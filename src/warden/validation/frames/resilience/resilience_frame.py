@@ -266,6 +266,7 @@ class ResilienceFrame(ValidationFrame, TaintAware):
     version = "3.1.0"  # v3.1: Added VectorDB semantic search for related patterns
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
+    minimum_triage_lane: str = "middle_lane"  # Skip FAST files; LLM-heavy frame
 
     # Configuration (fail-fast defaults)
     DEFAULT_TIMEOUT_SECONDS: float = 30.0

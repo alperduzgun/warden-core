@@ -1,11 +1,25 @@
 {
   "orphanFiles": [],
-  "orphanSymbols": [
-    "tests/e2e/fixtures/sample_project/src/vulnerable.py::get_user",
-    "tests/e2e/fixtures/sample_project/src/vulnerable.py::run_command",
-    "tests/e2e/fixtures/sample_project/src/vulnerable.py::evaluate"
+  "orphanSymbols": [],
+  "brokenImports": [
+    "__future__.annotations",
+    "pathlib.Path",
+    "src/warden/analysis/application/triage_cache.py",
+    "src/warden/analysis/domain/triage_heuristics.py",
+    "src/warden/analysis/domain/triage_models.py",
+    "src/warden/llm/providers/base.py",
+    "src/warden/llm/types.py",
+    "src/warden/shared/utils/llm_context.py",
+    "src/warden/validation/domain/frame.py",
+    "typing.TYPE_CHECKING",
+    "warden.analysis.domain.triage_heuristics.is_heuristic_safe",
+    "warden.analysis.domain.triage_models.RiskScore",
+    "warden.analysis.domain.triage_models.TriageDecision",
+    "warden.analysis.domain.triage_models.TriageLane",
+    "warden.llm.providers.base.ILlmClient",
+    "warden.llm.types.LlmRequest",
+    "warden.validation.domain.frame.CodeFile"
   ],
-  "brokenImports": [],
   "circularDeps": [],
   "unreachableFromEntry": [],
   "missingMixinImpl": [],
@@ -17,5 +31,5 @@
   "typeCheckingOnly": [],
   "unparseableFiles": [],
   "testOnlyConsumers": {},
-  "generated_at": "2026-02-26T22:17:39.417690+00:00"
+  "generated_at": "2026-02-27T07:56:21.560990+00:00"
 }

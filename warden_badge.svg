@@ -1,8 +1,8 @@
 <svg width="400" height="100" viewBox="0 0 400 100" fill="none" xmlns="http://www.w3.org/2000/svg"
-     data-warden-score="10.0"
-     data-warden-timestamp="1772144284"
-     data-warden-signature="22a7694bd1e93577622fedb9d8e8761c3ff90a6d7bdb523717c931857be29ba4">
-    <a href="https://warden.ai/verify?score=10.0&amp;sig=22a7694bd1e93577622fedb9d8e8761c3ff90a6d7bdb523717c931857be29ba4&amp;ts=1772144284" target="_blank">
+     data-warden-score="7.1"
+     data-warden-timestamp="1772179758"
+     data-warden-signature="1323d77b89606d72a330bbf7ad29583934c5236ef3616fc03c890eb63693da88">
+    <a href="https://warden.ai/verify?score=7.1&amp;sig=1323d77b89606d72a330bbf7ad29583934c5236ef3616fc03c890eb63693da88&amp;ts=1772179758" target="_blank">
         <!-- Drop Shadow Filter -->
         <defs>
             <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
@@ -13,8 +13,8 @@
                 <stop offset="100%" stop-color="#2a2a3c"/>
             </linearGradient>
             <linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="#10B981"/>
-                <stop offset="100%" stop-color="#059669"/>
+                <stop offset="0%" stop-color="#F59E0B"/>
+                <stop offset="100%" stop-color="#D97706"/>
             </linearGradient>
         </defs>
 
@@ -39,17 +39,17 @@
 
         <!-- Score Display (Improved Alignment) -->
         <text x="100" y="72" fill="#fff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-weight="700">
-            <tspan font-size="36">10.0</tspan>
+            <tspan font-size="36">7.1</tspan>
             <tspan font-size="18" fill="#71717a" font-weight="400" dx="2">/ 10</tspan>
         </text>
 
         <!-- Status Badge (Right Aligned) -->
-        <rect x="284" y="20" width="92" height="24" rx="6" fill="#10B981" fill-opacity="0.15" stroke="#10B981" stroke-opacity="0.3" stroke-width="1"/>
-        <text x="330" y="36" fill="#10B981" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.5">EXCELLENT</text>
+        <rect x="284" y="20" width="92" height="24" rx="6" fill="#F59E0B" fill-opacity="0.15" stroke="#F59E0B" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="330" y="36" fill="#F59E0B" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="10" font-weight="700" text-anchor="middle" letter-spacing="0.5">WARNING</text>
 
         <!-- Progress Bar Section -->
         <line x1="284" y1="64" x2="376" y2="64" stroke="#3f3f46" stroke-width="4" stroke-linecap="round" stroke-opacity="0.5"/>
-        <line x1="284" y1="64" x2="376.0" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
+        <line x1="284" y1="64" x2="349.017667844523" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
 
         <!-- Footer Meta -->
         <text x="376" y="84" fill="#52525b" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="9" text-anchor="end" letter-spacing="0.5">AI-NATIVE GUARDIAN</text>

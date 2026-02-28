@@ -65,6 +65,7 @@ class PropertyFrame(ValidationFrame, BatchExecutable):
     version = "1.0.0"
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
+    minimum_triage_lane: str = "middle_lane"  # Skip FAST files; LLM-heavy frame
 
     # Property check patterns
     PATTERNS = {

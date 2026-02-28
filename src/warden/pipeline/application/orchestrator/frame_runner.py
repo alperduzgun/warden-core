@@ -40,7 +40,7 @@ from .suppression_filter import SuppressionFilter
 # See: Bearer pkg/commands/process/filelist/timeout/timeout.go
 _FILE_TIMEOUT_MIN_S: float = 5.0  # floor: minimum timeout for any file
 _FILE_TIMEOUT_LOCAL_S: float = 120.0  # floor for local/slow providers (Ollama, Claude Code, Codex)
-_FILE_TIMEOUT_MAX_S: float = 60.0  # ceiling: no single file gets more than this
+_FILE_TIMEOUT_MAX_S: float = 300.0  # ceiling: no single file gets more than this (must be >= _FILE_TIMEOUT_LOCAL_S)
 _FILE_BYTES_PER_SECOND: int = 10_000  # conservative parse + LLM throughput rate
 _LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
@@ -815,11 +815,40 @@ class FrameRunner:
                                                 },
                                             )
                             else:
+                                _provider = str(
+                                    os.environ.get("WARDEN_LLM_PROVIDER", "")
+                                    or getattr(getattr(self, "config", None), "provider", "")
+                                ).lower()
+                                _is_local = _provider in _LOCAL_PROVIDERS
+                                _env_raw = os.environ.get("WARDEN_FILE_CONCURRENCY")
+                                _cfg_raw = getattr(getattr(self, "config", None), "file_concurrency", 0)
+                                _concurrency = max(
+                                    1,
+                                    int(_env_raw or _cfg_raw or (2 if _is_local else 5)),
+                                )
+                                _sem = asyncio.Semaphore(_concurrency)
+
+                                async def _guarded(
+                                    c_file: CodeFile, _s: asyncio.Semaphore = _sem
+                                ) -> CodeFrameResult | None:
+                                    async with _s:
+                                        return await execute_single_file_async(c_file)
+
+                                raw = await asyncio.gather(
+                                    *[_guarded(cf) for cf in files_to_scan],
+                                    return_exceptions=True,
+                                )
                                 f_results = []
-                                for cf in files_to_scan:
-                                    result = await execute_single_file_async(cf)
-                                    if result:
-                                        f_results.append(result)
+                                for item in raw:
+                                    if isinstance(item, BaseException):
+                                        logger.warning(
+                                            "frame_file_gather_error",
+                                            frame=frame.frame_id,
+                                            error=str(item),
+                                        )
+                                        execution_errors += 1
+                                    elif item is not None:
+                                        f_results.append(item)
 
                             if isinstance(frame, Cleanable):
                                 await frame.cleanup()

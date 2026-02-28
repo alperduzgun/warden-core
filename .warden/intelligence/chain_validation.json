@@ -1,26 +1,286 @@
 {
   "schemaVersion": "1.0.0",
-  "totalChainsChecked": 2,
+  "totalChainsChecked": 37,
   "confirmed": 0,
   "unconfirmed": 0,
-  "errors": 2,
+  "errors": 37,
   "entries": [
     {
-      "sourceFqn": "tests/e2e/fixtures/sample_project/src/vulnerable.py",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "__future__.annotations",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "json",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
       "targetFqn": "os",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "tests/e2e/fixtures/sample_project/src/vulnerable.py",
-      "targetFqn": "subprocess",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "re",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "time",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "pathlib.Path",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "typing.TYPE_CHECKING",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "psutil",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "structlog",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.analysis.domain.triage_heuristics.is_heuristic_safe",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.analysis.domain.triage_models.RiskScore",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.analysis.domain.triage_models.TriageDecision",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.analysis.domain.triage_models.TriageLane",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.llm.providers.base.ILlmClient",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.llm.types.LlmRequest",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.validation.domain.frame.CodeFile",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService.__init__",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._determine_batch_size",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService.batch_assess_risk_async",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._flush_cache",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._get_llm_batch_score_async",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._parse_batch_response",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._is_obviously_safe",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._get_llm_score_async",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._parse_response",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._extract_json",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._get_safe_batch_size",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._determine_lane",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._create_decision",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/shared/utils/llm_context.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/analysis/application/triage_cache.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/llm/providers/base.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/validation/domain/frame.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/analysis/domain/triage_models.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/analysis/domain/triage_heuristics.py",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/llm/types.py",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     }
   ],
-  "deadSymbols": [],
+  "deadSymbols": [
+    "src/warden/analysis/application/triage_service.py::TriageService",
+    "src/warden/analysis/application/triage_service.py::TriageService.__init__",
+    "src/warden/analysis/application/triage_service.py::TriageService._determine_batch_size",
+    "src/warden/analysis/application/triage_service.py::TriageService.batch_assess_risk_async",
+    "src/warden/analysis/application/triage_service.py::TriageService._flush_cache",
+    "src/warden/analysis/application/triage_service.py::TriageService._get_llm_batch_score_async",
+    "src/warden/analysis/application/triage_service.py::TriageService._parse_batch_response",
+    "src/warden/analysis/application/triage_service.py::TriageService._is_obviously_safe",
+    "src/warden/analysis/application/triage_service.py::TriageService._get_llm_score_async",
+    "src/warden/analysis/application/triage_service.py::TriageService._parse_response",
+    "src/warden/analysis/application/triage_service.py::TriageService._extract_json",
+    "src/warden/analysis/application/triage_service.py::TriageService._get_safe_batch_size",
+    "src/warden/analysis/application/triage_service.py::TriageService._determine_lane",
+    "src/warden/analysis/application/triage_service.py::TriageService._create_decision"
+  ],
   "lspAvailable": true,
-  "generated_at": "2026-02-26T22:17:39.457335+00:00"
+  "generated_at": "2026-02-27T07:56:22.790213+00:00"
 }

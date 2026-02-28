@@ -101,6 +101,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
     version = "1.0.0"
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
+    minimum_triage_lane: str = "middle_lane"  # Skip FAST files; LLM-heavy frame
 
     # Frame dependencies
     requires_frames = []  # No dependencies - can run standalone

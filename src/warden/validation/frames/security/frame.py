@@ -68,6 +68,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
     version = "2.2.0"  # v2.2: Added source-to-sink taint analysis
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]  # Applies to all languages
+    minimum_triage_lane: str = "middle_lane"  # Skip FAST files; LLM-heavy frame
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """

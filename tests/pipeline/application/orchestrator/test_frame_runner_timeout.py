@@ -44,14 +44,14 @@ class TestCalculatePerFileTimeout:
 
     def test_proportional_timeout(self):
         """Medium files should get a proportional timeout."""
-        # 300 KB: 300_000 / 10_000 = 30s (between min=5 and max=60)
+        # 300 KB: 300_000 / 10_000 = 30s (between min=5 and max=300)
         result = calculate_per_file_timeout(300_000)
         assert result == 30.0
 
     def test_large_file_capped_at_maximum(self):
         """Files larger than max*bytes_per_second should be capped."""
-        # 1 MB: 1_000_000 / 10_000 = 100s -> capped to max (60s)
-        result = calculate_per_file_timeout(1_000_000)
+        # 3.1 MB: 3_100_000 / 10_000 = 310s -> capped to max (300s)
+        result = calculate_per_file_timeout(3_100_000)
         assert result == _FILE_TIMEOUT_MAX_S
 
     def test_exact_formula(self):
@@ -137,7 +137,7 @@ class TestDefaultConstants:
         assert _FILE_TIMEOUT_MIN_S == 5.0
 
     def test_max_timeout(self):
-        assert _FILE_TIMEOUT_MAX_S == 60.0
+        assert _FILE_TIMEOUT_MAX_S == 300.0
 
     def test_bytes_per_second(self):
         assert _FILE_BYTES_PER_SECOND == 10_000
@@ -183,9 +183,7 @@ class TestFrameRunnerTimeout:
             "warden.pipeline.application.orchestrator.frame_runner.calculate_per_file_timeout",
             return_value=0.01,
         ):
-            result = await runner.execute_frame_with_rules_async(
-                context, frame, [code_file], pipeline
-            )
+            result = await runner.execute_frame_with_rules_async(context, frame, [code_file], pipeline)
 
         # The frame should still complete (not crash)
         assert result is not None

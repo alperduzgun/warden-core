@@ -1,12 +1,44 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-02-26T22:17:39.416346+00:00",
-  "forward": {},
-  "reverse": {},
+  "generated_at": "2026-02-27T07:56:21.559726+00:00",
+  "forward": {
+    "src/warden/analysis/application/triage_service.py": [
+      "src/warden/analysis/application/triage_cache.py",
+      "src/warden/analysis/domain/triage_heuristics.py",
+      "src/warden/analysis/domain/triage_models.py",
+      "src/warden/llm/providers/base.py",
+      "src/warden/llm/types.py",
+      "src/warden/shared/utils/llm_context.py",
+      "src/warden/validation/domain/frame.py"
+    ]
+  },
+  "reverse": {
+    "src/warden/analysis/application/triage_cache.py": [
+      "src/warden/analysis/application/triage_service.py"
+    ],
+    "src/warden/analysis/domain/triage_heuristics.py": [
+      "src/warden/analysis/application/triage_service.py"
+    ],
+    "src/warden/analysis/domain/triage_models.py": [
+      "src/warden/analysis/application/triage_service.py"
+    ],
+    "src/warden/llm/providers/base.py": [
+      "src/warden/analysis/application/triage_service.py"
+    ],
+    "src/warden/llm/types.py": [
+      "src/warden/analysis/application/triage_service.py"
+    ],
+    "src/warden/shared/utils/llm_context.py": [
+      "src/warden/analysis/application/triage_service.py"
+    ],
+    "src/warden/validation/domain/frame.py": [
+      "src/warden/analysis/application/triage_service.py"
+    ]
+  },
   "orphan_files": [],
   "stats": {
-    "total_files": 0,
-    "total_edges": 0,
+    "total_files": 8,
+    "total_edges": 7,
     "orphan_count": 0
   },
   "integrity": {

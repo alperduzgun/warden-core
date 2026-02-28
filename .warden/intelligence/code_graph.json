@@ -1,55 +1,425 @@
 {
   "schemaVersion": "1.0.0",
   "nodes": {
-    "tests/e2e/fixtures/sample_project/src/vulnerable.py::get_user": {
-      "fqn": "tests/e2e/fixtures/sample_project/src/vulnerable.py::get_user",
-      "name": "get_user",
-      "kind": "function",
-      "filePath": "tests/e2e/fixtures/sample_project/src/vulnerable.py",
-      "line": 11,
-      "module": "tests.e2e.fixtures.sample_project.src.vulnerable",
-      "isTest": true,
+    "src/warden/analysis/application/triage_service.py::TriageService": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "name": "TriageService",
+      "kind": "class",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 49,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
       "bases": [],
       "metadata": {}
     },
-    "tests/e2e/fixtures/sample_project/src/vulnerable.py::run_command": {
-      "fqn": "tests/e2e/fixtures/sample_project/src/vulnerable.py::run_command",
-      "name": "run_command",
-      "kind": "function",
-      "filePath": "tests/e2e/fixtures/sample_project/src/vulnerable.py",
-      "line": 16,
-      "module": "tests.e2e.fixtures.sample_project.src.vulnerable",
-      "isTest": true,
+    "src/warden/analysis/application/triage_service.py::TriageService.__init__": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService.__init__",
+      "name": "__init__",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 102,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
       "bases": [],
       "metadata": {}
     },
-    "tests/e2e/fixtures/sample_project/src/vulnerable.py::evaluate": {
-      "fqn": "tests/e2e/fixtures/sample_project/src/vulnerable.py::evaluate",
-      "name": "evaluate",
-      "kind": "function",
-      "filePath": "tests/e2e/fixtures/sample_project/src/vulnerable.py",
-      "line": 21,
-      "module": "tests.e2e.fixtures.sample_project.src.vulnerable",
-      "isTest": true,
+    "src/warden/analysis/application/triage_service.py::TriageService._determine_batch_size": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._determine_batch_size",
+      "name": "_determine_batch_size",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 125,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {
+        "decorators": [
+          "staticmethod"
+        ]
+      }
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService.batch_assess_risk_async": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService.batch_assess_risk_async",
+      "name": "batch_assess_risk_async",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 157,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._flush_cache": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._flush_cache",
+      "name": "_flush_cache",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 248,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._get_llm_batch_score_async": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._get_llm_batch_score_async",
+      "name": "_get_llm_batch_score_async",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 252,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._parse_batch_response": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._parse_batch_response",
+      "name": "_parse_batch_response",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 288,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._is_obviously_safe": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._is_obviously_safe",
+      "name": "_is_obviously_safe",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 319,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._get_llm_score_async": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._get_llm_score_async",
+      "name": "_get_llm_score_async",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 323,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._parse_response": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._parse_response",
+      "name": "_parse_response",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 342,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._extract_json": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._extract_json",
+      "name": "_extract_json",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 362,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._get_safe_batch_size": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._get_safe_batch_size",
+      "name": "_get_safe_batch_size",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 395,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._determine_lane": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._determine_lane",
+      "name": "_determine_lane",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 412,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
+      "bases": [],
+      "metadata": {}
+    },
+    "src/warden/analysis/application/triage_service.py::TriageService._create_decision": {
+      "fqn": "src/warden/analysis/application/triage_service.py::TriageService._create_decision",
+      "name": "_create_decision",
+      "kind": "method",
+      "filePath": "src/warden/analysis/application/triage_service.py",
+      "line": 421,
+      "module": "warden.analysis.application.triage_service",
+      "isTest": false,
       "bases": [],
       "metadata": {}
     }
   },
   "edges": [
     {
-      "source": "tests/e2e/fixtures/sample_project/src/vulnerable.py",
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "__future__.annotations",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "json",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
       "target": "os",
       "relation": "imports",
       "runtime": true,
       "metadata": {}
     },
     {
-      "source": "tests/e2e/fixtures/sample_project/src/vulnerable.py",
-      "target": "subprocess",
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "re",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "time",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "pathlib.Path",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "typing.TYPE_CHECKING",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "psutil",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "structlog",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "warden.analysis.domain.triage_heuristics.is_heuristic_safe",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "warden.analysis.domain.triage_models.RiskScore",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "warden.analysis.domain.triage_models.TriageDecision",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "warden.analysis.domain.triage_models.TriageLane",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "warden.llm.providers.base.ILlmClient",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "warden.llm.types.LlmRequest",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "warden.validation.domain.frame.CodeFile",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService.__init__",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._determine_batch_size",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService.batch_assess_risk_async",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._flush_cache",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._get_llm_batch_score_async",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._parse_batch_response",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._is_obviously_safe",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._get_llm_score_async",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._parse_response",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._extract_json",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._get_safe_batch_size",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._determine_lane",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py::TriageService",
+      "target": "src/warden/analysis/application/triage_service.py::TriageService._create_decision",
+      "relation": "defines",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "src/warden/shared/utils/llm_context.py",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "src/warden/analysis/application/triage_cache.py",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "src/warden/llm/providers/base.py",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "src/warden/validation/domain/frame.py",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "src/warden/analysis/domain/triage_models.py",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "src/warden/analysis/domain/triage_heuristics.py",
+      "relation": "imports",
+      "runtime": true,
+      "metadata": {}
+    },
+    {
+      "source": "src/warden/analysis/application/triage_service.py",
+      "target": "src/warden/llm/types.py",
       "relation": "imports",
       "runtime": true,
       "metadata": {}
     }
   ],
-  "generated_at": "2026-02-26T22:17:39.417278+00:00"
+  "generated_at": "2026-02-27T07:56:21.560472+00:00"
 }
