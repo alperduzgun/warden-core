@@ -40,7 +40,7 @@ from .suppression_filter import SuppressionFilter
 # See: Bearer pkg/commands/process/filelist/timeout/timeout.go
 _FILE_TIMEOUT_MIN_S: float = 5.0  # floor: minimum timeout for any file
 _FILE_TIMEOUT_LOCAL_S: float = 120.0  # floor for local/slow providers (Ollama, Claude Code, Codex)
-_FILE_TIMEOUT_MAX_S: float = 300.0  # ceiling: no single file gets more than this (must be >= _FILE_TIMEOUT_LOCAL_S)
+_FILE_TIMEOUT_MAX_S: float = 300.0  # ceiling: must be >= _FILE_TIMEOUT_LOCAL_S
 _FILE_BYTES_PER_SECOND: int = 10_000  # conservative parse + LLM throughput rate
 _LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
