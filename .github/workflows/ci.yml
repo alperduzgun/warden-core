@@ -181,7 +181,6 @@ jobs:
             warden-cache-${{ runner.os }}-
 
       - name: Cache AI Models
-        if: github.event_name == 'workflow_dispatch'
         uses: actions/cache@v5
         with:
           path: ~/.ollama
@@ -210,13 +209,26 @@ jobs:
       # - name: Verify Code Intelligence (Audit Context)
 
 
+      - name: Start Ollama
+        run: |
+          curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
+          bash /tmp/ollama-install.sh && rm /tmp/ollama-install.sh
+          sudo systemctl stop ollama || true
+          sudo systemctl disable ollama || true
+          ollama serve &
+          for i in {1..30}; do curl -s http://localhost:11434/api/tags > /dev/null && break || sleep 1; done
+          if ollama list | grep -q "qwen2.5-coder:0.5b"; then
+            echo "✅ Model already cached."
+          else
+            ollama pull qwen2.5-coder:0.5b
+          fi
+          curl -s http://localhost:11434/api/generate \
+            -d '{"model":"qwen2.5-coder:0.5b","prompt":"","keep_alive":-1}' -o /dev/null
+          echo "✅ Ollama ready."
+
       - name: Run Warden Scan
         env:
-          # Git ref for incremental scan (env var to prevent script injection)
           BASE_REF: ${{ github.base_ref || 'main' }}
-          # Groq — used for push/PR incremental LLM scans (no infrastructure setup)
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          # Ollama config — only used for workflow_dispatch deep scans
           WARDEN_LLM_PROVIDER: "ollama"
           WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
           OLLAMA_HOST: http://localhost:11434
@@ -226,30 +238,14 @@ jobs:
           OLLAMA_CONTEXT_LENGTH: "2048"
         run: |
           # =============================================================
-          # SCAN STRATEGY
-          # - push/PR (incremental): --level standard via Groq API
-          #   → LLM analysis on changed files, no infrastructure setup
-          # - workflow_dispatch (manual/nightly): --level standard via Ollama
-          #   → deep local analysis on full src/warden/
+          # SCAN STRATEGY (both paths use Ollama)
+          # - push/PR : --level standard on changed Python files only
+          # - workflow_dispatch: --level standard on full src/warden/
           # =============================================================
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # --- DEEP SCAN (manual trigger) via Ollama ---
-            echo "Manual dispatch — setting up Ollama for deep LLM scan..."
-            curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
-            bash /tmp/ollama-install.sh && rm /tmp/ollama-install.sh
-            sudo systemctl stop ollama || true
-            sudo systemctl disable ollama || true
-            ollama serve &
-            for i in {1..30}; do curl -s http://localhost:11434/api/tags > /dev/null && break || sleep 1; done
-            if ollama list | grep -q "qwen2.5-coder:0.5b"; then
-              echo "✅ Model already cached."
-            else
-              ollama pull qwen2.5-coder:0.5b
-            fi
-            curl -s http://localhost:11434/api/generate \
-              -d '{"model":"qwen2.5-coder:0.5b","prompt":"","keep_alive":-1}' -o /dev/null
-            echo "✅ Ollama ready. Running full LLM scan on src/warden/ ..."
+            # --- FULL SCAN (manual trigger) ---
+            echo "Manual dispatch — running full LLM scan on src/warden/ ..."
             set +e
             warden scan src/warden --level standard --format sarif --output warden.sarif
             EXIT_CODE=$?
@@ -261,7 +257,7 @@ jobs:
               echo "::warning title=Scan Incomplete::Scan failed (infrastructure). Quality gate skipped."
               echo "⚠️ Scan exit $EXIT_CODE — infrastructure issue, not a code quality failure."
             else
-              echo "✅ Deep scan passed."
+              echo "✅ Full scan passed."
             fi
             if [ -f warden.sarif ]; then
               mkdir -p .warden && cp warden.sarif .warden/baseline.sarif
@@ -269,16 +265,10 @@ jobs:
             fi
 
           else
-            # --- INCREMENTAL LLM SCAN (push / PR) via Groq ---
-            # Full LLM analysis on changed files only. No infrastructure setup.
-            export WARDEN_LLM_PROVIDER="groq"
-            export WARDEN_BLOCKED_PROVIDERS="claude_code,codex,ollama"
-            echo "Running INCREMENTAL LLM SCAN (--level standard, Groq) on changed files..."
-
-            # 1. Fetch base branch for diff
+            # --- INCREMENTAL SCAN (push / PR) ---
+            # Ollama already running. Scan only changed Python files.
             git fetch origin "$BASE_REF" --depth=1 2>/dev/null || true
 
-            # 2. Get changed Python files
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               CHANGED_FILES=$(git diff --name-only --diff-filter=d "origin/$BASE_REF"...HEAD 2>/dev/null | grep "\.py$" || true)
             else
@@ -286,7 +276,6 @@ jobs:
                               git diff --name-only --diff-filter=d "origin/$BASE_REF"...HEAD 2>/dev/null | grep "\.py$" || true)
             fi
 
-            # Filter: only existing files
             if [ -n "$CHANGED_FILES" ]; then
               CHANGED_FILES=$(echo "$CHANGED_FILES" | while read f; do [ -f "$f" ] && echo "$f"; done || true)
             fi
@@ -307,7 +296,7 @@ jobs:
             set -e
 
             if [ $EXIT_CODE -eq 0 ]; then
-              echo "✅ LLM scan passed."
+              echo "✅ Incremental LLM scan passed."
             elif [ $EXIT_CODE -eq 2 ]; then
               echo "🚫 CRITICAL ISSUES FOUND"
               echo "::error title=Policy Violation::Critical issues found in changed files. Review SARIF."
