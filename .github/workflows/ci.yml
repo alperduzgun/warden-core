@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint]
     if: always() && needs.lint.result != 'cancelled'
-    timeout-minutes: 45
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 360 || 120 }}
 
     steps:
       - name: Free Disk Space (Manual)
@@ -247,7 +247,7 @@ jobs:
             # --- FULL SCAN (manual trigger) ---
             echo "Manual dispatch — running full LLM scan on src/warden/ ..."
             set +e
-            warden scan src/warden --level standard --format sarif --output warden.sarif
+            warden scan src/warden --level standard --ci --format sarif --output warden.sarif
             EXIT_CODE=$?
             set -e
             if [ $EXIT_CODE -eq 2 ]; then
@@ -291,7 +291,7 @@ jobs:
 
             set +e
             FILES=$(echo "$CHANGED_FILES" | tr '\n' ' ')
-            warden scan $FILES --level standard --format sarif --output warden.sarif
+            warden scan $FILES --level standard --ci --format sarif --output warden.sarif
             EXIT_CODE=$?
             set -e
 
