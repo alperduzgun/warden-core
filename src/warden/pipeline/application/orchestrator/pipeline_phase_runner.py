@@ -172,7 +172,11 @@ class PipelinePhaseRunner:
         if getattr(self.config, "ci_mode", False):
             self.config.enable_fortification = False
             self.config.enable_cleaning = False
-            logger.info("ci_mode_active", skipped_phases=["fortification", "cleaning"])
+            self.config.enable_issue_validation = False
+            logger.info(
+                "ci_mode_active",
+                skipped_phases=["fortification", "cleaning", "issue_validation"],
+            )
 
         # Phase 0: PRE-ANALYSIS
         context.current_phase = "Pre-Analysis"
