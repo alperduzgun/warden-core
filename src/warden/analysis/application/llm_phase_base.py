@@ -517,6 +517,18 @@ class LLMPhaseBase(ABC):
 
         await self.rate_limiter.acquire_async(estimated_tokens)
 
+        # Dynamic max_tokens: benchmark local providers to fit within phase timeout.
+        # Cloud providers (is_local=False) skip this — no measurement overhead.
+        effective_max_tokens = self.config.max_tokens
+        if getattr(self, "is_local", False):
+            from warden.llm.provider_speed_benchmark import get_benchmark_service
+
+            effective_max_tokens = await get_benchmark_service().get_safe_max_tokens(
+                client=self.llm,
+                phase_timeout_s=float(self.config.timeout),
+                default_max_tokens=self.config.max_tokens,
+            )
+
         for attempt in range(self.config.max_retries):
             try:
                 # Call LLM with timeout
@@ -526,7 +538,7 @@ class LLMPhaseBase(ABC):
                         system_prompt=system_prompt,
                         model=model,
                         use_fast_tier=use_fast_tier,
-                        max_tokens=self.config.max_tokens,
+                        max_tokens=effective_max_tokens,
                     ),
                     timeout=self.config.timeout,
                 )
