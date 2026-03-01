@@ -141,6 +141,7 @@ class ILlmClient(ABC):
         system_prompt: str = "You are a helpful coding assistant.",
         model: str | None = None,
         use_fast_tier: bool = False,
+        max_tokens: int = 2000,
     ) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
@@ -150,6 +151,10 @@ class ILlmClient(ABC):
             system_prompt: System prompt (optional)
             model: Model override (optional)
             use_fast_tier: If True, request fast (local) tier
+            max_tokens: Maximum tokens to generate. Callers that know their
+                response budget (e.g. LLMPhaseConfig) should pass this
+                explicitly so slow local providers (Ollama on CPU) can finish
+                within the asyncio.wait_for timeout.
 
         Returns:
             LlmResponse with content and token usage
@@ -162,7 +167,7 @@ class ILlmClient(ABC):
             system_prompt=system_prompt,
             model=model,
             temperature=0.0,
-            max_tokens=2000,
+            max_tokens=max_tokens,
             timeout_seconds=120.0,
             use_fast_tier=use_fast_tier,
         )

@@ -522,7 +522,11 @@ class LLMPhaseBase(ABC):
                 # Call LLM with timeout
                 response = await asyncio.wait_for(
                     self.llm.complete_async(
-                        prompt=user_prompt, system_prompt=system_prompt, model=model, use_fast_tier=use_fast_tier
+                        prompt=user_prompt,
+                        system_prompt=system_prompt,
+                        model=model,
+                        use_fast_tier=use_fast_tier,
+                        max_tokens=self.config.max_tokens,
                     ),
                     timeout=self.config.timeout,
                 )
