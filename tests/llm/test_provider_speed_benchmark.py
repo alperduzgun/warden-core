@@ -236,31 +236,41 @@ class TestSingleton:
 
 class TestChaosFailureModes:
     @pytest.mark.asyncio
-    async def test_exception_returns_default(self):
-        """send_async raising → return default_max_tokens."""
+    async def test_benchmark_timeout_returns_conservative_budget(self):
+        """Benchmark TimeoutError → conservative upper-bound, NOT the full default.
+
+        Simulates the real CI scenario: Ollama cold-starts and the benchmark
+        call raises TimeoutError (BENCHMARK_TIMEOUT_S=30, TOKEN_COUNT=20).
+
+        Upper-bound tok/s = 20/30 ≈ 0.67 → _calculate(0.67, 120) = 100 (floor).
+        Returning default (800) would cause the real phase call to time out too.
+        """
+        client = MagicMock()
+        client.provider = LlmProvider.OLLAMA
+        # Inject TimeoutError directly — no need to actually wait
+        client.send_async = AsyncMock(side_effect=asyncio.TimeoutError())
+
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        # Use real BENCHMARK_TIMEOUT_S (30) and BENCHMARK_TOKEN_COUNT (20):
+        # conservative = _calculate(20/30, 120.0) = clamp(0.67*120*0.75, 100, 4000) = 100
+        result = await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
+
+        assert result < 800  # conservative, not full budget
+        assert result == ProviderSpeedBenchmarkService.MAX_TOKENS_FLOOR  # 100
+
+    @pytest.mark.asyncio
+    async def test_non_timeout_exception_returns_default(self):
+        """Non-timeout exception (e.g. connection refused) → return default_max_tokens.
+
+        Only TimeoutError implies we know an upper bound on speed.
+        For other failures we have no speed information, so fall back to default.
+        """
         client = MagicMock()
         client.provider = LlmProvider.OLLAMA
         client.send_async = AsyncMock(side_effect=RuntimeError("connection refused"))
 
         svc = ProviderSpeedBenchmarkService.get_instance()
         result = await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
-        assert result == 800
-
-    @pytest.mark.asyncio
-    async def test_benchmark_timeout_returns_default(self):
-        """Benchmark exceeding BENCHMARK_TIMEOUT_S → return default_max_tokens."""
-
-        async def slow_send(*_a, **_kw):
-            await asyncio.sleep(60)  # longer than any timeout
-
-        client = MagicMock()
-        client.provider = LlmProvider.OLLAMA
-        client.send_async = slow_send
-
-        svc = ProviderSpeedBenchmarkService.get_instance()
-        # Patch timeout to 0.01s to force immediate timeout
-        with patch.object(ProviderSpeedBenchmarkService, "BENCHMARK_TIMEOUT_S", 0.01):
-            result = await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
         assert result == 800
 
     @pytest.mark.asyncio

@@ -255,10 +255,32 @@ class ProviderSpeedBenchmarkService:
                 return self._calculate(result.tok_per_sec, phase_timeout_s)
 
             except Exception as exc:
+                # asyncio.TimeoutError.__str__() returns '' — show type name instead.
+                reason = str(exc) or type(exc).__name__
+
+                # Benchmark timed out: Ollama generated < BENCHMARK_TOKEN_COUNT tokens
+                # in BENCHMARK_TIMEOUT_S seconds.  We have an upper-bound on tok/s:
+                #   tok/s_max = BENCHMARK_TOKEN_COUNT / BENCHMARK_TIMEOUT_S
+                # Use that to compute a conservative safe budget rather than the full
+                # default, which would cause the actual phase call to time out too.
+                if isinstance(exc, TimeoutError):
+                    conservative = self._calculate(
+                        self.BENCHMARK_TOKEN_COUNT / self.BENCHMARK_TIMEOUT_S,
+                        phase_timeout_s,
+                    )
+                    logger.warning(
+                        "benchmark_failed",
+                        provider=cache_key,
+                        reason=reason,
+                        fallback=conservative,
+                        note="timeout→conservative_budget",
+                    )
+                    return conservative
+
                 logger.warning(
                     "benchmark_failed",
                     provider=cache_key,
-                    reason=str(exc),
+                    reason=reason,
                     fallback=default_max_tokens,
                 )
                 return default_max_tokens
