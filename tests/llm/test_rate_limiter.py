@@ -174,3 +174,11 @@ class TestBurstOneBugRegression:
         assert rl.token_limiter.tokens == 1
         # A 1000-token request would need to wait ~12s
         # This test documents the problem so it's caught in review
+
+    @pytest.mark.asyncio
+    async def test_sequential_acquires_do_not_deadlock(self):
+        """Lock must be released — sequential calls must complete without hanging."""
+        rl = RateLimiter(RateLimitConfig(tpm=1_000_000, rpm=1000))
+        await rl.acquire(100)
+        await rl.acquire(100)  # Deadlocked before fix
+        await rl.acquire(100)  # Triple verification

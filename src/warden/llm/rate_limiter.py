@@ -76,6 +76,7 @@ class TokenBucketLimiter:
                 await self._lock.acquire()
             else:
                 self.tokens -= n
+            self._lock.release()
         except Exception:
             # Ensure the lock is always released on unexpected errors
             if self._lock.locked():
