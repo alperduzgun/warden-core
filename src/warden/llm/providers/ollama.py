@@ -2,8 +2,10 @@
 Ollama LLM Client (Local Model Support)
 
 API: http://localhost:11434/api/chat
+Uses streaming mode so long CPU-side generation does not hit read timeouts.
 """
 
+import json
 import time
 
 import httpx
@@ -78,21 +80,33 @@ class OllamaClient(ILlmClient):
                     {"role": "system", "content": request.system_prompt},
                     {"role": "user", "content": request.user_message},
                 ],
-                "stream": False,
+                "stream": True,
                 "options": {"temperature": request.temperature, "num_predict": request.max_tokens},
             }
 
-            async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
-                response = await client.post(f"{self._endpoint}/api/chat", json=payload)
-                response.raise_for_status()
-                result = response.json()
+            # Streaming: Ollama sends tokens as they are generated.
+            # read_timeout applies per-chunk, so slow CPU generation never hits the limit.
+            stream_timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=5.0)
+            content_parts: list[str] = []
+            prompt_tokens = 0
+            completion_tokens = 0
+
+            async with httpx.AsyncClient(timeout=stream_timeout) as client:
+                async with client.stream("POST", f"{self._endpoint}/api/chat", json=payload) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        chunk = json.loads(line)
+                        if "message" in chunk and "content" in chunk["message"]:
+                            content_parts.append(chunk["message"]["content"])
+                        if chunk.get("done"):
+                            prompt_tokens = chunk.get("prompt_eval_count", 0)
+                            completion_tokens = chunk.get("eval_count", 0)
+                            break
 
             duration_ms = int((time.time() - start_time) * 1000)
-            content = result.get("message", {}).get("content", "")
-
-            # Ollama provides token counts in prompt_eval_count and eval_count
-            prompt_tokens = result.get("prompt_eval_count", 0)
-            completion_tokens = result.get("eval_count", 0)
+            content = "".join(content_parts)
 
             return LlmResponse(
                 content=content,
