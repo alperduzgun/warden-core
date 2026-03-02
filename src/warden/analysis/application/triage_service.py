@@ -276,6 +276,7 @@ FILES:
             use_fast_tier=True,
             temperature=0.01,
             max_tokens=min(2000, 300 * len(code_files)),
+            timeout_seconds=45.0,  # Triage is simple classification; 45s is ample.
         )
 
         response = await self.llm.send_async(request)
@@ -329,7 +330,12 @@ FILES:
         prompt = f"File Path: {code_file.path}\n\nCode:\n```{code_file.language}\n{truncated}```"
 
         request = LlmRequest(
-            system_prompt=self.SYSTEM_PROMPT, user_message=prompt, use_fast_tier=True, temperature=0.1, max_tokens=250
+            system_prompt=self.SYSTEM_PROMPT,
+            user_message=prompt,
+            use_fast_tier=True,
+            temperature=0.1,
+            max_tokens=250,
+            timeout_seconds=45.0,  # Triage is simple classification; 45s is ample.
         )
 
         response = await self.llm.send_async(request)
