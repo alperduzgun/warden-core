@@ -85,8 +85,10 @@ class OllamaClient(ILlmClient):
             }
 
             # Streaming: Ollama sends tokens as they are generated.
-            # read_timeout applies per-chunk, so slow CPU generation never hits the limit.
-            stream_timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=5.0)
+            # read_timeout applies per-chunk (between tokens), NOT total generation time.
+            # For larger models (3b+) on CPU, prefill alone can exceed 60s before the
+            # first token appears — so we use 120s to accommodate slow prefill phases.
+            stream_timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
             content_parts: list[str] = []
             prompt_tokens = 0
             completion_tokens = 0

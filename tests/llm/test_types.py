@@ -20,14 +20,11 @@ def test_llm_provider_enum():
 
 def test_llm_request_defaults():
     """Test LlmRequest default values"""
-    request = LlmRequest(
-        system_prompt="Test system",
-        user_message="Test message"
-    )
+    request = LlmRequest(system_prompt="Test system", user_message="Test message")
 
     assert request.temperature == 0.0
     assert request.max_tokens == 4000
-    assert request.timeout_seconds == 60
+    assert request.timeout_seconds == 90.0
 
 
 def test_llm_response_to_dict():
@@ -41,7 +38,7 @@ def test_llm_response_to_dict():
         completion_tokens=50,
         total_tokens=150,
         duration_ms=1000,
-        overall_confidence=0.95
+        overall_confidence=0.95,
     )
 
     result = response.to_dict()
@@ -71,7 +68,7 @@ def test_analysis_issue_to_dict():
         line=45,
         confidence=0.95,
         evidence_quote='query = f"SELECT * FROM users WHERE id = {user_id}"',
-        code_snippet='query = f"SELECT * FROM users WHERE id = {user_id}"'
+        code_snippet='query = f"SELECT * FROM users WHERE id = {user_id}"',
     )
 
     result = issue.to_dict()
@@ -92,7 +89,7 @@ def test_analysis_issue_from_dict():
         "line": 10,
         "confidence": 0.85,
         "evidenceQuote": "await api_call()",
-        "codeSnippet": "await api_call()"
+        "codeSnippet": "await api_call()",
     }
 
     issue = AnalysisIssue.from_dict(data)
@@ -112,15 +109,10 @@ def test_analysis_result_to_dict():
         line=100,
         confidence=0.9,
         evidence_quote="def long_function():",
-        code_snippet="def long_function():"
+        code_snippet="def long_function():",
     )
 
-    result = AnalysisResult(
-        score=6.5,
-        confidence=0.8,
-        summary="Code needs refactoring",
-        issues=[issue]
-    )
+    result = AnalysisResult(score=6.5, confidence=0.8, summary="Code needs refactoring", issues=[issue])
 
     data = result.to_dict()
 
@@ -145,9 +137,9 @@ def test_analysis_result_from_dict():
                 "line": 20,
                 "confidence": 0.7,
                 "evidenceQuote": "for x in range(10):",
-                "codeSnippet": "for x in range(10):"
+                "codeSnippet": "for x in range(10):",
             }
-        ]
+        ],
     }
 
     result = AnalysisResult.from_dict(data)
