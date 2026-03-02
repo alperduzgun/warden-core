@@ -373,7 +373,7 @@ jobs:
           fi
 
       - name: Archive SARIF Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always() && hashFiles('warden.sarif') != ''
         with:
           name: warden-scan-results
