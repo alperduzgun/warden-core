@@ -8,10 +8,10 @@ on:
       model:
         description: 'Ollama model to benchmark'
         required: false
-        default: 'qwen2.5-coder:0.5b'
+        default: 'qwen2.5-coder:3b'
         type: choice
         options:
-          - qwen2.5-coder:0.5b
+          - qwen2.5-coder:3b
           - qwen2.5-coder:1.5b
           - qwen2.5-coder:3b
 
@@ -67,7 +67,7 @@ jobs:
 
       - name: Pull Model
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "Pulling $MODEL..."
           START=$(date +%s)
           ollama pull "$MODEL"
@@ -76,7 +76,7 @@ jobs:
 
       - name: Warm-up
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           START=$(date +%s)
           curl -s http://localhost:11434/api/generate \
             -d "{\"model\":\"$MODEL\",\"prompt\":\"\",\"keep_alive\":-1}" -o /dev/null
@@ -85,7 +85,7 @@ jobs:
 
       - name: Benchmark - Short prompt
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "=== SHORT PROMPT (latency test) ==="
           START=$(date +%s%N)
           RESPONSE=$(curl -s http://localhost:11434/api/generate \
@@ -106,7 +106,7 @@ jobs:
 
       - name: Benchmark - Triage prompt (realistic)
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "=== TRIAGE PROMPT (realistic CI workload) ==="
           PROMPT='Analyze for security issues. Return JSON only: {"risk_score": 8, "has_issues": true, "reason": "command injection via shell=True"}\n\nCode:\ndef run(cmd):\n    subprocess.run(cmd, shell=True)'
 
@@ -128,7 +128,7 @@ jobs:
 
       - name: Benchmark - 5 sequential requests (batch=1 simulation)
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "=== 5 SEQUENTIAL REQUESTS (simulate warden batch=1 x5 files) ==="
           TOTAL_START=$(date +%s)
           for i in 1 2 3 4 5; do

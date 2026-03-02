@@ -217,13 +217,13 @@ jobs:
           sudo systemctl disable ollama || true
           ollama serve &
           for i in {1..30}; do curl -s http://localhost:11434/api/tags > /dev/null && break || sleep 1; done
-          if ollama list | grep -q "qwen2.5-coder:0.5b"; then
+          if ollama list | grep -q "qwen2.5-coder:3b"; then
             echo "✅ Model already cached."
           else
-            ollama pull qwen2.5-coder:0.5b
+            ollama pull qwen2.5-coder:3b
           fi
           curl -s http://localhost:11434/api/generate \
-            -d '{"model":"qwen2.5-coder:0.5b","prompt":"","keep_alive":-1}' -o /dev/null
+            -d '{"model":"qwen2.5-coder:3b","prompt":"","keep_alive":-1}' -o /dev/null
           echo "✅ Ollama ready."
 
       - name: Run Warden Scan

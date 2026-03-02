@@ -6,17 +6,17 @@ on:
       model:
         description: 'Ollama model to benchmark'
         required: false
-        default: 'qwen2.5-coder:0.5b'
+        default: 'qwen2.5-coder:3b'
         type: choice
         options:
-          - qwen2.5-coder:0.5b
+          - qwen2.5-coder:3b
           - qwen2.5-coder:1.5b
           - qwen2.5-coder:3b
           - qwen2.5-coder:7b
 
 jobs:
   benchmark:
-    name: Ollama Benchmark (${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }})
+    name: Ollama Benchmark (${{ github.event.inputs.model || 'qwen2.5-coder:3b' }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Pull Model
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "Pulling $MODEL..."
           START=$(date +%s)
           ollama pull "$MODEL"
@@ -64,7 +64,7 @@ jobs:
 
       - name: Warm-up (pin model to RAM)
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "Warming up $MODEL..."
           START=$(date +%s)
           curl -s http://localhost:11434/api/generate \
@@ -75,7 +75,7 @@ jobs:
 
       - name: Benchmark - Short prompt (single token response)
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "=== SHORT PROMPT BENCHMARK ==="
           PROMPT="Reply with only: OK"
 
@@ -105,7 +105,7 @@ jobs:
 
       - name: Benchmark - Triage prompt (realistic CI workload)
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "=== TRIAGE PROMPT BENCHMARK ==="
 
           PROMPT='You are a security triage assistant. Analyze this Python file and return a JSON object with keys: risk_score (0-10), has_security_issues (true/false), reason (string).
@@ -150,7 +150,7 @@ jobs:
 
       - name: Benchmark - 3 sequential triage requests (simulate batch=1 × 3 files)
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "=== SEQUENTIAL REQUESTS BENCHMARK (3x) ==="
 
           TOTAL_START=$(date +%s)
@@ -178,7 +178,7 @@ jobs:
 
       - name: Summary
         run: |
-          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:0.5b' }}"
+          MODEL="${{ github.event.inputs.model || 'qwen2.5-coder:3b' }}"
           echo "=== BENCHMARK SUMMARY ==="
           echo "Model: $MODEL"
           echo "Runner: ubuntu-latest ($(nproc) CPU cores, $(free -h | grep Mem | awk '{print $2}') RAM)"

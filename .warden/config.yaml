@@ -116,10 +116,10 @@ llm:
   tpm_limit: 10000
   rpm_limit: 60
   provider: ollama
-  model: qwen2.5-coder:0.5b
+  model: qwen2.5-coder:3b
   timeout: 300
   smart_model: qwen2.5-coder:3b
-  fast_model: qwen2.5-coder:0.5b
+  fast_model: qwen2.5-coder:3b
   token_budgets:
     # CI 0.5b CPU: ~20 tok/s. Total prompt = code_budget + ~300 instruction tokens.
     # Target: total prompt ≤ 700 tokens → 35s prefill → well within 60s WARDEN_FILE_TIMEOUT_MIN.
@@ -134,11 +134,11 @@ llm:
     analysis: {deep: 200, fast: 100}
   ci:
     provider: ollama
-    smart_model: qwen2.5-coder:0.5b
-    model: qwen2.5-coder:0.5b
+    smart_model: qwen2.5-coder:3b
+    model: qwen2.5-coder:3b
     fast_tier_providers:
     - ollama
-    fast_model: qwen2.5-coder:0.5b
+    fast_model: qwen2.5-coder:3b
 project:
   description: Warden configuration for warden-core
   detected_at: '2025-12-24T16:35:53.922859'
@@ -177,7 +177,7 @@ settings:
     use_llm: false
   classification_config:
     enabled: true
-    model: qwen2.5-coder:0.5b
+    model: qwen2.5-coder:3b
     batch_size: 1
   timeout: 3600
 custom_rules:
