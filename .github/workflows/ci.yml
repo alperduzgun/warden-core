@@ -167,9 +167,10 @@ jobs:
         with:
           path: |
             .warden/memory
-          key: warden-storage-${{ runner.os }}-${{ github.sha }}
+            .warden/embeddings
+          key: warden-storage-chromadb1-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            warden-storage-${{ runner.os }}-
+            warden-storage-chromadb1-${{ runner.os }}-
 
       - name: Cache Warden Triage & Findings
         uses: actions/cache@v5
