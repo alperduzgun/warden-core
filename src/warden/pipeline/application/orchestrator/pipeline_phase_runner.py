@@ -213,11 +213,21 @@ class PipelinePhaseRunner:
             )
 
         if getattr(self.config, "use_llm", True) and self.config.analysis_level != AnalysisLevel.BASIC:
-            if self._is_single_tier_provider():
-                # CLI-tool providers (Codex, Claude Code) spawn a subprocess per
-                # LLM call (~20s each).  Running 100+ triage calls is prohibitive.
-                # Use heuristic-only triage: safe files → FAST, rest → MIDDLE.
-                logger.info("triage_bypass_single_tier", provider=self._detect_primary_provider())
+            _provider = self._detect_primary_provider()
+            _ci_ollama = getattr(self.config, "ci_mode", False) and "ollama" in _provider
+            if self._is_single_tier_provider() or _ci_ollama:
+                # Two cases where LLM triage is skipped in favour of heuristics:
+                # 1. CLI-tool providers (Codex, Claude Code): subprocess-per-call ~20s each.
+                # 2. Ollama in CI mode: batch_size=1 + 90s timeout + 2 retries means
+                #    N files × 180s >> pipeline timeout (e.g. 552 × 180 = 99 360s >> 1800s).
+                #    Heuristic triage is fast (<1s) and coverage is equivalent — safe files
+                #    still receive FAST lane, all others receive MIDDLE (full analysis).
+                logger.info(
+                    "triage_bypass_heuristic",
+                    provider=_provider,
+                    reason="ci_ollama" if _ci_ollama else "single_tier",
+                    file_count=len(code_files),
+                )
                 self._apply_heuristic_triage(context, code_files)
             else:
                 logger.info("phase_enabled", phase="TRIAGE", enabled=True)
