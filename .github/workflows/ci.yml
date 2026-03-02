@@ -180,11 +180,18 @@ jobs:
           restore-keys: |
             warden-cache-${{ runner.os }}-
 
+      - name: Cache Ollama binary
+        id: ollama-binary-cache
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/bin/ollama
+          key: ollama-binary-${{ runner.os }}-0.17.4
+
       - name: Cache AI Models
         uses: actions/cache@v5
         with:
           path: ~/.ollama
-          key: ollama-models-${{ runner.os }}-${{ hashFiles('.warden/config.yaml') }}
+          key: ollama-models-${{ runner.os }}-qwen2.5-coder-3b
           restore-keys: |
             ollama-models-${{ runner.os }}-
 
@@ -208,6 +215,15 @@ jobs:
       # adding 10-20 min of overhead for no benefit in incremental scan mode.
       # - name: Verify Code Intelligence (Audit Context)
 
+      - name: Install Ollama binary
+        # Skipped on cache hit — binary is already at /usr/local/bin/ollama.
+        # On cache miss: install.sh pins the version, sets up systemd which we
+        # then stop/disable so we can manage the process ourselves.
+        if: steps.ollama-binary-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.17.4 sh
+          sudo systemctl stop ollama || true
+          sudo systemctl disable ollama || true
 
       - name: Start Ollama
         env:
@@ -217,23 +233,22 @@ jobs:
           OLLAMA_FLASH_ATTENTION: "1"
           OLLAMA_CONTEXT_LENGTH: "4096"   # prompt ~2K + output 800 → 4K safe; default 32K wastes 8× RAM
         run: |
-          curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
-          bash /tmp/ollama-install.sh && rm /tmp/ollama-install.sh
-          sudo systemctl stop ollama || true
-          sudo systemctl disable ollama || true
-          # If systemctl stop failed silently the port may still be bound; kill any
-          # leftover ollama process before starting a fresh server.
+          # Ensure port is free regardless of how we got the binary.
           lsof -ti :11434 | xargs --no-run-if-empty sudo kill -9 || true
           ollama serve &
           for i in {1..30}; do curl -s http://localhost:11434/api/tags > /dev/null && break || sleep 1; done
+          if ! curl -sf http://localhost:11434/api/tags > /dev/null; then
+            echo "::error::Ollama failed to start after 30s"
+            exit 1
+          fi
           if ollama list | grep -q "qwen2.5-coder:3b"; then
-            echo "✅ Model already cached."
+            echo "Model already cached."
           else
             ollama pull qwen2.5-coder:3b
           fi
           curl -s http://localhost:11434/api/generate \
             -d '{"model":"qwen2.5-coder:3b","prompt":"","keep_alive":-1}' -o /dev/null
-          echo "✅ Ollama ready."
+          echo "Ollama ready."
 
       - name: Run Warden Scan
         env:
