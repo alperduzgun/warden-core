@@ -246,8 +246,16 @@ jobs:
           else
             ollama pull qwen2.5-coder:3b
           fi
+          # Warm up inference pipeline, not just model weights.
+          # Empty prompt loads weights into RAM but does NOT initialize LLAMA.CPP
+          # thread pools, KV cache, or computation graphs. The first real inference
+          # call (benchmark probe) would then bear the cold-start cost and exceed
+          # the 30s asyncio.wait_for timeout → benchmark_failed → floor=400 fallback.
+          # Generating 1 token here fully initialises the execution engine so the
+          # benchmark probe runs warm. keep_alive=-1 keeps the model resident.
           curl -s http://localhost:11434/api/generate \
-            -d '{"model":"qwen2.5-coder:3b","prompt":"","keep_alive":-1}' -o /dev/null
+            -d '{"model":"qwen2.5-coder:3b","prompt":"hi","options":{"num_predict":1},"keep_alive":-1}' \
+            -o /dev/null
           echo "Ollama ready."
 
       - name: Run Warden Scan
