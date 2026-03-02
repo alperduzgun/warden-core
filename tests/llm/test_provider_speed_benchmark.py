@@ -91,9 +91,10 @@ class TestCalculate:
         assert result == ProviderSpeedBenchmarkService.MAX_TOKENS_FLOOR
 
     def test_short_timeout(self):
-        """Short timeout (30s) at 10 tok/s = 225 tokens (within bounds)."""
+        """Short timeout (30s) at 10 tok/s yields 225 raw tokens, floored to MAX_TOKENS_FLOOR."""
         result = ProviderSpeedBenchmarkService._calculate(10.0, 30.0)
-        assert result == int(10.0 * 30.0 * 0.75)  # 225
+        # 10 tok/s × 30s × 0.75 = 225, which is below MAX_TOKENS_FLOOR → clamped up
+        assert result == ProviderSpeedBenchmarkService.MAX_TOKENS_FLOOR
 
 
 # ---------------------------------------------------------------------------
@@ -415,3 +416,186 @@ class TestEndToEnd:
         )
         with pytest.raises(Exception):  # FrozenInstanceError or AttributeError
             r.tok_per_sec = 999.0  # type: ignore[misc]
+
+    def test_provider_speed_result_prefill_default(self):
+        """prefill_ms_per_token defaults to 0.0 when not supplied."""
+        r = ProviderSpeedResult(
+            cache_key="ollama@http://localhost:11434",
+            tok_per_sec=5.0,
+            safe_max_tokens=450,
+            measured_at=0.0,
+        )
+        assert r.prefill_ms_per_token == 0.0
+
+
+# ---------------------------------------------------------------------------
+# TestGetSafeReadTimeout
+# ---------------------------------------------------------------------------
+
+
+class TestGetSafeReadTimeout:
+    def _seed_cache(self, svc: ProviderSpeedBenchmarkService, cache_key: str, prefill_ms_per_token: float) -> None:
+        """Insert a cached result directly into the service cache."""
+        result = ProviderSpeedResult(
+            cache_key=cache_key,
+            tok_per_sec=10.0,
+            safe_max_tokens=900,
+            measured_at=time.monotonic(),
+            prefill_ms_per_token=prefill_ms_per_token,
+        )
+        svc._cache[cache_key] = (result, time.monotonic())
+
+    def test_no_cache_returns_default(self):
+        """No cache entry → 120.0 (original hardcoded default)."""
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=1000)
+        assert result == 120.0
+
+    def test_zero_prefill_returns_default(self):
+        """prefill_ms_per_token == 0 → 120.0 (unknown, use safe default)."""
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=0.0)
+        result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=1000)
+        assert result == 120.0
+
+    def test_formula(self):
+        """Verify formula: prefill_ms × tokens × margin / 1000 + 30s.
+
+        prefill_ms_per_token=10ms, tokens=1000, margin=1.5:
+        10 × 1000 × 1.5 / 1000 + 30 = 15 + 30 = 45 s
+        """
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=10.0)
+        result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=1000)
+        assert result == pytest.approx(45.0, abs=0.01)
+
+    def test_ceiling_300s(self):
+        """Very slow prefill → capped at 300 s."""
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        # 500 ms/token × 2000 tokens × 1.5 / 1000 + 30 = 1530s → capped at 300
+        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=500.0)
+        result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=2000)
+        assert result == 300.0
+
+    def test_floor_30s(self):
+        """Near-zero prefill → floored at 30 s (still need time for generation)."""
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        # 0.001 ms/token × 100 tokens × 1.5 / 1000 + 30 ≈ 30s
+        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=0.001)
+        result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=100)
+        assert result >= 30.0
+
+    def test_custom_safety_margin(self):
+        """Custom margin applies correctly."""
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=10.0)
+        # 10 × 1000 × 2.0 / 1000 + 30 = 50 s
+        result = svc.get_safe_read_timeout(
+            "ollama@http://localhost:11434",
+            estimated_prompt_tokens=1000,
+            safety_margin=2.0,
+        )
+        assert result == pytest.approx(50.0, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# TestNativeStats — benchmark uses Ollama's generation_duration_ms
+# ---------------------------------------------------------------------------
+
+
+class TestNativeStats:
+    @pytest.mark.asyncio
+    async def test_native_generation_stats_used_for_tok_per_sec(self):
+        """When response carries generation_duration_ms, use it instead of wall-clock.
+
+        Wall-clock elapsed is 5 s (includes rate-limiter overhead).
+        Native gen_ms = 1000 ms → true 10 tok/s.
+        Without native stats: tok/s = 10 / 5 = 2 → would underestimate.
+        """
+        client = MagicMock()
+        client.provider = LlmProvider.OLLAMA
+        response = LlmResponse(
+            content="hi " * 10,
+            success=True,
+            provider=LlmProvider.OLLAMA,
+            model="qwen",
+            completion_tokens=10,
+            generation_duration_ms=1000.0,  # 1 s native → 10 tok/s
+            prefill_duration_ms=None,
+        )
+        client.send_async = AsyncMock(return_value=response)
+
+        svc = ProviderSpeedBenchmarkService.get_instance()
+
+        call_count = 0
+
+        def fake_monotonic():
+            nonlocal call_count
+            call_count += 1
+            return float(call_count * 5)  # 5s wall-clock gap
+
+        with patch("warden.llm.provider_speed_benchmark.time.monotonic", side_effect=fake_monotonic):
+            result_tokens = await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
+
+        # Should use native 10 tok/s, not wall-clock 2 tok/s
+        expected = ProviderSpeedBenchmarkService._calculate(10.0, 120.0)  # 900
+        assert result_tokens == expected
+
+    @pytest.mark.asyncio
+    async def test_prefill_stats_stored_in_result(self):
+        """When response carries prefill_duration_ms + prompt_tokens, prefill rate is stored."""
+        client = MagicMock()
+        client.provider = LlmProvider.OLLAMA
+        # 500 ms to prefill 50 input tokens → 10 ms/token
+        response = LlmResponse(
+            content="hello",
+            success=True,
+            provider=LlmProvider.OLLAMA,
+            model="qwen",
+            completion_tokens=5,
+            prompt_tokens=50,
+            prefill_duration_ms=500.0,
+            generation_duration_ms=None,
+        )
+        client.send_async = AsyncMock(return_value=response)
+
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
+
+        cache_key = svc._get_cache_key(client)
+        stored_result, _ = svc._cache[cache_key]
+        assert stored_result.prefill_ms_per_token == pytest.approx(10.0, abs=0.01)
+
+    @pytest.mark.asyncio
+    async def test_wall_clock_fallback_when_no_native_stats(self):
+        """No native stats → wall-clock elapsed used (existing behaviour preserved)."""
+        client = MagicMock()
+        client.provider = LlmProvider.OLLAMA
+        response = LlmResponse(
+            content="hello",
+            success=True,
+            provider=LlmProvider.OLLAMA,
+            model="qwen",
+            completion_tokens=10,
+            # No generation_duration_ms / prefill_duration_ms
+        )
+        client.send_async = AsyncMock(return_value=response)
+
+        svc = ProviderSpeedBenchmarkService.get_instance()
+
+        call_count = 0
+
+        def fake_monotonic():
+            nonlocal call_count
+            call_count += 1
+            return float(call_count)  # 1s elapsed
+
+        with patch("warden.llm.provider_speed_benchmark.time.monotonic", side_effect=fake_monotonic):
+            await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
+
+        cache_key = svc._get_cache_key(client)
+        stored_result, _ = svc._cache[cache_key]
+        # Wall-clock: 10 tokens / 1s = 10 tok/s
+        assert stored_result.tok_per_sec == pytest.approx(10.0, abs=0.1)
+        # No native prefill data → 0.0
+        assert stored_result.prefill_ms_per_token == 0.0

@@ -33,6 +33,7 @@ class ProviderSpeedResult:
     tok_per_sec: float
     safe_max_tokens: int
     measured_at: float  # time.monotonic()
+    prefill_ms_per_token: float = 0.0  # ms to prefill 1 input token; 0 = unknown
 
 
 class ProviderSpeedBenchmarkService:
@@ -56,7 +57,7 @@ class ProviderSpeedBenchmarkService:
     BENCHMARK_TOKEN_COUNT: int = 20
     CACHE_TTL_S: float = 300.0  # 5 minutes
     MAX_TOKENS_CEILING: int = 4000
-    MAX_TOKENS_FLOOR: int = 100
+    MAX_TOKENS_FLOOR: int = 400  # Minimum useful budget for a single security finding
 
     # Providers where throughput measurement makes sense
     _LOCAL_PROVIDER_VALUES: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
@@ -173,12 +174,30 @@ class ProviderSpeedBenchmarkService:
         response = await client.send_async(request)
         elapsed = time.monotonic() - t0
 
-        if response.completion_tokens and response.completion_tokens > 0:
-            tokens_produced = response.completion_tokens
-        else:
-            tokens_produced = max(1, len(response.content) // 4)
+        tokens_produced = (
+            response.completion_tokens
+            if response.completion_tokens and response.completion_tokens > 0
+            else max(1, len(response.content) // 4)
+        )
 
-        tok_per_sec = tokens_produced / max(elapsed, 0.001)
+        # Prefer Ollama's native eval_duration (excludes rate-limiter/network overhead)
+        # over wall-clock time for a more accurate generation speed estimate.
+        gen_ms = getattr(response, "generation_duration_ms", None)
+        if gen_ms and gen_ms > 0:
+            tok_per_sec = tokens_produced / (gen_ms / 1000)
+        else:
+            tok_per_sec = tokens_produced / max(elapsed, 0.001)
+
+        # Prefill rate: ms needed to process each input token (from Ollama's stats).
+        # Used to compute a read timeout that covers worst-case prefill before the
+        # first output token is produced.
+        prefill_ms = getattr(response, "prefill_duration_ms", None)
+        prompt_toks = response.prompt_tokens or 0
+        if prefill_ms and prefill_ms > 0 and prompt_toks > 0:
+            prefill_ms_per_token = prefill_ms / prompt_toks
+        else:
+            prefill_ms_per_token = 0.0
+
         # safe_max_tokens stored with a fixed reference timeout; recalculated per call
         safe_max = self._calculate(tok_per_sec, 120.0)
 
@@ -187,12 +206,14 @@ class ProviderSpeedBenchmarkService:
             tok_per_sec=tok_per_sec,
             safe_max_tokens=safe_max,
             measured_at=time.monotonic(),
+            prefill_ms_per_token=prefill_ms_per_token,
         )
 
         logger.info(
             "benchmark_complete",
             provider=cache_key,
             tok_per_sec=round(tok_per_sec, 1),
+            prefill_ms_per_token=round(prefill_ms_per_token, 2),
             safe_max_tokens=safe_max,
             phase_timeout_s=120.0,
             elapsed_s=round(elapsed, 2),
@@ -203,6 +224,30 @@ class ProviderSpeedBenchmarkService:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def get_safe_read_timeout(
+        self,
+        cache_key: str,
+        estimated_prompt_tokens: int,
+        safety_margin: float = 1.5,
+    ) -> float:
+        """Compute a read timeout that covers prefill for *estimated_prompt_tokens*.
+
+        Formula: prefill_ms_per_token × prompt_tokens × safety_margin / 1000 + 30 s
+        (30 s generation buffer on top of prefill estimate).
+
+        Returns 120.0 (previous hardcoded default) when no benchmark data is
+        available or when prefill_ms_per_token was not measured (non-Ollama provider).
+        Floor: 30 s. Ceiling: 300 s.
+        """
+        if cache_key not in self._cache:
+            return 120.0
+        result, _ = self._cache[cache_key]
+        if result.prefill_ms_per_token <= 0:
+            return 120.0
+        prefill_s = result.prefill_ms_per_token * estimated_prompt_tokens / 1000
+        total = prefill_s * safety_margin + 30.0
+        return min(300.0, max(30.0, total))
 
     async def get_safe_max_tokens(
         self,

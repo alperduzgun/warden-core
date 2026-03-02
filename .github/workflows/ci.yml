@@ -167,7 +167,6 @@ jobs:
         with:
           path: |
             .warden/memory
-            .warden/embeddings
           key: warden-storage-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
             warden-storage-${{ runner.os }}-
