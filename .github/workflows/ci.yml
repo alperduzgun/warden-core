@@ -210,11 +210,20 @@ jobs:
 
 
       - name: Start Ollama
+        env:
+          # Server-side vars must be in the *serve* process environment,
+          # not the scan step — Ollama reads these from its own process via os.Getenv().
+          OLLAMA_MAX_LOADED_MODELS: "1"
+          OLLAMA_FLASH_ATTENTION: "1"
+          OLLAMA_CONTEXT_LENGTH: "2048"
         run: |
           curl -fsSL -o /tmp/ollama-install.sh https://ollama.com/install.sh
           bash /tmp/ollama-install.sh && rm /tmp/ollama-install.sh
           sudo systemctl stop ollama || true
           sudo systemctl disable ollama || true
+          # If systemctl stop failed silently the port may still be bound; kill any
+          # leftover ollama process before starting a fresh server.
+          lsof -ti :11434 | xargs --no-run-if-empty sudo kill -9 || true
           ollama serve &
           for i in {1..30}; do curl -s http://localhost:11434/api/tags > /dev/null && break || sleep 1; done
           if ollama list | grep -q "qwen2.5-coder:3b"; then
@@ -232,10 +241,6 @@ jobs:
           WARDEN_LLM_PROVIDER: "ollama"
           WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
           OLLAMA_HOST: http://localhost:11434
-          OLLAMA_NUM_THREADS: "4"
-          OLLAMA_MAX_LOADED_MODELS: "1"
-          OLLAMA_FLASH_ATTENTION: "1"
-          OLLAMA_CONTEXT_LENGTH: "2048"
         run: |
           # =============================================================
           # SCAN STRATEGY (both paths use Ollama)
