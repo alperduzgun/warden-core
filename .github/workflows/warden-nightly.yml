@@ -10,6 +10,8 @@ jobs:
   warden:
     name: Nightly Full Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for baseline commit push
 
     env:
       WARDEN_LLM_PROVIDER: ollama
@@ -18,40 +20,65 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install Warden
-        run: pip install warden-core
-
-      - name: Setup Ollama
+      - name: Install Warden (local)
+        # Use current codebase, not the published PyPI package.
         run: |
-          curl -fsSL https://ollama.com/install.sh | sh
+          pip install --upgrade pip
+          pip install ".[semantic]"
+
+      - name: Cache Ollama binary
+        id: ollama-binary-cache
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/bin/ollama
+          key: ollama-binary-${{ runner.os }}-0.17.4
+
+      - name: Cache AI Models
+        uses: actions/cache@v5
+        with:
+          path: ~/.ollama
+          key: ollama-models-${{ runner.os }}-qwen2.5-coder-3b
+          restore-keys: |
+            ollama-models-${{ runner.os }}-
+
+      - name: Install Ollama binary
+        if: steps.ollama-binary-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.17.4 sh
+          sudo systemctl stop ollama || true
+          sudo systemctl disable ollama || true
+
+      - name: Start Ollama and warm up model
+        env:
+          OLLAMA_MAX_LOADED_MODELS: "1"
+          OLLAMA_FLASH_ATTENTION: "1"
+          OLLAMA_CONTEXT_LENGTH: "4096"
+        run: |
+          lsof -ti :11434 | xargs --no-run-if-empty sudo kill -9 || true
           ollama serve &
-          echo "Waiting for Ollama to be ready..."
-          for i in {1..30}; do
-            if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
-              echo "Ollama is ready!"
-              break
-            fi
-            echo "Attempt $i/30: Ollama not ready yet..."
-            sleep 1
-          done
-          ollama pull qwen2.5-coder:3b
-
-
-      - name: Refresh Intelligence
-        run: warden refresh --force
+          for i in {1..30}; do curl -s http://localhost:11434/api/tags > /dev/null && break || sleep 1; done
+          if ollama list | grep -q "qwen2.5-coder:3b"; then
+            echo "Model already cached."
+          else
+            ollama pull qwen2.5-coder:3b
+          fi
+          curl -s http://localhost:11434/api/generate \
+            -d '{"model":"qwen2.5-coder:3b","prompt":"hi","options":{"num_predict":1},"keep_alive":-1}' \
+            -o /dev/null
+          echo "Ollama ready."
 
       - name: Run Full Scan and Update Baseline
         run: |
           mkdir -p .warden/reports
-          warden scan --format sarif --output .warden/reports/warden-report.sarif
+          warden scan src/warden --level standard --format sarif --output .warden/reports/warden-report.sarif
 
       - name: Check Technical Debt
         run: warden baseline debt
@@ -67,14 +94,14 @@ jobs:
 
       - name: Upload SARIF Report
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: .warden/reports/warden-report.sarif
         continue-on-error: true
 
       - name: Upload Reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: warden-nightly-reports
           path: .warden/reports/
