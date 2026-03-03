@@ -53,11 +53,11 @@ class ProviderSpeedBenchmarkService:
 
     # Tuning constants
     SAFETY_MARGIN: float = 0.75
-    BENCHMARK_TIMEOUT_S: float = 90.0  # 3b model on CPU needs ~60s prefill; 30s was too tight
+    BENCHMARK_TIMEOUT_S: float = 30.0
     BENCHMARK_TOKEN_COUNT: int = 20
     CACHE_TTL_S: float = 300.0  # 5 minutes
     MAX_TOKENS_CEILING: int = 4000
-    MAX_TOKENS_FLOOR: int = 150  # 3b @ ~3 tok/s = ~50s; fits within 120s read_timeout
+    MAX_TOKENS_FLOOR: int = 400  # Minimum useful budget for a single security finding
 
     # Providers where throughput measurement makes sense
     _LOCAL_PROVIDER_VALUES: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
@@ -134,18 +134,21 @@ class ProviderSpeedBenchmarkService:
         return f"{provider_str}@{endpoint}"
 
     @staticmethod
-    def _calculate(tok_per_sec: float, timeout_s: float) -> int:
+    def _calculate(tok_per_sec: float, timeout_s: float, apply_floor: bool = True) -> int:
         """
         Compute safe max_tokens given measured throughput and phase timeout.
 
         Formula: floor(tok_per_sec × timeout_s × SAFETY_MARGIN)
-        Clamped to [MAX_TOKENS_FLOOR, MAX_TOKENS_CEILING].
+        Clamped to [MAX_TOKENS_CEILING] always; floor applied only when
+        apply_floor=True (normal path).  Conservative timeout estimates skip
+        the floor so the mathematically derived upper-bound is preserved.
         """
         cls = ProviderSpeedBenchmarkService
         if tok_per_sec <= 0:
-            return cls.MAX_TOKENS_FLOOR
+            return cls.MAX_TOKENS_FLOOR if apply_floor else 1
         raw = int(tok_per_sec * timeout_s * cls.SAFETY_MARGIN)
-        return min(cls.MAX_TOKENS_CEILING, max(cls.MAX_TOKENS_FLOOR, raw))
+        floor = cls.MAX_TOKENS_FLOOR if apply_floor else 1
+        return min(cls.MAX_TOKENS_CEILING, max(floor, raw))
 
     # ------------------------------------------------------------------
     # I/O core
@@ -312,6 +315,7 @@ class ProviderSpeedBenchmarkService:
                     conservative = self._calculate(
                         self.BENCHMARK_TOKEN_COUNT / self.BENCHMARK_TIMEOUT_S,
                         phase_timeout_s,
+                        apply_floor=False,  # floor would override the measured upper-bound
                     )
                     logger.warning(
                         "benchmark_failed",
