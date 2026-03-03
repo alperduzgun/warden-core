@@ -18,6 +18,7 @@ from warden.cli.commands.config import config_app
 from warden.cli.commands.context import context_app
 from warden.cli.commands.doctor import doctor as doctor_command
 from warden.cli.commands.init import init_command
+from warden.cli.commands.login import login_command, logout_command, whoami_command
 from warden.cli.commands.install import install as install_command
 from warden.cli.commands.refresh import refresh_command
 from warden.cli.commands.scan import scan_command
@@ -106,6 +107,9 @@ app.command(name="update")(update_command)
 app.command(name="refresh")(refresh_command)
 app.command(name="ci-config")(ci_config_command)
 app.command(name="audit-context")(audit_context_command)
+app.command(name="/login")(login_command)
+app.command(name="/logout")(logout_command)
+app.command(name="/whoami")(whoami_command)
 
 
 def _normalize_color_env() -> None:

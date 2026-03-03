@@ -677,6 +677,24 @@ def init_command(
     """
     console.print("[bold blue]🛡️  Initializing Warden (Smart Mode)...[/bold blue]")
 
+    # --- Cloud Auth Check ---
+    try:
+        from warden.auth.credentials import CredentialStore
+
+        store = CredentialStore()
+        if not store.is_logged_in():
+            console.print("[bold yellow]Not logged in. Starting authentication...[/bold yellow]")
+            from warden.cli.commands.login import _run_login
+
+            logged_in = asyncio.run(_run_login())
+            if not logged_in:
+                console.print("[bold red]Authentication failed. Cannot continue.[/bold red]")
+                raise typer.Exit(1)
+    except typer.Exit:
+        raise
+    except Exception:
+        pass  # auth module unavailable — continue with local init
+
     warden_dir = Path(".warden")
     warden_dir.mkdir(parents=True, exist_ok=True)
 
