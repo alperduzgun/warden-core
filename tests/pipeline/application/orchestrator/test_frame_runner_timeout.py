@@ -180,7 +180,10 @@ class TestFrameRunnerTimeout:
         pipeline.frames_passed = 0
         pipeline.frames_failed = 0
 
-        runner = FrameRunner(config=PipelineConfig())
+        # force_scan=True disables the cross-scan FindingsCache so the cache
+        # restored from CI artefacts cannot return a cache hit and cause an
+        # early None return before the timeout logic is reached.
+        runner = FrameRunner(config=PipelineConfig(force_scan=True))
         # Force a very short timeout so the test completes quickly
         with patch(
             "warden.pipeline.application.orchestrator.frame_runner.calculate_per_file_timeout",
