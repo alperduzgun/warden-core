@@ -192,7 +192,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.ollama
-          key: ollama-models-${{ runner.os }}-qwen2.5-coder-3b
+          key: ollama-models-${{ runner.os }}-qwen2.5-coder-0.5b
           restore-keys: |
             ollama-models-${{ runner.os }}-
 
@@ -242,20 +242,20 @@ jobs:
             echo "::error::Ollama failed to start after 30s"
             exit 1
           fi
-          if ollama list | grep -q "qwen2.5-coder:3b"; then
+          if ollama list | grep -q "qwen2.5-coder:0.5b"; then
             echo "Model already cached."
           else
-            ollama pull qwen2.5-coder:3b
+            ollama pull qwen2.5-coder:0.5b
           fi
           # Warm up inference pipeline, not just model weights.
           # Empty prompt loads weights into RAM but does NOT initialize LLAMA.CPP
           # thread pools, KV cache, or computation graphs. The first real inference
           # call (benchmark probe) would then bear the cold-start cost and exceed
-          # the 30s asyncio.wait_for timeout → benchmark_failed → floor=400 fallback.
+          # the benchmark timeout → benchmark_failed → tiny fallback budget.
           # Generating 1 token here fully initialises the execution engine so the
           # benchmark probe runs warm. keep_alive=-1 keeps the model resident.
           curl -s http://localhost:11434/api/generate \
-            -d '{"model":"qwen2.5-coder:3b","prompt":"hi","options":{"num_predict":1},"keep_alive":-1}' \
+            -d '{"model":"qwen2.5-coder:0.5b","prompt":"hi","options":{"num_predict":1},"keep_alive":-1}' \
             -o /dev/null
           echo "Ollama ready."
 
@@ -264,6 +264,8 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
           WARDEN_LLM_PROVIDER: "ollama"
           WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
+          WARDEN_SMART_MODEL: "qwen2.5-coder:0.5b"
+          WARDEN_FAST_MODEL: "qwen2.5-coder:0.5b"
           OLLAMA_HOST: http://localhost:11434
         run: |
           # =============================================================

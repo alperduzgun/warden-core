@@ -114,7 +114,10 @@ class ResourceDisposalFortifier(BaseFortifier):
                 max_tokens=3000,
             )
 
-            fortified_code = self._extract_code_from_markdown(response, code_file.content)
+            if not response or not response.content:
+                raise RuntimeError("LLM returned empty response")
+
+            fortified_code = self._extract_code_from_markdown(response.content, code_file.content)
 
             actions = [
                 FortificationAction(

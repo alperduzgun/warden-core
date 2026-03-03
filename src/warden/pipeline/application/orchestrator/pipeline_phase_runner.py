@@ -1,5 +1,6 @@
 """Execute all pipeline phases sequentially with progress tracking."""
 
+import asyncio
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
@@ -721,7 +722,9 @@ class PipelinePhaseRunner:
                 unconfirmed=chain_validation.unconfirmed,
                 dead_symbols=len(chain_validation.dead_symbols),
             )
-        except TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
+            # asyncio.TimeoutError ≠ built-in TimeoutError in Python 3.10;
+            # they were unified in Python 3.11.  Catch both for 3.10 compat.
             logger.warning("lsp_audit_timeout", timeout=30.0)
         except Exception as e:
             logger.warning("lsp_audit_failed", error=str(e))
