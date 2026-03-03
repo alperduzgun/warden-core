@@ -202,13 +202,15 @@ class TestBenchmarkIntegration:
         """
         The phase timeout value (config.timeout) is passed as phase_timeout_s
         to get_safe_max_tokens. Verify _calculate honours it.
-        30s timeout: _calculate(10 tok/s, 30s) = 225
+        30s timeout: _calculate(10 tok/s, 30s) = 225 raw, floored to MAX_TOKENS_FLOOR
         120s timeout: _calculate(10 tok/s, 120s) = 900
         This is a pure-function contract — no async, no mock needed.
         """
+        floor = ProviderSpeedBenchmarkService.MAX_TOKENS_FLOOR
         tokens_30 = ProviderSpeedBenchmarkService._calculate(10.0, 30.0)
         tokens_120 = ProviderSpeedBenchmarkService._calculate(10.0, 120.0)
 
         assert tokens_30 < tokens_120
-        assert tokens_30 == 225
+        # 10 × 30 × 0.75 = 225 < floor → clamped up to MAX_TOKENS_FLOOR
+        assert tokens_30 == floor
         assert tokens_120 == 900

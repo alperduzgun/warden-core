@@ -243,7 +243,9 @@ class TestChaosFailureModes:
         Simulates the real CI scenario: Ollama cold-starts and the benchmark
         call raises TimeoutError (BENCHMARK_TIMEOUT_S=30, TOKEN_COUNT=20).
 
-        Upper-bound tok/s = 20/30 ≈ 0.67 → _calculate(0.67, 120) = 100 (floor).
+        Upper-bound tok/s = 20/30 ≈ 0.67.  apply_floor=False is used so the
+        mathematically derived budget (int(0.67×120×0.75) = 60) is preserved
+        without the MAX_TOKENS_FLOOR override.
         Returning default (800) would cause the real phase call to time out too.
         """
         client = MagicMock()
@@ -252,12 +254,38 @@ class TestChaosFailureModes:
         client.send_async = AsyncMock(side_effect=asyncio.TimeoutError())
 
         svc = ProviderSpeedBenchmarkService.get_instance()
-        # Use real BENCHMARK_TIMEOUT_S (30) and BENCHMARK_TOKEN_COUNT (20):
-        # conservative = _calculate(20/30, 120.0) = clamp(0.67*120*0.75, 100, 4000) = 100
+        # conservative = _calculate(20/30, 120.0, apply_floor=False)
+        #              = int(0.667 × 120 × 0.75) = 60
         result = await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
 
+        conservative_expected = int((svc.BENCHMARK_TOKEN_COUNT / svc.BENCHMARK_TIMEOUT_S) * 120.0 * svc.SAFETY_MARGIN)
         assert result < 800  # conservative, not full budget
-        assert result == ProviderSpeedBenchmarkService.MAX_TOKENS_FLOOR  # 100
+        assert result == conservative_expected  # derived upper-bound (apply_floor=False)
+
+    @pytest.mark.asyncio
+    async def test_benchmark_timeout_caches_result(self):
+        """Benchmark TimeoutError result is cached so subsequent phases skip re-benchmarking.
+
+        Real scenario: ANALYSIS phase benchmark times out → CLASSIFICATION phase
+        should hit cache and NOT run the benchmark probe again.
+        """
+        client = MagicMock()
+        client.provider = LlmProvider.OLLAMA
+        client.send_async = AsyncMock(side_effect=asyncio.TimeoutError())
+
+        svc = ProviderSpeedBenchmarkService.get_instance()
+        cache_key = ProviderSpeedBenchmarkService._get_cache_key(client)
+
+        # First call — benchmark times out
+        first = await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
+
+        # Cache must be populated after a timeout
+        assert cache_key in svc._cache, "Timeout result must be cached to prevent re-benchmarking"
+
+        # Second call (simulates next pipeline phase) — must hit cache, not re-run benchmark
+        second = await svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
+        assert client.send_async.call_count == 1  # benchmark ran exactly once
+        assert first == second
 
     @pytest.mark.asyncio
     async def test_non_timeout_exception_returns_default(self):

@@ -34,6 +34,7 @@ class ProviderSpeedResult:
     safe_max_tokens: int
     measured_at: float  # time.monotonic()
     prefill_ms_per_token: float = 0.0  # ms to prefill 1 input token; 0 = unknown
+    timed_out: bool = False  # True when result is derived from a benchmark timeout
 
 
 class ProviderSpeedBenchmarkService:
@@ -276,7 +277,9 @@ class ProviderSpeedBenchmarkService:
             result, cached_at = self._cache[cache_key]
             age = now - cached_at
             if age < self.CACHE_TTL_S:
-                safe = self._calculate(result.tok_per_sec, phase_timeout_s)
+                # Preserve apply_floor=False for timeout-derived entries so the
+                # conservative upper-bound is not overridden by MAX_TOKENS_FLOOR.
+                safe = self._calculate(result.tok_per_sec, phase_timeout_s, apply_floor=not result.timed_out)
                 logger.debug(
                     "benchmark_cache_hit",
                     provider=cache_key,
@@ -292,7 +295,7 @@ class ProviderSpeedBenchmarkService:
             if cache_key in self._cache:
                 result, cached_at = self._cache[cache_key]
                 if time.monotonic() - cached_at < self.CACHE_TTL_S:
-                    return self._calculate(result.tok_per_sec, phase_timeout_s)
+                    return self._calculate(result.tok_per_sec, phase_timeout_s, apply_floor=not result.timed_out)
 
             try:
                 result = await asyncio.wait_for(
@@ -312,10 +315,25 @@ class ProviderSpeedBenchmarkService:
                 # Use that to compute a conservative safe budget rather than the full
                 # default, which would cause the actual phase call to time out too.
                 if isinstance(exc, TimeoutError):
+                    conservative_tok_per_sec = self.BENCHMARK_TOKEN_COUNT / self.BENCHMARK_TIMEOUT_S
                     conservative = self._calculate(
-                        self.BENCHMARK_TOKEN_COUNT / self.BENCHMARK_TIMEOUT_S,
+                        conservative_tok_per_sec,
                         phase_timeout_s,
                         apply_floor=False,  # floor would override the measured upper-bound
+                    )
+                    # Cache a synthetic result so subsequent phases (e.g. CLASSIFICATION
+                    # after ANALYSIS) reuse the conservative budget directly instead of
+                    # re-running the already-known-failing 30s benchmark probe.
+                    # timed_out=True preserves apply_floor=False on cache hits.
+                    self._cache[cache_key] = (
+                        ProviderSpeedResult(
+                            cache_key=cache_key,
+                            tok_per_sec=conservative_tok_per_sec,
+                            safe_max_tokens=conservative,
+                            measured_at=time.monotonic(),
+                            timed_out=True,
+                        ),
+                        time.monotonic(),
                     )
                     logger.warning(
                         "benchmark_failed",
