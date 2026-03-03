@@ -60,6 +60,12 @@ class ProviderSpeedBenchmarkService:
     MAX_TOKENS_CEILING: int = 4000
     MAX_TOKENS_FLOOR: int = 150  # 3b @ ~3 tok/s = ~50s; fits within 120s read_timeout
 
+    # Read-timeout tuning constants (used by get_safe_read_timeout)
+    READ_TIMEOUT_DEFAULT_S: float = 120.0  # returned when no benchmark data available
+    READ_TIMEOUT_FLOOR_S: float = 30.0  # minimum to allow token generation time
+    READ_TIMEOUT_CEILING_S: float = 300.0  # hard cap regardless of prefill estimate
+    READ_TIMEOUT_SAFETY_MARGIN: float = 1.5  # prefill overrun buffer
+
     # Providers where throughput measurement makes sense
     _LOCAL_PROVIDER_VALUES: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
@@ -245,13 +251,13 @@ class ProviderSpeedBenchmarkService:
         Floor: 30 s. Ceiling: 300 s.
         """
         if cache_key not in self._cache:
-            return 120.0
+            return self.READ_TIMEOUT_DEFAULT_S
         result, _ = self._cache[cache_key]
         if result.prefill_ms_per_token <= 0:
-            return 120.0
+            return self.READ_TIMEOUT_DEFAULT_S
         prefill_s = result.prefill_ms_per_token * estimated_prompt_tokens / 1000
-        total = prefill_s * safety_margin + 30.0
-        return min(300.0, max(30.0, total))
+        total = prefill_s * safety_margin + self.READ_TIMEOUT_FLOOR_S
+        return min(self.READ_TIMEOUT_CEILING_S, max(self.READ_TIMEOUT_FLOOR_S, total))
 
     async def get_safe_max_tokens(
         self,

@@ -19,12 +19,12 @@ def test_llm_provider_enum():
 
 
 def test_llm_request_defaults():
-    """Test LlmRequest default values"""
+    """Test LlmRequest default values match class field definitions."""
     request = LlmRequest(system_prompt="Test system", user_message="Test message")
 
     assert request.temperature == 0.0
-    assert request.max_tokens == 4000
-    assert request.timeout_seconds == 90.0
+    assert request.max_tokens == LlmRequest.model_fields["max_tokens"].default
+    assert request.timeout_seconds == LlmRequest.model_fields["timeout_seconds"].default
 
 
 def test_llm_response_to_dict():

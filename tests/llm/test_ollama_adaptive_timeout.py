@@ -43,31 +43,33 @@ def _make_ollama_client() -> OllamaClient:
 
 class TestSetReadTimeout:
     def test_default_read_timeout(self):
-        """Default _read_timeout is 120 s."""
+        """Default _read_timeout equals READ_TIMEOUT_DEFAULT_S."""
         client = _make_ollama_client()
-        assert client._read_timeout == 120.0
+        assert client._read_timeout == OllamaClient.READ_TIMEOUT_DEFAULT_S
 
     def test_set_read_timeout_updates_value(self):
         client = _make_ollama_client()
-        client.set_read_timeout(90.0)
-        assert client._read_timeout == 90.0
+        above_floor = OllamaClient.READ_TIMEOUT_FLOOR_S + 60.0
+        client.set_read_timeout(above_floor)
+        assert client._read_timeout == above_floor
 
-    def test_floor_30s_enforced(self):
-        """Values below 30 s are clamped to 30 s."""
+    def test_floor_enforced(self):
+        """Values below READ_TIMEOUT_FLOOR_S are clamped to the floor."""
         client = _make_ollama_client()
         client.set_read_timeout(5.0)
-        assert client._read_timeout == 30.0
+        assert client._read_timeout == OllamaClient.READ_TIMEOUT_FLOOR_S
 
     def test_exact_floor_boundary(self):
         client = _make_ollama_client()
-        client.set_read_timeout(30.0)
-        assert client._read_timeout == 30.0
+        client.set_read_timeout(OllamaClient.READ_TIMEOUT_FLOOR_S)
+        assert client._read_timeout == OllamaClient.READ_TIMEOUT_FLOOR_S
 
     def test_ceiling_not_enforced(self):
-        """No artificial ceiling — 300 s is valid for very slow prefill."""
+        """No artificial ceiling — values above READ_TIMEOUT_CEILING_S are valid."""
         client = _make_ollama_client()
-        client.set_read_timeout(300.0)
-        assert client._read_timeout == 300.0
+        above_ceiling = 300.0
+        client.set_read_timeout(above_ceiling)
+        assert client._read_timeout == above_ceiling
 
 
 # ---------------------------------------------------------------------------
@@ -212,20 +214,21 @@ class TestApplyReadTimeout:
     def test_direct_ollama_client(self):
         """_apply_read_timeout sets timeout on a direct OllamaClient."""
         client = _make_ollama_client()
-        _apply_read_timeout(client, 90.0)
-        assert client._read_timeout == 90.0
+        value = OllamaClient.READ_TIMEOUT_FLOOR_S + 60.0
+        _apply_read_timeout(client, value)
+        assert client._read_timeout == value
 
     def test_orchestrated_fast_client(self):
         """_apply_read_timeout reaches OllamaClient in fast_clients list."""
         ollama = _make_ollama_client()
-        # Simulate OrchestratedLlmClient-like object with fast_clients
         orchestrated = MagicMock()
         del orchestrated.set_read_timeout  # not a direct client
         orchestrated.smart_client = MagicMock(spec=[])  # no set_read_timeout
         orchestrated.fast_clients = [ollama]
 
-        _apply_read_timeout(orchestrated, 80.0)
-        assert ollama._read_timeout == 80.0
+        value = OllamaClient.READ_TIMEOUT_FLOOR_S + 50.0
+        _apply_read_timeout(orchestrated, value)
+        assert ollama._read_timeout == value
 
     def test_orchestrated_smart_client_is_ollama(self):
         """_apply_read_timeout reaches OllamaClient when it's the smart_client."""
@@ -235,19 +238,20 @@ class TestApplyReadTimeout:
         orchestrated.smart_client = ollama
         orchestrated.fast_clients = []
 
-        _apply_read_timeout(orchestrated, 75.0)
-        assert ollama._read_timeout == 75.0
+        value = OllamaClient.READ_TIMEOUT_FLOOR_S + 45.0
+        _apply_read_timeout(orchestrated, value)
+        assert ollama._read_timeout == value
 
     def test_no_ollama_client_no_error(self):
         """If no OllamaClient is reachable, function silently returns."""
         plain = MagicMock(spec=[])  # no set_read_timeout, no smart_client, no fast_clients
-        _apply_read_timeout(plain, 90.0)  # must not raise
+        _apply_read_timeout(plain, OllamaClient.READ_TIMEOUT_FLOOR_S + 60.0)  # must not raise
 
     def test_floor_respected_through_helper(self):
-        """set_read_timeout floor (30 s) is enforced when called through _apply_read_timeout."""
+        """set_read_timeout floor is enforced when called through _apply_read_timeout."""
         client = _make_ollama_client()
-        _apply_read_timeout(client, 10.0)
-        assert client._read_timeout == 30.0
+        _apply_read_timeout(client, OllamaClient.READ_TIMEOUT_FLOOR_S / 2)
+        assert client._read_timeout == OllamaClient.READ_TIMEOUT_FLOOR_S
 
     def test_both_smart_and_fast_updated(self):
         """When both smart and fast clients are OllamaClient instances, both are updated."""
@@ -259,6 +263,7 @@ class TestApplyReadTimeout:
         orchestrated.smart_client = smart_ollama
         orchestrated.fast_clients = [fast_ollama]
 
-        _apply_read_timeout(orchestrated, 100.0)
-        assert smart_ollama._read_timeout == 100.0
-        assert fast_ollama._read_timeout == 100.0
+        value = OllamaClient.READ_TIMEOUT_FLOOR_S + 70.0
+        _apply_read_timeout(orchestrated, value)
+        assert smart_ollama._read_timeout == value
+        assert fast_ollama._read_timeout == value

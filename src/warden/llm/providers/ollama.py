@@ -36,6 +36,10 @@ class OllamaClient(ILlmClient):
     Targeting ultra-light models like qwen2.5-coder:3b for CI and fast checks.
     """
 
+    # Read-timeout tuning constants
+    READ_TIMEOUT_DEFAULT_S: float = 120.0  # safe default before benchmark calibration
+    READ_TIMEOUT_FLOOR_S: float = 30.0  # minimum to tolerate transient CPU load
+
     def __init__(self, config: ProviderConfig):
         # Ollama doesn't require an API key by default
         self._endpoint = config.endpoint or "http://localhost:11434"
@@ -43,8 +47,8 @@ class OllamaClient(ILlmClient):
         # Cache of models confirmed missing — prevents repeated 404s
         self._missing_models: set[str] = set()
         # Read timeout (seconds) applied per-chunk while streaming.
-        # Calibrated at startup via ProviderSpeedBenchmarkService; floor 30s.
-        self._read_timeout: float = 120.0
+        # Calibrated at startup via ProviderSpeedBenchmarkService; floor READ_TIMEOUT_FLOOR_S.
+        self._read_timeout: float = self.READ_TIMEOUT_DEFAULT_S
 
         logger.debug("ollama_client_initialized", endpoint=self._endpoint, default_model=self._default_model)
 
@@ -54,7 +58,7 @@ class OllamaClient(ILlmClient):
         Called once at scan startup after the speed benchmark completes.
         Floor of 30 s prevents too-aggressive timeouts on temporarily loaded CPUs.
         """
-        self._read_timeout = max(30.0, seconds)
+        self._read_timeout = max(self.READ_TIMEOUT_FLOOR_S, seconds)
 
     @property
     def provider(self) -> LlmProvider:

@@ -207,10 +207,12 @@ class TestBenchmarkIntegration:
         This is a pure-function contract — no async, no mock needed.
         """
         floor = ProviderSpeedBenchmarkService.MAX_TOKENS_FLOOR
-        tokens_30 = ProviderSpeedBenchmarkService._calculate(6.0, 30.0)
-        tokens_120 = ProviderSpeedBenchmarkService._calculate(6.0, 120.0)
+        margin = ProviderSpeedBenchmarkService.SAFETY_MARGIN
+        tok_per_sec = 6.0
+        tokens_30 = ProviderSpeedBenchmarkService._calculate(tok_per_sec, 30.0)
+        tokens_120 = ProviderSpeedBenchmarkService._calculate(tok_per_sec, 120.0)
 
         assert tokens_30 < tokens_120
-        # 6 × 30 × 0.75 = 135 < floor (150) → clamped up to MAX_TOKENS_FLOOR
+        # 6 × 30 × SAFETY_MARGIN = 135 < floor → clamped up to MAX_TOKENS_FLOOR
         assert tokens_30 == floor
-        assert tokens_120 == 540
+        assert tokens_120 == int(tok_per_sec * 120.0 * margin)

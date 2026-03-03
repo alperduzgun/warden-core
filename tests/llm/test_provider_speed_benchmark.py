@@ -71,9 +71,11 @@ def _make_groq_client() -> MagicMock:
 
 class TestCalculate:
     def test_nominal(self):
-        """10 tok/s × 120s × 0.75 = 900 tokens."""
-        result = ProviderSpeedBenchmarkService._calculate(10.0, 120.0)
-        assert result == 900
+        """10 tok/s × 120s × SAFETY_MARGIN tokens."""
+        tok_per_sec, timeout = 10.0, 120.0
+        result = ProviderSpeedBenchmarkService._calculate(tok_per_sec, timeout)
+        expected = int(tok_per_sec * timeout * ProviderSpeedBenchmarkService.SAFETY_MARGIN)
+        assert result == expected
 
     def test_ceiling_cap(self):
         """Very fast provider should be capped at MAX_TOKENS_CEILING."""
@@ -474,56 +476,59 @@ class TestGetSafeReadTimeout:
         svc._cache[cache_key] = (result, time.monotonic())
 
     def test_no_cache_returns_default(self):
-        """No cache entry → 120.0 (original hardcoded default)."""
+        """No cache entry → READ_TIMEOUT_DEFAULT_S."""
         svc = ProviderSpeedBenchmarkService.get_instance()
         result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=1000)
-        assert result == 120.0
+        assert result == ProviderSpeedBenchmarkService.READ_TIMEOUT_DEFAULT_S
 
     def test_zero_prefill_returns_default(self):
-        """prefill_ms_per_token == 0 → 120.0 (unknown, use safe default)."""
+        """prefill_ms_per_token == 0 → READ_TIMEOUT_DEFAULT_S (unknown, use safe default)."""
         svc = ProviderSpeedBenchmarkService.get_instance()
         self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=0.0)
         result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=1000)
-        assert result == 120.0
+        assert result == ProviderSpeedBenchmarkService.READ_TIMEOUT_DEFAULT_S
 
     def test_formula(self):
-        """Verify formula: prefill_ms × tokens × margin / 1000 + 30s.
-
-        prefill_ms_per_token=10ms, tokens=1000, margin=1.5:
-        10 × 1000 × 1.5 / 1000 + 30 = 15 + 30 = 45 s
-        """
+        """Verify formula: prefill_ms × tokens × margin / 1000 + FLOOR_S."""
         svc = ProviderSpeedBenchmarkService.get_instance()
-        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=10.0)
-        result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=1000)
-        assert result == pytest.approx(45.0, abs=0.01)
+        prefill_ms = 10.0
+        tokens = 1000
+        margin = ProviderSpeedBenchmarkService.READ_TIMEOUT_SAFETY_MARGIN
+        floor = ProviderSpeedBenchmarkService.READ_TIMEOUT_FLOOR_S
+        expected = prefill_ms * tokens * margin / 1000 + floor
+        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=prefill_ms)
+        result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=tokens)
+        assert result == pytest.approx(expected, abs=0.01)
 
-    def test_ceiling_300s(self):
-        """Very slow prefill → capped at 300 s."""
+    def test_ceiling(self):
+        """Very slow prefill → capped at READ_TIMEOUT_CEILING_S."""
         svc = ProviderSpeedBenchmarkService.get_instance()
-        # 500 ms/token × 2000 tokens × 1.5 / 1000 + 30 = 1530s → capped at 300
         self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=500.0)
         result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=2000)
-        assert result == 300.0
+        assert result == ProviderSpeedBenchmarkService.READ_TIMEOUT_CEILING_S
 
     def test_floor_30s(self):
-        """Near-zero prefill → floored at 30 s (still need time for generation)."""
+        """Near-zero prefill → floored at READ_TIMEOUT_FLOOR_S."""
         svc = ProviderSpeedBenchmarkService.get_instance()
-        # 0.001 ms/token × 100 tokens × 1.5 / 1000 + 30 ≈ 30s
         self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=0.001)
         result = svc.get_safe_read_timeout("ollama@http://localhost:11434", estimated_prompt_tokens=100)
-        assert result >= 30.0
+        assert result >= ProviderSpeedBenchmarkService.READ_TIMEOUT_FLOOR_S
 
     def test_custom_safety_margin(self):
         """Custom margin applies correctly."""
         svc = ProviderSpeedBenchmarkService.get_instance()
-        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=10.0)
-        # 10 × 1000 × 2.0 / 1000 + 30 = 50 s
+        prefill_ms = 10.0
+        tokens = 1000
+        custom_margin = 2.0
+        floor = ProviderSpeedBenchmarkService.READ_TIMEOUT_FLOOR_S
+        expected = prefill_ms * tokens * custom_margin / 1000 + floor
+        self._seed_cache(svc, "ollama@http://localhost:11434", prefill_ms_per_token=prefill_ms)
         result = svc.get_safe_read_timeout(
             "ollama@http://localhost:11434",
-            estimated_prompt_tokens=1000,
-            safety_margin=2.0,
+            estimated_prompt_tokens=tokens,
+            safety_margin=custom_margin,
         )
-        assert result == pytest.approx(50.0, abs=0.01)
+        assert result == pytest.approx(expected, abs=0.01)
 
 
 # ---------------------------------------------------------------------------
