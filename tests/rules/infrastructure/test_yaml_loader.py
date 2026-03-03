@@ -32,7 +32,7 @@ rules:
     conditions:
       secrets:
         patterns:
-          - "api_key\\s*="
+          - 'api_key\\s*='
 
 ai_validation:
   enabled: true

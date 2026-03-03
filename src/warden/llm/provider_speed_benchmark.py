@@ -314,7 +314,10 @@ class ProviderSpeedBenchmarkService:
                 #   tok/s_max = BENCHMARK_TOKEN_COUNT / BENCHMARK_TIMEOUT_S
                 # Use that to compute a conservative safe budget rather than the full
                 # default, which would cause the actual phase call to time out too.
-                if isinstance(exc, TimeoutError):
+                # asyncio.TimeoutError is a subclass of TimeoutError in Python 3.11+
+                # but NOT in Python 3.10 (there it inherits from concurrent.futures.TimeoutError).
+                # Use asyncio.TimeoutError directly for cross-version compatibility.
+                if isinstance(exc, asyncio.TimeoutError):
                     conservative_tok_per_sec = self.BENCHMARK_TOKEN_COUNT / self.BENCHMARK_TIMEOUT_S
                     conservative = self._calculate(
                         conservative_tok_per_sec,
