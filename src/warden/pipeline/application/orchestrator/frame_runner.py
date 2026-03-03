@@ -976,6 +976,9 @@ class FrameRunner:
                     frame_id=frame.frame_id,
                     frame_name=frame.name,
                     status="timeout",
+                    duration=time.perf_counter() - frame_start_time,
+                    issues_found=0,
+                    is_blocker=False,
                     findings=[],
                 )
                 pipeline.frames_failed += 1
@@ -1015,6 +1018,9 @@ class FrameRunner:
                         frame_id=frame.frame_id,
                         frame_name=frame.name,
                         status="error",
+                        duration=time.perf_counter() - frame_start_time,
+                        issues_found=0,
+                        is_blocker=False,
                         findings=[],
                     )
                     pipeline.frames_failed += 1
