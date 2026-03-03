@@ -95,6 +95,25 @@ def calculate_per_file_timeout(
     return max(min_timeout, min(proportional, max_timeout))
 
 
+_BATCH_TIMEOUT_MIN_S: float = 300.0  # floor: 5 files × 60s minimum
+_BATCH_TIMEOUT_MAX_S: float = 1800.0  # ceiling: 5 files × 300s maximum
+
+
+def calculate_batch_timeout(
+    code_files: list,
+    *,
+    provider: str = "",
+) -> float:
+    """Sum per-file timeouts for a batch chunk.
+
+    Replaces the static config.frame_timeout for batch execution so that
+    large files or slow local providers get proportionally more time.
+    Clamped to [300s, 1800s] to prevent runaway batches.
+    """
+    total = sum(calculate_per_file_timeout(cf.size_bytes, provider=provider) for cf in code_files)
+    return min(_BATCH_TIMEOUT_MAX_S, max(_BATCH_TIMEOUT_MIN_S, total))
+
+
 @dataclass
 class ContextInjectionMetrics:
     """Track context injection health."""
@@ -789,9 +808,15 @@ class FrameRunner:
 
                                 for i in range(0, len(uncached_files), CHUNK_SIZE):
                                     chunk = uncached_files[i : i + CHUNK_SIZE]
+                                    _batch_provider = str(
+                                        getattr(getattr(context, "llm_config", None), "provider", "")
+                                        or getattr(context, "llm_provider", "")
+                                        or os.environ.get("WARDEN_LLM_PROVIDER", "")
+                                    ).lower()
+                                    chunk_timeout = calculate_batch_timeout(chunk, provider=_batch_provider)
                                     chunk_results = await asyncio.wait_for(
                                         frame.execute_batch_async(chunk),
-                                        timeout=getattr(self.config, "frame_timeout", 300.0),
+                                        timeout=chunk_timeout,
                                     )
                                     if chunk_results:
                                         # Persist each result to findings cache (1:1 with chunk files)

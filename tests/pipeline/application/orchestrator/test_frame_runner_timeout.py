@@ -14,10 +14,13 @@ import pytest
 
 from warden.pipeline.application.orchestrator.frame_runner import (
     FrameRunner,
+    _BATCH_TIMEOUT_MAX_S,
+    _BATCH_TIMEOUT_MIN_S,
     _FILE_BYTES_PER_SECOND,
     _FILE_TIMEOUT_LOCAL_S,
     _FILE_TIMEOUT_MAX_S,
     _FILE_TIMEOUT_MIN_S,
+    calculate_batch_timeout,
     calculate_per_file_timeout,
 )
 from warden.pipeline.domain.models import PipelineConfig
@@ -195,3 +198,60 @@ class TestFrameRunnerTimeout:
         assert tf.severity == "medium"
         assert "timed out" in tf.message.lower()
         assert "/tmp/big.py" in tf.location
+
+
+# ---------------------------------------------------------------------------
+# calculate_batch_timeout — unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestCalculateBatchTimeout:
+    """Tests for the batch timeout calculation function."""
+
+    def _make_file(self, size_bytes: int):
+        """Return a minimal object with a size_bytes attribute."""
+        from types import SimpleNamespace
+
+        return SimpleNamespace(size_bytes=size_bytes)
+
+    def test_sums_per_file_timeouts(self):
+        """Five small files → each gets local floor (120s) → sum=600s, clamped to min 300s."""
+        files = [self._make_file(100) for _ in range(5)]
+        result = calculate_batch_timeout(files, provider="ollama")
+        # Each file with size 100 and ollama provider → _FILE_TIMEOUT_LOCAL_S = 120s
+        # Total = 5 × 120 = 600s, clamp(300, 1800) = 600s
+        assert result == 5 * _FILE_TIMEOUT_LOCAL_S
+
+    def test_ollama_provider_uses_local_floor(self):
+        """Ollama provider forces each file to at least _FILE_TIMEOUT_LOCAL_S."""
+        files = [self._make_file(0)]
+        result = calculate_batch_timeout(files, provider="ollama")
+        # sum = 120s, clamped to min 300s
+        assert result == _BATCH_TIMEOUT_MIN_S
+
+    def test_min_clamp_300s(self):
+        """A single tiny file should be clamped up to the batch minimum of 300s."""
+        files = [self._make_file(100)]
+        result = calculate_batch_timeout(files, provider="openai")
+        # per_file = _FILE_TIMEOUT_MIN_S (5s); total=5s → clamped to 300s
+        assert result == _BATCH_TIMEOUT_MIN_S
+
+    def test_max_clamp_1800s(self):
+        """Very large files should be clamped at the batch ceiling of 1800s."""
+        # 5 files × 300s max per file = 1500s — need more: use 7 large files
+        # Actually 6 × 300s = 1800s = exactly at cap; 7 × 300s > 1800s
+        files = [self._make_file(10_000_000) for _ in range(7)]
+        result = calculate_batch_timeout(files, provider="openai")
+        assert result == _BATCH_TIMEOUT_MAX_S
+
+    def test_empty_chunk_returns_min(self):
+        """Empty file list → sum=0 → clamped to _BATCH_TIMEOUT_MIN_S."""
+        result = calculate_batch_timeout([], provider="ollama")
+        assert result == _BATCH_TIMEOUT_MIN_S
+
+    def test_no_provider_uses_cloud_floor(self):
+        """Without provider, each file uses the standard cloud floor."""
+        files = [self._make_file(100)]
+        result = calculate_batch_timeout(files)
+        # per_file = _FILE_TIMEOUT_MIN_S (5s); total=5s → clamped to 300s
+        assert result == _BATCH_TIMEOUT_MIN_S

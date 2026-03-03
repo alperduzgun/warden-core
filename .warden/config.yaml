@@ -167,7 +167,6 @@ settings:
   enable_issue_validation: true
   enable_suppression: true
   fail_fast: false
-  frame_timeout: 45
   min_severity: high
   mode: normal
   pre_analysis_config:
