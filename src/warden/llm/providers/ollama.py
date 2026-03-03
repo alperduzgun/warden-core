@@ -42,8 +42,19 @@ class OllamaClient(ILlmClient):
         self._default_model = config.default_model or "qwen2.5-coder:3b"
         # Cache of models confirmed missing — prevents repeated 404s
         self._missing_models: set[str] = set()
+        # Read timeout (seconds) applied per-chunk while streaming.
+        # Calibrated at startup via ProviderSpeedBenchmarkService; floor 30s.
+        self._read_timeout: float = 120.0
 
         logger.debug("ollama_client_initialized", endpoint=self._endpoint, default_model=self._default_model)
+
+    def set_read_timeout(self, seconds: float) -> None:
+        """Calibrate the per-chunk read timeout used during streaming.
+
+        Called once at scan startup after the speed benchmark completes.
+        Floor of 30 s prevents too-aggressive timeouts on temporarily loaded CPUs.
+        """
+        self._read_timeout = max(30.0, seconds)
 
     @property
     def provider(self) -> LlmProvider:
@@ -86,12 +97,14 @@ class OllamaClient(ILlmClient):
 
             # Streaming: Ollama sends tokens as they are generated.
             # read_timeout applies per-chunk (between tokens), NOT total generation time.
-            # For larger models (3b+) on CPU, prefill alone can exceed 60s before the
-            # first token appears — so we use 120s to accommodate slow prefill phases.
-            stream_timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=5.0)
+            # _read_timeout is calibrated by ProviderSpeedBenchmarkService at startup
+            # to cover worst-case prefill for the running model on this hardware.
+            stream_timeout = httpx.Timeout(connect=10.0, read=self._read_timeout, write=10.0, pool=5.0)
             content_parts: list[str] = []
             prompt_tokens = 0
             completion_tokens = 0
+            prefill_ns: int = 0
+            gen_ns: int = 0
 
             async with httpx.AsyncClient(timeout=stream_timeout) as client:
                 async with client.stream("POST", f"{self._endpoint}/api/chat", json=payload) as response:
@@ -105,6 +118,8 @@ class OllamaClient(ILlmClient):
                         if chunk.get("done"):
                             prompt_tokens = chunk.get("prompt_eval_count", 0)
                             completion_tokens = chunk.get("eval_count", 0)
+                            prefill_ns = chunk.get("prompt_eval_duration", 0)
+                            gen_ns = chunk.get("eval_duration", 0)
                             break
 
             duration_ms = int((time.time() - start_time) * 1000)
@@ -119,6 +134,8 @@ class OllamaClient(ILlmClient):
                 completion_tokens=completion_tokens,
                 total_tokens=prompt_tokens + completion_tokens,
                 duration_ms=duration_ms,
+                prefill_duration_ms=prefill_ns / 1e6 if prefill_ns else None,
+                generation_duration_ms=gen_ns / 1e6 if gen_ns else None,
             )
 
         except httpx.HTTPStatusError as e:

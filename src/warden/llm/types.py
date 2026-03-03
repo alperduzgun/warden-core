@@ -83,6 +83,8 @@ class LlmResponse(BaseDomainModel):
     total_tokens: int | None = None
     duration_ms: int = 0
     overall_confidence: float | None = None
+    prefill_duration_ms: float | None = None  # Ollama: prompt_eval_duration / 1e6
+    generation_duration_ms: float | None = None  # Ollama: eval_duration / 1e6
 
 
 class AnalysisIssue(BaseDomainModel):
