@@ -174,6 +174,9 @@ class LLMClassificationPhase(LLMPhaseBase):
                     system_prompt=self.get_system_prompt(), user_prompt=prompt, use_fast_tier=True
                 )
 
+                if not response or not response.content:
+                    raise RuntimeError("LLM returned no content after retries")
+
                 # Parse Batch Results
                 batch_results = self._parse_classification_batch_response(response.content, len(batch_files))
 

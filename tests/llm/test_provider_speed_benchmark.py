@@ -91,9 +91,9 @@ class TestCalculate:
         assert result == ProviderSpeedBenchmarkService.MAX_TOKENS_FLOOR
 
     def test_short_timeout(self):
-        """Short timeout (30s) at 10 tok/s yields 225 raw tokens, floored to MAX_TOKENS_FLOOR."""
-        result = ProviderSpeedBenchmarkService._calculate(10.0, 30.0)
-        # 10 tok/s × 30s × 0.75 = 225, which is below MAX_TOKENS_FLOOR → clamped up
+        """Short timeout (30s) at slow provider: raw tokens below floor → clamped up."""
+        result = ProviderSpeedBenchmarkService._calculate(2.0, 30.0)
+        # 2 tok/s × 30s × 0.75 = 45 < MAX_TOKENS_FLOOR (150) → clamped up
         assert result == ProviderSpeedBenchmarkService.MAX_TOKENS_FLOOR
 
 

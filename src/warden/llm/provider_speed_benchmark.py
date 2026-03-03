@@ -54,11 +54,11 @@ class ProviderSpeedBenchmarkService:
 
     # Tuning constants
     SAFETY_MARGIN: float = 0.75
-    BENCHMARK_TIMEOUT_S: float = 30.0
+    BENCHMARK_TIMEOUT_S: float = 90.0  # 3b model on CPU needs ~60s prefill; 30s too tight
     BENCHMARK_TOKEN_COUNT: int = 20
     CACHE_TTL_S: float = 300.0  # 5 minutes
     MAX_TOKENS_CEILING: int = 4000
-    MAX_TOKENS_FLOOR: int = 400  # Minimum useful budget for a single security finding
+    MAX_TOKENS_FLOOR: int = 150  # 3b @ ~3 tok/s = ~50s; fits within 120s read_timeout
 
     # Providers where throughput measurement makes sense
     _LOCAL_PROVIDER_VALUES: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
