@@ -247,7 +247,7 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
             get_benchmark_service,
         )
 
-        _PROPERTY_MIN_VIABLE_TOKENS = 55
+        _PROPERTY_MIN_VIABLE_TOKENS = 80  # Must match _MIN_VIABLE_TOKENS in llm_phase_base
         if ProviderSpeedBenchmarkService._is_local_provider(self.llm_service):
             _svc = get_benchmark_service()
             _safe = await _svc.get_safe_max_tokens(self.llm_service, phase_timeout_s=120.0, default_max_tokens=800)

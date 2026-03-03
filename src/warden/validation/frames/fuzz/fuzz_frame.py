@@ -296,7 +296,7 @@ Output must be a valid JSON object with the following structure:
                 get_benchmark_service,
             )
 
-            _FUZZ_MIN_VIABLE_TOKENS = 55
+            _FUZZ_MIN_VIABLE_TOKENS = 80  # Must match _MIN_VIABLE_TOKENS in llm_phase_base
             if ProviderSpeedBenchmarkService._is_local_provider(client):
                 _svc = get_benchmark_service()
                 _safe = await _svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
