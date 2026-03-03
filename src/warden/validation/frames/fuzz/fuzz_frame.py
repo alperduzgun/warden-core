@@ -289,6 +289,27 @@ Output must be a valid JSON object with the following structure:
 
             client = self.llm_service
 
+            # Guard: skip LLM on slow local providers to avoid burning phase timeout.
+            # Mirrors the MIN_VIABLE check in llm_phase_base.analyze_with_llm_async().
+            from warden.llm.provider_speed_benchmark import (
+                ProviderSpeedBenchmarkService,
+                get_benchmark_service,
+            )
+
+            _FUZZ_MIN_VIABLE_TOKENS = 55
+            if ProviderSpeedBenchmarkService._is_local_provider(client):
+                _svc = get_benchmark_service()
+                _safe = await _svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
+                if _safe < _FUZZ_MIN_VIABLE_TOKENS:
+                    logger.warning(
+                        "llm_skipped_budget_below_viable",
+                        phase="fuzz",
+                        max_tokens=_safe,
+                        min_viable=_FUZZ_MIN_VIABLE_TOKENS,
+                        note="fallback_to_rules",
+                    )
+                    return findings
+
             # Build taint context for LLM prompt
             taint_context = ""
             if taint_paths:

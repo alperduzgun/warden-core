@@ -560,9 +560,13 @@ class LLMPhaseBase(ABC):
             # If the conservative budget is too small to produce a useful response,
             # bail out immediately instead of burning self.config.max_retries × timeout
             # seconds on calls that will likely time out anyway.
-            # Threshold: 80 tokens is the minimum for a JSON finding object.
-            # Example: benchmark timeout → conservative=60 → skip all 3 × 120s retries.
-            _MIN_VIABLE_TOKENS = 80
+            # Threshold: 55 tokens covers a minimal JSON finding object (~35-40 tokens)
+            # with a small safety margin.  The conservative budget when the benchmark
+            # times out (BENCHMARK_TOKEN_COUNT/BENCHMARK_TIMEOUT_S × phase_timeout ×
+            # SAFETY_MARGIN = 20/30 × 120 × 0.75 = 60 tokens) must remain ≥ this
+            # threshold; lower the threshold rather than losing all LLM analysis on
+            # slow CI runners.
+            _MIN_VIABLE_TOKENS = 55
             if effective_max_tokens < _MIN_VIABLE_TOKENS:
                 logger.warning(
                     "llm_skipped_budget_below_viable",
