@@ -298,10 +298,18 @@ jobs:
             git fetch origin "$BASE_REF" --depth=1 2>/dev/null || true
 
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              # PR: three-dot diff is safe (full fetch available)
               CHANGED_FILES=$(git diff --name-only --diff-filter=d "origin/$BASE_REF"...HEAD 2>/dev/null | grep "\.py$" || true)
             else
-              CHANGED_FILES=$(git diff --name-only --diff-filter=d HEAD~1 HEAD 2>/dev/null | grep "\.py$" || \
-                              git diff --name-only --diff-filter=d "origin/$BASE_REF"...HEAD 2>/dev/null | grep "\.py$" || true)
+              # Push: use github.event.before..HEAD to cover ALL commits in the push
+              PUSH_BEFORE="${{ github.event.before }}"
+              if [[ "$PUSH_BEFORE" == "0000000000000000000000000000000000000000" ]] || [[ -z "$PUSH_BEFORE" ]]; then
+                # New branch or force push — diff from base branch
+                CHANGED_FILES=$(git diff --name-only --diff-filter=d "origin/$BASE_REF"...HEAD 2>/dev/null | grep "\.py$" || true)
+              else
+                # Normal push — covers all commits from before the push to HEAD
+                CHANGED_FILES=$(git diff --name-only --diff-filter=d "$PUSH_BEFORE" HEAD 2>/dev/null | grep "\.py$" || true)
+              fi
             fi
 
             if [ -n "$CHANGED_FILES" ]; then
