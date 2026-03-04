@@ -36,29 +36,32 @@ class OllamaClient(ILlmClient):
     Targeting ultra-light models like qwen2.5-coder:3b for CI and fast checks.
     """
 
-    # Read-timeout tuning constants
-    READ_TIMEOUT_DEFAULT_S: float = 120.0  # safe default before benchmark calibration
-    READ_TIMEOUT_FLOOR_S: float = 30.0  # minimum to tolerate transient CPU load
-
     def __init__(self, config: ProviderConfig):
+        from warden.llm.provider_speed_benchmark import ProviderSpeedBenchmarkService
+
         # Ollama doesn't require an API key by default
         self._endpoint = config.endpoint or "http://localhost:11434"
         self._default_model = config.default_model or "qwen2.5-coder:3b"
         # Cache of models confirmed missing — prevents repeated 404s
         self._missing_models: set[str] = set()
-        # Read timeout (seconds) applied per-chunk while streaming.
-        # Calibrated at startup via ProviderSpeedBenchmarkService; floor READ_TIMEOUT_FLOOR_S.
-        self._read_timeout: float = self.READ_TIMEOUT_DEFAULT_S
+        # Read timeout derived from benchmark constants so it scales automatically.
+        # = BENCHMARK_TIMEOUT_S + BENCHMARK_TIMEOUT_S/3 (generation_buffer)
+        # Calibrated at scan startup once the speed benchmark completes.
+        _gen_buf = ProviderSpeedBenchmarkService.BENCHMARK_TIMEOUT_S / 3
+        self._read_timeout: float = ProviderSpeedBenchmarkService.BENCHMARK_TIMEOUT_S + _gen_buf
 
         logger.debug("ollama_client_initialized", endpoint=self._endpoint, default_model=self._default_model)
 
     def set_read_timeout(self, seconds: float) -> None:
         """Calibrate the per-chunk read timeout used during streaming.
 
-        Called once at scan startup after the speed benchmark completes.
-        Floor of 30 s prevents too-aggressive timeouts on temporarily loaded CPUs.
+        Floor = BENCHMARK_TIMEOUT_S / 3 (generation buffer) so the floor
+        scales with the benchmark window automatically.
         """
-        self._read_timeout = max(self.READ_TIMEOUT_FLOOR_S, seconds)
+        from warden.llm.provider_speed_benchmark import ProviderSpeedBenchmarkService
+
+        floor = ProviderSpeedBenchmarkService.BENCHMARK_TIMEOUT_S / 3
+        self._read_timeout = max(floor, seconds)
 
     @property
     def provider(self) -> LlmProvider:
@@ -167,9 +170,11 @@ class OllamaClient(ILlmClient):
             raise  # Don't wrap in generic handler
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
-            logger.error("ollama_request_failed", error=str(e), model=model, duration_ms=duration_ms)
+            # asyncio.TimeoutError.__str__() returns '' — show type name as fallback
+            _err = str(e) or type(e).__name__
+            logger.error("ollama_request_failed", error=_err, model=model, duration_ms=duration_ms)
             return LlmResponse(
-                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
+                content="", success=False, error_message=_err, provider=self.provider, duration_ms=duration_ms
             )
 
     async def is_available_async(self) -> bool:

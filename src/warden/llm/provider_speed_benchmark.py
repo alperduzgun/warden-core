@@ -128,10 +128,16 @@ class ProviderSpeedBenchmarkService:
 
     @staticmethod
     def _get_cache_key(client: Any) -> str:
-        """Stable key: 'provider_value@endpoint'."""
-        provider_raw: Any = getattr(client, "provider", "unknown")
+        """Stable key: 'provider_value@endpoint'.
+
+        Unwraps orchestrated/wrapper clients (which expose no _endpoint) to
+        reach the actual underlying provider so the key is stable and unique.
+        """
+        # Unwrap orchestrated client → use smart_client as the real provider
+        actual = getattr(client, "smart_client", client)
+        provider_raw: Any = getattr(actual, "provider", "unknown")
         provider_str = str(getattr(provider_raw, "value", provider_raw)).lower()
-        endpoint = getattr(client, "endpoint", getattr(client, "_endpoint", ""))
+        endpoint = getattr(actual, "endpoint", getattr(actual, "_endpoint", ""))
         return f"{provider_str}@{endpoint}"
 
     @staticmethod

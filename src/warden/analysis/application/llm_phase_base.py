@@ -563,7 +563,7 @@ class LLMPhaseBase(ABC):
             # Threshold: 80 tokens is the minimum for a well-formed JSON finding object.
             # When the benchmark times out, the conservative upper-bound is
             # BENCHMARK_TOKEN_COUNT/BENCHMARK_TIMEOUT_S × phase_timeout × SAFETY_MARGIN
-            # = 20/30 × 120 × 0.75 = 60 tokens.  60 < 80, so LLM is skipped on slow
+            # = 20/90 × 120 × 0.75 ≈ 20 tokens.  20 < 80, so LLM is skipped on slow
             # runners — this is intentional: attempting an LLM call that would almost
             # certainly time out wastes max_retries × timeout_s seconds for no gain.
             _MIN_VIABLE_TOKENS = 80
