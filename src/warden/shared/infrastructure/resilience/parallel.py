@@ -44,7 +44,7 @@ class ParallelBatchExecutor:
             async with self.semaphore:
                 try:
                     return await asyncio.wait_for(task_fn(item), timeout=self.item_timeout)
-                except asyncio.TimeoutError:
+                except (asyncio.TimeoutError, TimeoutError):
                     logger.warning("parallel_task_timeout", batch=batch_name)
                     return None
                 except Exception as e:

@@ -641,7 +641,7 @@ class FrameRunner:
                                 pass  # best-effort persistence
 
                         return result
-                    except asyncio.TimeoutError:
+                    except (asyncio.TimeoutError, TimeoutError):
                         logger.warning(
                             "frame_file_timeout",
                             frame=frame.frame_id,
@@ -895,7 +895,7 @@ class FrameRunner:
                                     if res and res.findings:
                                         frame_findings.extend(res.findings)
 
-                        except asyncio.TimeoutError:
+                        except (asyncio.TimeoutError, TimeoutError):
                             logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)
                             execution_errors += 1
                         except Exception as ex:
@@ -970,7 +970,7 @@ class FrameRunner:
                         "frame_executed_successfully", frame_id=frame.frame_id, files_scanned=files_scanned, findings=0
                     )
 
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 logger.error("frame_timeout", frame_id=frame.frame_id)
                 frame_result = FrameResult(
                     frame_id=frame.frame_id,

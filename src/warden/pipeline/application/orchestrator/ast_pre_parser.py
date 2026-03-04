@@ -212,7 +212,7 @@ class ASTPreParser:
                 )
                 context.ast_cache[code_file.path] = result
                 parsed += 1
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 logger.debug(
                     "ast_pre_parse_timeout",
                     file=code_file.path,
@@ -291,7 +291,7 @@ class ASTPreParser:
                     result = await asyncio.wait_for(future, timeout=self._timeout)
                     context.ast_cache[code_file.path] = result
                     parsed += 1
-                except asyncio.TimeoutError:
+                except (asyncio.TimeoutError, TimeoutError):
                     logger.debug(
                         "ast_pre_parse_timeout",
                         file=code_file.path,

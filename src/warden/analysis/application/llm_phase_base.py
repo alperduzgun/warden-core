@@ -596,7 +596,7 @@ class LLMPhaseBase(ABC):
 
                 return response
 
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 logger.warning(
                     "llm_timeout",
                     phase=self.phase_name,

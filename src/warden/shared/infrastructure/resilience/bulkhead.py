@@ -48,7 +48,7 @@ class Bulkhead:
                 self._semaphore.acquire(),
                 timeout=self.config.timeout,
             )
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             self._waiting -= 1
             raise BulkheadFull(self.name, self.config.max_concurrent)
         self._waiting -= 1

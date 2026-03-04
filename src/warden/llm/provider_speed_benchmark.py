@@ -60,12 +60,6 @@ class ProviderSpeedBenchmarkService:
     MAX_TOKENS_CEILING: int = 4000
     MAX_TOKENS_FLOOR: int = 150  # 3b @ ~3 tok/s = ~50s; fits within 120s read_timeout
 
-    # Read-timeout tuning constants (used by get_safe_read_timeout)
-    READ_TIMEOUT_DEFAULT_S: float = 120.0  # returned when no benchmark data available
-    READ_TIMEOUT_FLOOR_S: float = 30.0  # minimum to allow token generation time
-    READ_TIMEOUT_CEILING_S: float = 300.0  # hard cap regardless of prefill estimate
-    READ_TIMEOUT_SAFETY_MARGIN: float = 1.5  # prefill overrun buffer
-
     # Providers where throughput measurement makes sense
     _LOCAL_PROVIDER_VALUES: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
@@ -209,7 +203,8 @@ class ProviderSpeedBenchmarkService:
             prefill_ms_per_token = 0.0
 
         # safe_max_tokens stored with a fixed reference timeout; recalculated per call
-        safe_max = self._calculate(tok_per_sec, 120.0)
+        _default_phase_timeout = self.BENCHMARK_TIMEOUT_S + self.BENCHMARK_TIMEOUT_S / 3
+        safe_max = self._calculate(tok_per_sec, _default_phase_timeout)
 
         result = ProviderSpeedResult(
             cache_key=cache_key,
@@ -225,7 +220,7 @@ class ProviderSpeedBenchmarkService:
             tok_per_sec=round(tok_per_sec, 1),
             prefill_ms_per_token=round(prefill_ms_per_token, 2),
             safe_max_tokens=safe_max,
-            phase_timeout_s=120.0,
+            phase_timeout_s=_default_phase_timeout,
             elapsed_s=round(elapsed, 2),
         )
 
@@ -243,21 +238,28 @@ class ProviderSpeedBenchmarkService:
     ) -> float:
         """Compute a read timeout that covers prefill for *estimated_prompt_tokens*.
 
-        Formula: prefill_ms_per_token × prompt_tokens × safety_margin / 1000 + 30 s
-        (30 s generation buffer on top of prefill estimate).
+        All thresholds are derived from BENCHMARK_TIMEOUT_S so they scale
+        automatically if the benchmark window changes:
+          generation_buffer = BENCHMARK_TIMEOUT_S / 3
+          default           = BENCHMARK_TIMEOUT_S + generation_buffer
+          floor             = generation_buffer
+          ceiling           = 3 × BENCHMARK_TIMEOUT_S + generation_buffer
 
-        Returns 120.0 (previous hardcoded default) when no benchmark data is
-        available or when prefill_ms_per_token was not measured (non-Ollama provider).
-        Floor: 30 s. Ceiling: 300 s.
+        Formula: prefill_s × safety_margin + generation_buffer
         """
+        gen_buf = self.BENCHMARK_TIMEOUT_S / 3
+        default = self.BENCHMARK_TIMEOUT_S + gen_buf
+        floor = gen_buf
+        ceiling = 3 * self.BENCHMARK_TIMEOUT_S + gen_buf
+
         if cache_key not in self._cache:
-            return self.READ_TIMEOUT_DEFAULT_S
+            return default
         result, _ = self._cache[cache_key]
         if result.prefill_ms_per_token <= 0:
-            return self.READ_TIMEOUT_DEFAULT_S
+            return default
         prefill_s = result.prefill_ms_per_token * estimated_prompt_tokens / 1000
-        total = prefill_s * safety_margin + self.READ_TIMEOUT_FLOOR_S
-        return min(self.READ_TIMEOUT_CEILING_S, max(self.READ_TIMEOUT_FLOOR_S, total))
+        total = prefill_s * safety_margin + floor
+        return min(ceiling, max(floor, total))
 
     async def get_safe_max_tokens(
         self,

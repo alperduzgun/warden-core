@@ -176,7 +176,7 @@ class ClaudeCodeClient(ILlmClient):
 
             return self._parse_response(stdout, model, duration_ms)
 
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             duration_ms = self._calc_duration_ms(start_time)
             logger.error("claude_code_timeout", timeout=timeout)
             return self._error_response(f"Timeout after {timeout}s", model, duration_ms)

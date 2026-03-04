@@ -74,7 +74,7 @@ class DependencyManager:
 
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 process.kill()
                 logger.error("dependency_install_timeout", packages=missing, timeout=timeout)
                 console.print(f"[red]❌ Installation timed out after {timeout}s[/red]")

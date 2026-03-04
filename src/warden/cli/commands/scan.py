@@ -117,7 +117,7 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
         console.print("\n[bold red]🤖 Qwen Analysis:[/bold red]")
         console.print(f"[white]{response.content}[/white]")
 
-    except asyncio.TimeoutError:
+    except (asyncio.TimeoutError, TimeoutError):
         console.print("\n[dim]⚠️  AI Analysis timed out (skipped)[/dim]")
     except Exception:
         # Silent fail - this is an enhancement, not a critical path

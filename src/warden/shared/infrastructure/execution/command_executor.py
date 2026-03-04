@@ -110,7 +110,7 @@ class CommandExecutor:
 
             try:
                 stdout_data, stderr_data = await asyncio.wait_for(process.communicate(), timeout=timeout_val)
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 logger.warning("command_timeout", command=cmd_str, timeout=timeout_val)
 
                 # Kill process group to ensure children die too

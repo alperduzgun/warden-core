@@ -139,7 +139,7 @@ class LanguageServerClient:
         try:
             await self._write_message_async(request)
             return await asyncio.wait_for(future, timeout=timeout)
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             del self._pending_requests[req_id]
             logger.debug("lsp_request_timeout", method=method, id=req_id, timeout=timeout)
             raise
@@ -215,7 +215,7 @@ class LanguageServerClient:
             refs = result or []
             logger.debug("lsp_references_found", uri=uri, line=line, count=len(refs))
             return refs
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             logger.debug("lsp_find_references_timeout", uri=uri, line=line)
             return []
         except Exception as e:
