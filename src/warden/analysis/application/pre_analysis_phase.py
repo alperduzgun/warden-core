@@ -1226,14 +1226,17 @@ class PreAnalysisPhase:
                     pass
 
         # Add internal config dict hash (if passed via CLI args etc)
+        # Exclude LLM runtime settings (provider, model) — they don't affect
+        # which vulnerabilities are found, only how fast. Changing provider
+        # between scans should NOT invalidate the context cache.
+        _LLM_VOLATILE_KEYS = frozenset({"llm_provider", "llm_config", "llm_model", "fast_model", "smart_model"})
         if self.config:
             import json
 
             try:
-                # Deterministic JSON representation
-                components.append(json.dumps(self.config, sort_keys=True, default=str))
+                stable_config = {k: v for k, v in self.config.items() if k not in _LLM_VOLATILE_KEYS}
+                components.append(json.dumps(stable_config, sort_keys=True, default=str))
             except Exception:
-                # Fallback to str if not json serializable
                 components.append(str(self.config))
 
         return hashlib.sha256("-".join(components).encode()).hexdigest()

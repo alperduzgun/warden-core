@@ -35,16 +35,21 @@ class RustPreFilter:
         import warden
 
         package_root = Path(warden.__file__).parent
-        rule_paths = [
-            package_root / "rules/defaults/python/security.yaml",
-            package_root / "rules/defaults/javascript/security.yaml",
-        ]
 
-        logger.info("debug_rule_paths", package_root=str(package_root))
+        # Detect which languages are present to avoid cross-language false positives
+        file_extensions = {Path(cf.path).suffix.lower() for cf in code_files}
+        has_python = bool(file_extensions & {".py", ".pyw"})
+        has_js = bool(file_extensions & {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"})
+
+        rule_paths: list[Path] = []
+        if has_python:
+            rule_paths.append(package_root / "rules/defaults/python/security.yaml")
+        if has_js:
+            rule_paths.append(package_root / "rules/defaults/javascript/security.yaml")
+
+        logger.debug("rust_pre_filter_languages", has_python=has_python, has_js=has_js)
         for path in rule_paths:
-            exists = path.exists()
-            logger.info("debug_rule_path_check", path=str(path), exists=exists)
-            if exists:
+            if path.exists():
                 await engine.load_rules_from_yaml_async(path)
 
         if self.rule_validator and self.rule_validator.rules:

@@ -167,6 +167,12 @@ Return as JSON with:
             else:
                 raise ValueError("No JSON found in response")
 
+            # Sanitize control characters that small models (3b) sometimes emit
+            # inside string values, especially in long file paths
+            import re as _re
+
+            json_str = _re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", json_str)
+
             result = json.loads(json_str)
 
             # Ensure required fields

@@ -42,16 +42,16 @@ BUDGET_DEFAULT = "default"
 # Overridable via LlmConfiguration.token_budgets or config.yaml llm.token_budgets
 # ---------------------------------------------------------------------------
 DEFAULT_TOKEN_BUDGETS: dict[str, dict[str, int]] = {
-    BUDGET_SECURITY: {"deep": 2400, "fast": 800},
-    BUDGET_RESILIENCE: {"deep": 3000, "fast": 500},
-    BUDGET_PROPERTY: {"deep": 2000, "fast": 400},
-    BUDGET_FUZZ: {"deep": 2000, "fast": 400},
+    BUDGET_SECURITY: {"deep": 2400, "fast": 900},
+    BUDGET_RESILIENCE: {"deep": 3000, "fast": 700},
+    BUDGET_PROPERTY: {"deep": 2000, "fast": 700},
+    BUDGET_FUZZ: {"deep": 2000, "fast": 700},
     BUDGET_ORPHAN: {"deep": 3000, "fast": 1000},
-    BUDGET_FORTIFICATION: {"deep": 3000, "fast": 800},
-    BUDGET_TRIAGE: {"deep": 1000, "fast": 1000},
+    BUDGET_FORTIFICATION: {"deep": 3000, "fast": 900},
+    BUDGET_TRIAGE: {"deep": 1500, "fast": 1200},
     BUDGET_CLASSIFICATION: {"deep": 2000, "fast": 1000},
-    BUDGET_ANALYSIS: {"deep": 400, "fast": 250},
-    BUDGET_DEFAULT: {"deep": 2400, "fast": 400},
+    BUDGET_ANALYSIS: {"deep": 1500, "fast": 800},
+    BUDGET_DEFAULT: {"deep": 2400, "fast": 700},
 }
 
 

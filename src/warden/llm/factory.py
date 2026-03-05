@@ -26,6 +26,10 @@ SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset(
     }
 )
 
+# Local providers support dual-tier (smart_model + fast_model are different binaries).
+# Cloud providers should not duplicate into fast tier — same API quota/rate limit.
+_LOCAL_PROVIDERS: frozenset[LlmProvider] = frozenset({LlmProvider.OLLAMA})
+
 _providers_lock = threading.Lock()
 _providers_imported = False
 _factory_logger = _structlog.get_logger(__name__)
@@ -169,9 +173,9 @@ def create_client(provider_or_config: LlmProvider | LlmConfiguration | str | Non
             )
     else:
         for fast_provider in getattr(config, "fast_tier_providers", [LlmProvider.OLLAMA]):
-            if fast_provider == provider:
-                # Primary provider is already the smart_client — skip to avoid
-                # racing against itself in the fast tier.
+            if fast_provider == provider and fast_provider not in _LOCAL_PROVIDERS:
+                # Cloud provider is already the smart_client — skip to avoid
+                # racing against the same API quota / rate limit.
                 continue
             try:
                 fast_cfg = config.get_provider_config(fast_provider)

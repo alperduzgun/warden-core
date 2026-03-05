@@ -159,15 +159,19 @@ class FortificationExecutor(BasePhaseExecutor):
 
                 # Link Fortifications back to Findings for Reporting
                 # Build map from the same validated_issues sent to LLM (guarantees ID match)
+                # Deduplicate by composite key (file_path + line_number + type) so that
+                # multiple findings with the same rule-id from different files don't collide.
                 findings_map = {}
                 for issue in validated_issues:
                     fid = issue.get("id", "unknown")
-                    if fid in findings_map:
-                        logger.warning(
-                            "fortification_duplicate_finding_id",
-                            finding_id=fid,
-                        )
-                    findings_map[fid] = issue
+                    file_path = issue.get("file_path", "")
+                    line_number = issue.get("line_number", 0)
+                    # Use composite key to avoid collision when same rule fires on multiple files
+                    composite_key = f"{fid}::{file_path}::{line_number}"
+                    findings_map[composite_key] = issue
+                    # Also map by plain id for backward compat (last-write-wins for dups)
+                    if fid not in findings_map:
+                        findings_map[fid] = issue
 
                 # BATCH 3: Track fortification linking metrics
                 linked_count = 0
