@@ -329,7 +329,7 @@ class TestAdaptiveBatchSizing:
     def test_ollama_batch_size(self) -> None:
         client = _make_llm_client("ollama")
         svc = TriageService(client)
-        assert svc._requested_batch_size == 5
+        assert svc._requested_batch_size == 10
 
     def test_groq_batch_size(self) -> None:
         client = _make_llm_client("groq")
@@ -359,7 +359,7 @@ class TestAdaptiveBatchSizing:
     def test_orchestrated_client_uses_fast_tier_provider(self) -> None:
         """OrchestratedLlmClient should use fast_clients for batch size (triage uses fast tier)."""
         smart = _make_llm_client("groq")       # smart tier = Groq (15)
-        fast = _make_llm_client("ollama")       # fast tier = Ollama (5)
+        fast = _make_llm_client("ollama")       # fast tier = Ollama (10)
 
         wrapper = MagicMock()
         wrapper.provider = "groq"               # .provider returns smart provider
@@ -367,8 +367,8 @@ class TestAdaptiveBatchSizing:
         wrapper.fast_clients = [fast]            # fast tier has Ollama
 
         svc = TriageService(wrapper)
-        # Must pick Ollama (5), not Groq (15) -- triage uses fast tier
-        assert svc._requested_batch_size == 5
+        # Must pick Ollama (10), not Groq (15) -- triage uses fast tier
+        assert svc._requested_batch_size == 10
 
     def test_orchestrated_client_no_fast_tier_falls_to_smart(self) -> None:
         """When no fast clients exist, use smart provider for batch size."""

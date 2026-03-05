@@ -6,6 +6,7 @@ Uses streaming mode so long CPU-side generation does not hit read timeouts.
 """
 
 import json
+import os
 import time
 
 import httpx
@@ -19,6 +20,9 @@ from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 
 logger = get_logger(__name__)
+
+# CI detection for aggressive fail-fast
+_IS_CI = os.environ.get("CI", "").lower() == "true" or os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
 
 
 class ModelNotFoundError(Exception):
@@ -67,7 +71,11 @@ class OllamaClient(ILlmClient):
     def provider(self) -> LlmProvider:
         return LlmProvider.OLLAMA
 
-    @resilient(name="provider_send", timeout_seconds=300.0, retry_max_attempts=2)
+    @resilient(
+        name="provider_send",
+        timeout_seconds=120.0 if _IS_CI else 300.0,
+        retry_max_attempts=1 if _IS_CI else 2,
+    )
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """
         Send a request to the local Ollama instance.
@@ -91,59 +99,61 @@ class OllamaClient(ILlmClient):
 
             limiter = await GlobalRateLimiter.get_instance()
             await limiter.acquire("ollama", tokens=request.max_tokens)
+            sem = await limiter.concurrency_limit("ollama")
 
-            payload = {
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": request.system_prompt},
-                    {"role": "user", "content": request.user_message},
-                ],
-                "stream": True,
-                "options": {"temperature": request.temperature, "num_predict": request.max_tokens},
-            }
+            async with sem:
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": request.system_prompt},
+                        {"role": "user", "content": request.user_message},
+                    ],
+                    "stream": True,
+                    "options": {"temperature": request.temperature, "num_predict": request.max_tokens},
+                }
 
-            # Streaming: Ollama sends tokens as they are generated.
-            # read_timeout applies per-chunk (between tokens), NOT total generation time.
-            # _read_timeout is calibrated by ProviderSpeedBenchmarkService at startup
-            # to cover worst-case prefill for the running model on this hardware.
-            stream_timeout = httpx.Timeout(connect=10.0, read=self._read_timeout, write=10.0, pool=5.0)
-            content_parts: list[str] = []
-            prompt_tokens = 0
-            completion_tokens = 0
-            prefill_ns: int = 0
-            gen_ns: int = 0
+                # Streaming: Ollama sends tokens as they are generated.
+                # read_timeout applies per-chunk (between tokens), NOT total generation time.
+                # _read_timeout is calibrated by ProviderSpeedBenchmarkService at startup
+                # to cover worst-case prefill for the running model on this hardware.
+                stream_timeout = httpx.Timeout(connect=10.0, read=self._read_timeout, write=10.0, pool=5.0)
+                content_parts: list[str] = []
+                prompt_tokens = 0
+                completion_tokens = 0
+                prefill_ns: int = 0
+                gen_ns: int = 0
 
-            async with httpx.AsyncClient(timeout=stream_timeout) as client:
-                async with client.stream("POST", f"{self._endpoint}/api/chat", json=payload) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        if not line:
-                            continue
-                        chunk = json.loads(line)
-                        if "message" in chunk and "content" in chunk["message"]:
-                            content_parts.append(chunk["message"]["content"])
-                        if chunk.get("done"):
-                            prompt_tokens = chunk.get("prompt_eval_count", 0)
-                            completion_tokens = chunk.get("eval_count", 0)
-                            prefill_ns = chunk.get("prompt_eval_duration", 0)
-                            gen_ns = chunk.get("eval_duration", 0)
-                            break
+                async with httpx.AsyncClient(timeout=stream_timeout) as client:
+                    async with client.stream("POST", f"{self._endpoint}/api/chat", json=payload) as response:
+                        response.raise_for_status()
+                        async for line in response.aiter_lines():
+                            if not line:
+                                continue
+                            chunk = json.loads(line)
+                            if "message" in chunk and "content" in chunk["message"]:
+                                content_parts.append(chunk["message"]["content"])
+                            if chunk.get("done"):
+                                prompt_tokens = chunk.get("prompt_eval_count", 0)
+                                completion_tokens = chunk.get("eval_count", 0)
+                                prefill_ns = chunk.get("prompt_eval_duration", 0)
+                                gen_ns = chunk.get("eval_duration", 0)
+                                break
 
-            duration_ms = int((time.time() - start_time) * 1000)
-            content = "".join(content_parts)
+                duration_ms = int((time.time() - start_time) * 1000)
+                content = "".join(content_parts)
 
-            return LlmResponse(
-                content=content,
-                success=True,
-                provider=self.provider,
-                model=model,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=prompt_tokens + completion_tokens,
-                duration_ms=duration_ms,
-                prefill_duration_ms=prefill_ns / 1e6 if prefill_ns else None,
-                generation_duration_ms=gen_ns / 1e6 if gen_ns else None,
-            )
+                return LlmResponse(
+                    content=content,
+                    success=True,
+                    provider=self.provider,
+                    model=model,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=prompt_tokens + completion_tokens,
+                    duration_ms=duration_ms,
+                    prefill_duration_ms=prefill_ns / 1e6 if prefill_ns else None,
+                    generation_duration_ms=gen_ns / 1e6 if gen_ns else None,
+                )
 
         except httpx.HTTPStatusError as e:
             duration_ms = int((time.time() - start_time) * 1000)

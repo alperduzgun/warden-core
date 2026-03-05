@@ -6,7 +6,12 @@ from ..circuit_breaker import ProviderCircuitBreaker
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
 
+import os
+
 logger = get_logger(__name__)
+
+# CI detection for aggressive fail-fast
+_IS_CI = os.environ.get("CI", "").lower() == "true" or os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
 
 
 class OrchestratedLlmClient(ILlmClient):
@@ -221,7 +226,9 @@ class OrchestratedLlmClient(ILlmClient):
                 # Max concurrency limit prevents resource exhaustion
                 # Timeout derived from request budget: 1/3 gives fast tier priority
                 # without starving it — 3b Ollama on CI needs ~15-20s for warm inference.
-                fast_timeout = min(request.timeout_seconds / 3, 30.0)
+                # In CI, we use a tighter timeout to fail fast.
+                fast_timeout_limit = 20.0 if _IS_CI else 30.0
+                fast_timeout = min(request.timeout_seconds / 3, fast_timeout_limit)
 
                 # Create tasks for eligible providers only (circuit-open ones already filtered)
                 tasks = [asyncio.create_task(try_fast_provider(client)) for client in eligible_clients]

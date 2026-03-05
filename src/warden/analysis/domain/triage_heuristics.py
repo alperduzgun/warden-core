@@ -123,7 +123,19 @@ _SAFE_FILENAMES: frozenset[str] = frozenset(
         "LICENSE",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
+        "OWNERS",
+        "CODEOWNERS",
     }
+)
+
+# Keywords that indicate a file is likely safe (boilerplate/metadata).
+_SAFE_BOILERPLATE_KEYWORDS: tuple[str, ...] = (
+    "abstractmethod",
+    "dataclass",
+    "pydantic",
+    "basemodel",
+    "typeddict",
+    "namedtuple",
 )
 
 # Minimum content size for a file to warrant LLM triage.
@@ -173,5 +185,25 @@ def is_heuristic_safe(code_file: CodeFile) -> bool:
         return True
     if hasattr(code_file, "line_count") and code_file.line_count < _MIN_LINE_COUNT:
         return True
+
+    # 6. DTO/Boilerplate detection (Pareto: skip data-only containers)
+    # If the file is just a set of definitions without active logic (if/for/while/try), it's safe.
+    content = code_file.content
+    if len(content) < 2000:  # Only check medium-sized files
+        logic_keywords = (" if ", " for ", " while ", " try ", " except ", " with ", " await ")
+        has_logic = any(kw in content for kw in logic_keywords)
+
+        # If no logic keywords AND it looks like a model/DTO, skip.
+        if not has_logic:
+            if any(kw in content.lower() for kw in _SAFE_BOILERPLATE_KEYWORDS):
+                return True
+
+            # Check for pure assignment/definition files (mostly imports and class/def)
+            lines = content.splitlines()
+            if len(lines) > 0:
+                definition_lines = [l for l in lines if l.strip() and not l.strip().startswith(("#", "import", "from", "class ", "def ", "    ", "@"))]
+                if not definition_lines:
+                    # Only contains comments, imports, class/def headers, or indented blocks (which we already checked for logic)
+                    return True
 
     return False

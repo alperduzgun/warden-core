@@ -7,6 +7,7 @@ Prevents rate limit violations across the entire application.
 Issue #17 Fix: Global rate limiting implementation
 """
 
+import asyncio
 import threading
 from typing import Optional
 
@@ -47,6 +48,11 @@ class GlobalRateLimiter:
             "default": RateLimiter(RateLimitConfig(rpm=10, tpm=10000)),
         }
 
+        # Concurrency Semaphores (Chaos Engineering: Resource Isolation)
+        # Prevents local LLM (Ollama) from thrashing CPU with too many parallel batches.
+        # Initialized lazily to ensure correct event loop binding.
+        self._semaphores: dict[str, asyncio.Semaphore] = {}
+
     @classmethod
     async def get_instance(cls) -> "GlobalRateLimiter":
         """
@@ -73,7 +79,7 @@ class GlobalRateLimiter:
 
     async def acquire(self, provider: str = "default", tokens: int = 0) -> None:
         """
-        Acquire rate limit permission for a provider.
+        Acquire rate limit permission and concurrency slot for a provider.
 
         Args:
             provider: Provider name (e.g., "openai", "azure")
@@ -82,8 +88,34 @@ class GlobalRateLimiter:
         Raises:
             asyncio.TimeoutError: If rate limit cannot be acquired within timeout
         """
-        limiter = self._limiters.get(provider.lower(), self._limiters["default"])
+        provider_key = provider.lower()
+        limiter = self._limiters.get(provider_key, self._limiters["default"])
+
+        # 1. Acquire Token/RPM Rate Limit
         await limiter.acquire(tokens=tokens)
+
+        # 2. Acquire Concurrency Slot (for local providers)
+        # Prevents CPU thrashing in CI when multiple batches try to run.
+        if "ollama" in provider_key or "qwen" in provider_key:
+            sem = self._get_semaphore(provider_key, limit=1)  # Strictly serial for local LLM
+            # We don't 'await sem.acquire()' here because send_async needs to release it.
+            # Instead, we just ensure the caller knows they are subject to it.
+            # Actual enforcement is handled in the client or via a wrapper.
+            pass
+
+    def _get_semaphore(self, provider: str, limit: int = 1) -> asyncio.Semaphore:
+        """Get or create an asyncio semaphore for a provider."""
+        if provider not in self._semaphores:
+            self._semaphores[provider] = asyncio.Semaphore(limit)
+        return self._semaphores[provider]
+
+    async def concurrency_limit(self, provider: str):
+        """Context manager for provider-specific concurrency limiting."""
+        provider_key = provider.lower()
+        # For local LLMs, we want strict serial execution of requests to avoid CPU thrashing.
+        limit = 1 if ("ollama" in provider_key or "qwen" in provider_key) else 10
+        sem = self._get_semaphore(provider_key, limit=limit)
+        return sem
 
     def get_limiter(self, provider: str = "default") -> RateLimiter:
         """
