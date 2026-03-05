@@ -104,10 +104,10 @@ class OllamaClient(ILlmClient):
             async with sem:
                 # Detect if the response is expected to be JSON so Ollama enforces grammar.
                 # Avoids markdown wrapping (```json...```) that breaks parse on 3b models.
-                _wants_json = (
-                    "json" in (request.system_prompt or "").lower()
-                    or "json" in (request.user_message or "").lower()[:200]
-                )
+                # Check system prompt + start/end of user message (some prompts put "Return as JSON" at the end).
+                _sys_lower = (request.system_prompt or "").lower()
+                _msg_lower = (request.user_message or "").lower()
+                _wants_json = "json" in _sys_lower or "json" in _msg_lower[:200] or "json" in _msg_lower[-400:]
                 payload: dict = {
                     "model": model,
                     "messages": [

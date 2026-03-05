@@ -430,6 +430,10 @@ Return ONLY a JSON array of objects in the EXACT order:
                 else:
                     raise
 
+            if isinstance(results, dict):
+                # Small models with format=json return a bare dict for single-item batches.
+                # Wrap it so downstream logic stays uniform.
+                results = [results]
             if not isinstance(results, list):
                 raise ValueError(f"LLM returned {type(results).__name__} instead of list")
 

@@ -1225,19 +1225,11 @@ class PreAnalysisPhase:
                 except (ValueError, TypeError, AttributeError):  # Non-critical metrics
                     pass
 
-        # Add internal config dict hash (if passed via CLI args etc)
-        # Exclude LLM runtime settings (provider, model) — they don't affect
-        # which vulnerabilities are found, only how fast. Changing provider
-        # between scans should NOT invalidate the context cache.
-        _LLM_VOLATILE_KEYS = frozenset({"llm_provider", "llm_config", "llm_model", "fast_model", "smart_model"})
-        if self.config:
-            import json
-
-            try:
-                stable_config = {k: v for k, v in self.config.items() if k not in _LLM_VOLATILE_KEYS}
-                components.append(json.dumps(stable_config, sort_keys=True, default=str))
-            except Exception:
-                components.append(str(self.config))
+        # Runtime config (phase_config dict) is intentionally excluded from the environment hash.
+        # The YAML config files above already cover all stable configuration.
+        # Runtime objects (LlmConfiguration, enums, analysis_level) may serialize
+        # non-deterministically across runs (memory addresses, enum reprs) and would
+        # cause spurious cache invalidation on every scan.
 
         return hashlib.sha256("-".join(components).encode()).hexdigest()
 
