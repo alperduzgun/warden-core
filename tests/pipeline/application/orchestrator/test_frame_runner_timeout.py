@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from warden.pipeline.application.orchestrator.frame_runner import (
+    CodeFile,
     FrameRunner,
     _BATCH_TIMEOUT_MAX_S,
     _BATCH_TIMEOUT_MIN_S,
@@ -24,6 +25,8 @@ from warden.pipeline.application.orchestrator.frame_runner import (
     calculate_per_file_timeout,
 )
 from warden.pipeline.domain.models import PipelineConfig
+
+from warden.validation.domain.frame import ValidationFrame
 
 from .conftest import make_code_file, make_context, make_pipeline
 
@@ -158,7 +161,7 @@ class TestFrameRunnerTimeout:
     async def test_timeout_produces_finding(self):
         """When a file times out, a Finding with id=WARDEN-TIMEOUT should be recorded."""
         # Create a frame that hangs forever
-        frame = MagicMock()
+        frame = MagicMock(spec=ValidationFrame)
         frame.frame_id = "test_security"
         frame.name = "Security"
         frame.is_blocker = False

@@ -29,29 +29,28 @@ class GlobalRateLimiter:
 
     _instance: Optional["GlobalRateLimiter"] = None
 
+    # Static configuration for provider limits
+    _LIMIT_CONFIGS = {
+        "qwen": RateLimitConfig(rpm=60, tpm=100000),
+        "ollama": RateLimitConfig(rpm=60, tpm=100000),
+        "openai": RateLimitConfig(rpm=10, tpm=40000),
+        "azure": RateLimitConfig(rpm=10, tpm=40000),
+        "anthropic": RateLimitConfig(rpm=10, tpm=40000),
+        "gemini": RateLimitConfig(rpm=15, tpm=30000),
+        "default": RateLimitConfig(rpm=10, tpm=10000),
+    }
+
     def __init__(self):
-        """Initialize global rate limiter with provider-specific limits."""
+        """Initialize global rate limiter."""
         if GlobalRateLimiter._instance is not None:
             raise RuntimeError("Use GlobalRateLimiter.get_instance() instead")
 
-        # Provider-specific rate limiters
-        self._limiters: dict[str, RateLimiter] = {
-            # Fast tier providers (high limits)
-            "qwen": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
-            "ollama": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
-            # Smart tier providers (conservative limits)
-            "openai": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
-            "azure": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
-            "anthropic": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
-            "gemini": RateLimiter(RateLimitConfig(rpm=15, tpm=30000)),
-            # Default fallback
-            "default": RateLimiter(RateLimitConfig(rpm=10, tpm=10000)),
-        }
+        # Maps (loop_id, provider_key) -> RateLimiter to ensure event-loop isolation.
+        self._loop_limiters: dict[tuple[int, str], RateLimiter] = {}
 
         # Concurrency Semaphores (Chaos Engineering: Resource Isolation)
-        # Prevents local LLM (Ollama) from thrashing CPU with too many parallel batches.
-        # Initialized lazily to ensure correct event loop binding.
-        self._semaphores: dict[str, asyncio.Semaphore] = {}
+        # Maps (loop_id, provider_key) -> Semaphore
+        self._loop_semaphores: dict[tuple[int, str], asyncio.Semaphore] = {}
 
     @classmethod
     async def get_instance(cls) -> "GlobalRateLimiter":
@@ -89,25 +88,18 @@ class GlobalRateLimiter:
             asyncio.TimeoutError: If rate limit cannot be acquired within timeout
         """
         provider_key = provider.lower()
-        limiter = self._limiters.get(provider_key, self._limiters["default"])
+        limiter = self.get_limiter(provider_key)
 
         # 1. Acquire Token/RPM Rate Limit
         await limiter.acquire(tokens=tokens)
 
-        # 2. Acquire Concurrency Slot (for local providers)
-        # Prevents CPU thrashing in CI when multiple batches try to run.
-        if "ollama" in provider_key or "qwen" in provider_key:
-            sem = self._get_semaphore(provider_key, limit=1)  # Strictly serial for local LLM
-            # We don't 'await sem.acquire()' here because send_async needs to release it.
-            # Instead, we just ensure the caller knows they are subject to it.
-            # Actual enforcement is handled in the client or via a wrapper.
-            pass
-
     def _get_semaphore(self, provider: str, limit: int = 1) -> asyncio.Semaphore:
-        """Get or create an asyncio semaphore for a provider."""
-        if provider not in self._semaphores:
-            self._semaphores[provider] = asyncio.Semaphore(limit)
-        return self._semaphores[provider]
+        """Get or create an asyncio semaphore for a provider, bound to the current loop."""
+        loop = asyncio.get_running_loop()
+        key = (id(loop), provider)
+        if key not in self._loop_semaphores:
+            self._loop_semaphores[key] = asyncio.Semaphore(limit)
+        return self._loop_semaphores[key]
 
     async def concurrency_limit(self, provider: str):
         """Context manager for provider-specific concurrency limiting."""
@@ -119,7 +111,7 @@ class GlobalRateLimiter:
 
     def get_limiter(self, provider: str = "default") -> RateLimiter:
         """
-        Get the rate limiter for a specific provider.
+        Get the rate limiter for a specific provider, bound to current event loop.
 
         Args:
             provider: Provider name
@@ -127,7 +119,15 @@ class GlobalRateLimiter:
         Returns:
             RateLimiter instance for the provider
         """
-        return self._limiters.get(provider.lower(), self._limiters["default"])
+        provider_key = provider.lower()
+        loop = asyncio.get_running_loop()
+        key = (id(loop), provider_key)
+
+        if key not in self._loop_limiters:
+            config = self._LIMIT_CONFIGS.get(provider_key, self._LIMIT_CONFIGS["default"])
+            self._loop_limiters[key] = RateLimiter(config)
+
+        return self._loop_limiters[key]
 
     def get_stats(self, provider: str = "default") -> dict:
         """
@@ -139,7 +139,7 @@ class GlobalRateLimiter:
         Returns:
             Dictionary with current rate limit stats
         """
-        limiter = self._limiters.get(provider.lower(), self._limiters["default"])
+        limiter = self.get_limiter(provider)
         return {
             "provider": provider,
             "rpm": limiter.config.rpm,
