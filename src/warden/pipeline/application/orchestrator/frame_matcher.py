@@ -4,6 +4,7 @@ Frame matcher module for validation frames.
 Handles frame matching and discovery logic.
 """
 
+import re
 from pathlib import Path
 
 from warden.shared.infrastructure.logging import get_logger
