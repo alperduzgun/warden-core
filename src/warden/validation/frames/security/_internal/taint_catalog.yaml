@@ -196,6 +196,7 @@ sinks:
   logger.warn: LOG-output
   logger.debug: LOG-output
 
+
 # ── Sanitizers (functions that neutralize taint for a given sink type) ──────
 
 sanitizers:
