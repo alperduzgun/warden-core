@@ -38,6 +38,7 @@ _BATCH_SIZES: dict[str, int] = {
     "deepseek": 15,
     "qwencode": 15,
     "gemini": 15,
+    "ollama": 10,  # Optimized for 3b-7b models in CI with 15GB RAM
     # CLI-tool providers: safety net if bypass fails to activate
     "claude_code": 25,
     "codex": 25,
@@ -406,12 +407,20 @@ FILES:
         try:
             mem = psutil.virtual_memory()
             available_gb = mem.available / (1024**3)
-            mem_limit = max(1, int(available_gb // 2.0))  # Triage is simpler, 2GB per item
+
+            # Triage with small models (3b) is lightweight.
+            # 14GB RAM can easily handle larger batches of 3b models.
+            # Scaling: 1GB per item for triage is very safe for 3b models.
+            mem_limit = max(1, int(available_gb // 1.0))
 
             cpu_load = psutil.cpu_percent(interval=None)
-            cpu_limit = 1 if cpu_load > 80 else max_allowed
+            # Don't drop to 1 immediately on 80% load, allow some concurrency
+            cpu_limit = max(1, max_allowed // 2) if cpu_load > 85 else max_allowed
 
-            return min(max_allowed, mem_limit, cpu_limit, (os.cpu_count() or 2) // 2)
+            # Use more of available cores for local execution if RAM allows
+            core_limit = max(2, (os.cpu_count() or 2))
+
+            return min(max_allowed, mem_limit, cpu_limit, core_limit)
         except (AttributeError, psutil.Error, OSError):
             # psutil unavailable or error - default to safe value
             return 1

@@ -60,6 +60,12 @@ class ProviderSpeedBenchmarkService:
     MAX_TOKENS_CEILING: int = 4000
     MAX_TOKENS_FLOOR: int = 150  # 3b @ ~3 tok/s = ~50s; fits within 120s read_timeout
 
+    # Read timeout constants (derived from BENCHMARK_TIMEOUT_S)
+    READ_TIMEOUT_FLOOR_S: float = 30.0    # BENCHMARK_TIMEOUT_S / 3
+    READ_TIMEOUT_DEFAULT_S: float = 120.0  # BENCHMARK_TIMEOUT_S + FLOOR
+    READ_TIMEOUT_CEILING_S: float = 300.0  # 3 * BENCHMARK_TIMEOUT_S + FLOOR
+    READ_TIMEOUT_SAFETY_MARGIN: float = 1.5
+
     # Providers where throughput measurement makes sense
     _LOCAL_PROVIDER_VALUES: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
@@ -240,23 +246,16 @@ class ProviderSpeedBenchmarkService:
         self,
         cache_key: str,
         estimated_prompt_tokens: int,
-        safety_margin: float = 1.5,
+        safety_margin: float | None = None,
     ) -> float:
         """Compute a read timeout that covers prefill for *estimated_prompt_tokens*.
 
-        All thresholds are derived from BENCHMARK_TIMEOUT_S so they scale
-        automatically if the benchmark window changes:
-          generation_buffer = BENCHMARK_TIMEOUT_S / 3
-          default           = BENCHMARK_TIMEOUT_S + generation_buffer
-          floor             = generation_buffer
-          ceiling           = 3 × BENCHMARK_TIMEOUT_S + generation_buffer
-
-        Formula: prefill_s × safety_margin + generation_buffer
+        Formula: prefill_s × safety_margin + floor
         """
-        gen_buf = self.BENCHMARK_TIMEOUT_S / 3
-        default = self.BENCHMARK_TIMEOUT_S + gen_buf
-        floor = gen_buf
-        ceiling = 3 * self.BENCHMARK_TIMEOUT_S + gen_buf
+        margin = safety_margin if safety_margin is not None else self.READ_TIMEOUT_SAFETY_MARGIN
+        floor = self.READ_TIMEOUT_FLOOR_S
+        default = self.READ_TIMEOUT_DEFAULT_S
+        ceiling = self.READ_TIMEOUT_CEILING_S
 
         if cache_key not in self._cache:
             return default
@@ -264,7 +263,7 @@ class ProviderSpeedBenchmarkService:
         if result.prefill_ms_per_token <= 0:
             return default
         prefill_s = result.prefill_ms_per_token * estimated_prompt_tokens / 1000
-        total = prefill_s * safety_margin + floor
+        total = prefill_s * margin + floor
         return min(ceiling, max(floor, total))
 
     async def get_safe_max_tokens(

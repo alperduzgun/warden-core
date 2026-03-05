@@ -4,6 +4,7 @@ Frame matcher module for validation frames.
 Handles frame matching and discovery logic.
 """
 
+import re
 from pathlib import Path
 
 from warden.shared.infrastructure.logging import get_logger
@@ -162,10 +163,30 @@ class FrameMatcher:
                     logger.debug(f"Exact match by name: {name} -> {frame.frame_id}")
                     return frame
 
-        # Pass 2: Partial matches with word boundary check (only if no exact match found)
-        # IMPORTANT: Avoid matching "security" to "demosecurity" or "environmentsecurity"
-        # Only match if search term is at the START of frame ID (word boundary)
+        # Pass 2: Fuzzy/Partial matches (only if no exact match found)
+        # Optimized for "anti-fragile" selection — tries to find the best match
+        # even if LLM slightly misnames the frame.
 
+        # 2a. Match by exact substring with word boundary
+        for frame in self.available_frames:
+            fid = frame.frame_id.lower()
+            fname = getattr(frame, "name", "").lower()
+
+            # Check if search term is a distinct part of the ID or Name
+            # e.g., "security" matches "security_analysis" or "web-security"
+            target_patterns = [
+                rf"\b{re.escape(search_normalized)}\b",
+                rf"^{re.escape(search_normalized)}",
+                rf"{re.escape(search_normalized)}$"
+            ]
+
+            for pattern in target_patterns:
+                if re.search(pattern, fid.replace("-", " ").replace("_", " ")) or \
+                   re.search(pattern, fname.replace("-", " ").replace("_", " ")):
+                    logger.debug(f"Part-of-word match: {name} -> {frame.frame_id}")
+                    return frame
+
+        # Pass 3: Word-boundary prefix check (Original logic)
         for frame in self.available_frames:
             frame_id_normalized = frame.frame_id.lower().replace("frame", "").replace("-", "").replace("_", "").strip()
 
