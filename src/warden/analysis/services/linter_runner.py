@@ -59,7 +59,7 @@ class LinterRunner:
 
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=self.timeout)
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 self._kill_process(process)
                 logger.error("linter_timeout", tool=tool_name, timeout=self.timeout)
                 return False, None, f"Timeout exceeded ({self.timeout}s)"

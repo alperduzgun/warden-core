@@ -326,10 +326,13 @@ Format: JSON array of objects with keys: issueLine (int), suggestion (string)"""
                 max_tokens=1000,
             )
 
+            if not response or not response.content:
+                raise RuntimeError("LLM returned empty response")
+
             # Parse LLM response and enhance suggestions
             import json
 
-            llm_suggestions = json.loads(response)
+            llm_suggestions = json.loads(response.content)
 
             # Match LLM suggestions with our suggestions
             llm_map = {s["issueLine"]: s["suggestion"] for s in llm_suggestions}

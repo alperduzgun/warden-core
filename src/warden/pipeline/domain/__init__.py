@@ -8,6 +8,11 @@ from warden.pipeline.domain.models import (
     PipelineResult,
     ValidationPipeline,
 )
+from warden.pipeline.domain.phase_checklist import (
+    PhaseChecklist,
+    PhaseChecklistItem,
+    PhaseStatus,
+)
 
 __all__ = [
     "ValidationPipeline",
@@ -17,4 +22,7 @@ __all__ = [
     "PipelineStatus",
     "ExecutionStrategy",
     "ProjectIntelligence",
+    "PhaseChecklist",
+    "PhaseChecklistItem",
+    "PhaseStatus",
 ]

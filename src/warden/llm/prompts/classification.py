@@ -5,7 +5,10 @@ Based on C# ClassificationPrompt.cs
 Detects code characteristics and recommends validation frames
 """
 
+from __future__ import annotations
+
 from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
+from warden.llm.types import StructuredPrompt
 
 _CLASSIFICATION_BASE_PROMPT = """You are an expert code analyzer specializing in detecting code characteristics and security patterns.
 
@@ -84,3 +87,23 @@ Code:
 ```
 
 Provide your analysis following the format specified in the system prompt. Return JSON only."""
+
+
+def build_classification_prompt(code: str, language: str, file_path: str | None = None) -> StructuredPrompt:
+    """
+    Build a structured prompt for classification, separating cacheable system
+    context from variable file content.
+
+    Args:
+        code: Code to classify
+        language: Programming language
+        file_path: Optional file path for context
+
+    Returns:
+        StructuredPrompt with system_context (cacheable) and file_context (variable)
+    """
+    file_context = generate_classification_request(code, language, file_path)
+    return StructuredPrompt(
+        system_context=CLASSIFICATION_SYSTEM_PROMPT,
+        file_context=file_context,
+    )

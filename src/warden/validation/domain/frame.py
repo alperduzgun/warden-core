@@ -297,6 +297,12 @@ class ValidationFrame(ABC):
     # architectural gaps) where the security-focused verifier prompt produces incorrect rejections.
     supports_verification: bool = True
 
+    # Minimum triage lane for this frame to process a file.
+    # "fast_lane" = process all files (default, rule-based frames).
+    # "middle_lane" = skip FAST files (LLM-heavy frames).
+    # "deep_lane" = skip FAST+MIDDLE (future use).
+    minimum_triage_lane: str = "fast_lane"
+
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """
         Initialize frame with optional configuration.

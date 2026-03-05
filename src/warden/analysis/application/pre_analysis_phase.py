@@ -554,7 +554,7 @@ class PreAnalysisPhase:
                         coverage=f"{gap_report.coverage:.1%}",
                     )
 
-                except asyncio.TimeoutError:
+                except (asyncio.TimeoutError, TimeoutError):
                     logger.warning("code_graph_build_timeout", timeout=60)
                 except Exception as e:
                     logger.warning("code_graph_build_failed", error=str(e))

@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from warden.mcp.domain.enums import ToolCategory
+from warden.mcp.domain.enums import ToolCategory, ToolTier
 from warden.mcp.domain.errors import MCPToolExecutionError
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.ports.tool_executor import IToolExecutor
@@ -194,9 +194,15 @@ class BaseWardenAdapter(IToolExecutor, ABC):
         properties: dict[str, Any] | None = None,
         required: list[str] | None = None,
         requires_bridge: bool = True,
+        tier: ToolTier = ToolTier.EXTENDED,
     ) -> MCPToolDefinition:
         """
         Helper to create tool definitions with consistent structure.
+
+        The tier parameter defaults to EXTENDED. The ToolRegistry.register()
+        method will override it based on the canonical CORE_TOOL_NAMES and
+        INTERNAL_TOOL_NAMES sets, so adapters generally do not need to
+        specify tier explicitly.
 
         Args:
             name: Tool name
@@ -204,6 +210,7 @@ class BaseWardenAdapter(IToolExecutor, ABC):
             properties: JSON Schema properties for input
             required: List of required property names
             requires_bridge: Whether this tool needs WardenBridge initialized
+            tier: Tool tier for visibility control
 
         Returns:
             MCPToolDefinition instance
@@ -220,4 +227,5 @@ class BaseWardenAdapter(IToolExecutor, ABC):
             category=self.TOOL_CATEGORY,
             input_schema=input_schema,
             requires_bridge=requires_bridge,
+            tier=tier,
         )

@@ -26,6 +26,25 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _apply_read_timeout(client: Any, timeout_s: float) -> None:
+    """Propagate a calibrated read timeout to all reachable OllamaClient instances.
+
+    Traversal order:
+    1. Direct OllamaClient (has set_read_timeout) — handles the simple case.
+    2. OrchestratedLlmClient.smart_client — e.g. when Ollama is the smart tier.
+    3. OrchestratedLlmClient.fast_clients list — Ollama is typically the fast tier.
+    """
+    if hasattr(client, "set_read_timeout"):
+        client.set_read_timeout(timeout_s)
+        return
+    smart = getattr(client, "smart_client", None)
+    if smart is not None and hasattr(smart, "set_read_timeout"):
+        smart.set_read_timeout(timeout_s)
+    for fast in getattr(client, "fast_clients", []):
+        if hasattr(fast, "set_read_timeout"):
+            fast.set_read_timeout(timeout_s)
+
+
 @dataclass
 class LLMPhaseConfig:
     """Configuration for LLM-enhanced phase."""
@@ -517,12 +536,57 @@ class LLMPhaseBase(ABC):
 
         await self.rate_limiter.acquire_async(estimated_tokens)
 
+        # Dynamic max_tokens: benchmark local providers to fit within phase timeout.
+        # Cloud providers (is_local=False) skip this — no measurement overhead.
+        effective_max_tokens = self.config.max_tokens
+        if getattr(self, "is_local", False):
+            from warden.llm.provider_speed_benchmark import get_benchmark_service
+
+            svc = get_benchmark_service()
+            effective_max_tokens = await svc.get_safe_max_tokens(
+                client=self.llm,
+                phase_timeout_s=float(self.config.timeout),
+                default_max_tokens=self.config.max_tokens,
+            )
+
+            # Calibrate the underlying OllamaClient's read timeout so that
+            # it covers worst-case prefill for the estimated input token count.
+            # estimated_tokens includes both input + output budget, making this
+            # a conservative (safe) overestimate of prefill duration.
+            cache_key = svc._get_cache_key(self.llm)
+            read_timeout = svc.get_safe_read_timeout(cache_key, estimated_tokens)
+            _apply_read_timeout(self.llm, read_timeout)
+
+            # If the conservative budget is too small to produce a useful response,
+            # bail out immediately instead of burning self.config.max_retries × timeout
+            # seconds on calls that will likely time out anyway.
+            # Threshold: 80 tokens is the minimum for a well-formed JSON finding object.
+            # When the benchmark times out, the conservative upper-bound is
+            # BENCHMARK_TOKEN_COUNT/BENCHMARK_TIMEOUT_S × phase_timeout × SAFETY_MARGIN
+            # = 20/90 × 120 × 0.75 ≈ 20 tokens.  20 < 80, so LLM is skipped on slow
+            # runners — this is intentional: attempting an LLM call that would almost
+            # certainly time out wastes max_retries × timeout_s seconds for no gain.
+            _MIN_VIABLE_TOKENS = 80
+            if effective_max_tokens < _MIN_VIABLE_TOKENS:
+                logger.warning(
+                    "llm_skipped_budget_below_viable",
+                    phase=self.phase_name,
+                    max_tokens=effective_max_tokens,
+                    min_viable=_MIN_VIABLE_TOKENS,
+                    note="fallback_to_rules",
+                )
+                return None
+
         for attempt in range(self.config.max_retries):
             try:
                 # Call LLM with timeout
                 response = await asyncio.wait_for(
                     self.llm.complete_async(
-                        prompt=user_prompt, system_prompt=system_prompt, model=model, use_fast_tier=use_fast_tier
+                        prompt=user_prompt,
+                        system_prompt=system_prompt,
+                        model=model,
+                        use_fast_tier=use_fast_tier,
+                        max_tokens=effective_max_tokens,
                     ),
                     timeout=self.config.timeout,
                 )
@@ -532,7 +596,7 @@ class LLMPhaseBase(ABC):
 
                 return response
 
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 logger.warning(
                     "llm_timeout",
                     phase=self.phase_name,

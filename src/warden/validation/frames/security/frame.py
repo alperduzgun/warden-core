@@ -68,6 +68,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
     version = "2.2.0"  # v2.2: Added source-to-sink taint analysis
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]  # Applies to all languages
+    minimum_triage_lane: str = "middle_lane"  # Skip FAST files; LLM-heavy frame
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """
@@ -105,9 +106,13 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             sys.path.append(current_dir)
 
         try:
+            from _internal.crypto_check import WeakCryptoCheck
+            from _internal.csrf_check import CSRFCheck
             from _internal.hardcoded_password_check import (
                 HardcodedPasswordCheck,
             )
+            from _internal.http_security_check import HTTPSecurityCheck
+            from _internal.jwt_check import JWTMisconfigCheck
             from _internal.secrets_check import SecretsCheck
             from _internal.sql_injection_check import SQLInjectionCheck
             from _internal.xss_check import XSSCheck
@@ -120,6 +125,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         self.checks.register(XSSCheck(self.config.get("xss", {})))
         self.checks.register(SecretsCheck(self.config.get("secrets", {})))
         self.checks.register(HardcodedPasswordCheck(self.config.get("hardcoded_password", {})))
+        self.checks.register(HTTPSecurityCheck(self.config.get("http_security", {})))
+        self.checks.register(CSRFCheck(self.config.get("csrf", {})))
+        self.checks.register(WeakCryptoCheck(self.config.get("weak_crypto", {})))
+        self.checks.register(JWTMisconfigCheck(self.config.get("jwt_misconfiguration", {})))
 
         logger.info(
             "builtin_checks_registered",
@@ -654,7 +663,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         """
         Execute security checks on multiple files with BATCH PROCESSING.
 
-        Pattern: OrphanFrame-style batch processing for 80-90% LLM call reduction.
+        Runs the full analysis pipeline (pattern checks, AST extraction, taint
+        analysis, data flow analysis) per file -- matching ``execute_async`` --
+        then batches the LLM verification step for 80-90% LLM call reduction.
 
         Args:
             code_files: List of code files to validate
@@ -668,9 +679,12 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         logger.info("security_batch_started", file_count=len(code_files))
         batch_start = time.perf_counter()
 
-        # PHASE 1: Pattern/AST + Taint Analysis (Fast, per-file)
+        # PHASE 1: Full per-file analysis (pattern + AST + taint + data flow)
         findings_map: dict[str, list[Finding]] = {}
         check_results_map: dict[str, list[CheckResult]] = {}
+        ast_context_map: dict[str, dict[str, Any]] = {}
+        taint_paths_map: dict[str, list] = {}
+        data_flow_context_map: dict[str, dict[str, Any]] = {}
 
         _TAINT_SUPPORTED_LANGUAGES = {"python", "javascript", "typescript", "go", "java"}
 
@@ -680,7 +694,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                 # Get enabled checks
                 enabled_checks = self.checks.get_enabled(self.config)
 
-                # Execute pattern checks (fast!)
+                # STEP 1: Execute pattern checks (fast!)
                 check_results: list[CheckResult] = []
                 for check in enabled_checks:
                     try:
@@ -689,7 +703,15 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     except Exception as e:
                         logger.error("batch_check_failed", check=check.name, file=code_file.path, error=str(e))
 
-                # Taint analysis (prefer shared, fallback to inline)
+                # STEP 2: Tree-sitter AST Analysis (structural vulnerability detection)
+                ast_context: dict[str, Any] = {}
+                try:
+                    ast_context = await extract_ast_context(code_file)
+                except Exception as e:
+                    logger.debug("batch_ast_extraction_failed", file=code_file.path, error=str(e))
+                ast_context_map[code_file.path] = ast_context
+
+                # STEP 2.5: Taint analysis (prefer shared, fallback to inline)
                 file_taint_paths: list = []
                 if code_file.language in _TAINT_SUPPORTED_LANGUAGES:
                     file_taint_paths = []
@@ -714,6 +736,16 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                         taint_result = self._convert_taint_paths_to_findings(file_taint_paths, code_file.path)
                         if taint_result:
                             check_results.append(taint_result)
+                taint_paths_map[code_file.path] = file_taint_paths
+
+                # STEP 3: Data Flow Analysis (taint tracking via LSP)
+                data_flow_context: dict[str, Any] = {}
+                if check_results:
+                    try:
+                        data_flow_context = await analyze_data_flow(code_file, check_results)
+                    except Exception as e:
+                        logger.debug("batch_data_flow_analysis_failed", file=code_file.path, error=str(e))
+                data_flow_context_map[code_file.path] = data_flow_context
 
                 check_results_map[code_file.path] = check_results
 
@@ -750,6 +782,35 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                 "checks_passed": sum(1 for r in check_results if r.passed),
                 "checks_failed": sum(1 for r in check_results if not r.passed),
             }
+
+            # Add AST analysis results if available
+            file_ast = ast_context_map.get(code_file.path, {})
+            if file_ast:
+                metadata["ast_analysis"] = {
+                    "dangerous_calls_found": len(file_ast.get("dangerous_calls", [])),
+                    "sql_queries_found": len(file_ast.get("sql_queries", [])),
+                    "input_sources_found": len(file_ast.get("input_sources", [])),
+                }
+
+            # Add taint analysis results
+            file_taint = taint_paths_map.get(code_file.path, [])
+            if file_taint:
+                metadata["taint_analysis"] = {
+                    "paths_found": len(file_taint),
+                    "unsanitized": len([p for p in file_taint if not p.is_sanitized]),
+                    "paths": [p.to_json() for p in file_taint[:10]],
+                }
+
+            # Add data flow analysis results if available
+            file_data_flow = data_flow_context_map.get(code_file.path, {})
+            if file_data_flow:
+                metadata["data_flow_analysis"] = {
+                    "tainted_paths_found": len(file_data_flow.get("tainted_paths", [])),
+                    "blast_radius_files": len(file_data_flow.get("blast_radius", [])),
+                    "data_sources_traced": len(file_data_flow.get("data_sources", [])),
+                }
+                if file_data_flow.get("tainted_paths"):
+                    metadata["tainted_paths"] = file_data_flow["tainted_paths"]
 
             result = FrameResult(
                 frame_id=self.frame_id,

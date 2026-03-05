@@ -12,6 +12,12 @@ from warden.validation.domain.frame import CodeFile, ValidationFrame
 
 logger = get_logger(__name__)
 
+_LANE_ORDER: dict[str, int] = {
+    "fast_lane": 0,
+    "middle_lane": 1,
+    "deep_lane": 2,
+}
+
 
 class FileFilter:
     """Handles file filtering based on context and triage decisions."""
@@ -53,26 +59,21 @@ class FileFilter:
         context: PipelineContext, frame: ValidationFrame, code_files: list[CodeFile]
     ) -> list[CodeFile]:
         """
-        Filter files based on Triage Lane and Frame cost.
+        Filter files based on triage lane and frame's declared minimum lane.
 
-        Logic:
-        - Fast Lane: Skip expensive/LLM frames
-        - Middle/Deep Lane: Execute everything
+        Frames declare their minimum_triage_lane:
+        - "fast_lane" (default): process all files
+        - "middle_lane": skip FAST files
+        - "deep_lane": skip FAST+MIDDLE files (future use)
         """
         if not hasattr(context, "triage_decisions") or not context.triage_decisions:
             return code_files
 
-        is_expensive = False
+        min_lane = getattr(frame, "minimum_triage_lane", "fast_lane")
+        min_order = _LANE_ORDER.get(str(min_lane), 0)
 
-        if hasattr(frame, "config") and frame.config.get("use_llm") is True:
-            is_expensive = True
-        else:
-            expensive_keywords = ["security", "complex", "architecture", "design", "refactor", "llm", "deep"]
-            if any(k in frame.frame_id.lower() for k in expensive_keywords):
-                is_expensive = True
-
-        if not is_expensive:
-            return code_files
+        if min_order == 0:
+            return code_files  # frame accepts all lanes
 
         filtered = []
         skipped_count = 0
@@ -83,19 +84,24 @@ class FileFilter:
                 filtered.append(cf)
                 continue
 
-            lane = decision_data.get("lane")
-
+            lane = decision_data.get("lane", "middle_lane")
             if cf.metadata is None:
                 cf.metadata = {}
             cf.metadata["triage_lane"] = lane
 
-            if lane == "fast_lane":
+            if _LANE_ORDER.get(str(lane), 1) < min_order:
                 skipped_count += 1
                 continue
 
             filtered.append(cf)
 
-        if skipped_count > 0:
-            logger.info("triage_routing_applied", frame=frame.frame_id, skipped=skipped_count, remaining=len(filtered))
+        if skipped_count:
+            logger.info(
+                "triage_routing_applied",
+                frame=frame.frame_id,
+                min_lane=min_lane,
+                skipped=skipped_count,
+                remaining=len(filtered),
+            )
 
         return filtered

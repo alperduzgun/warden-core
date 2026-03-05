@@ -165,7 +165,7 @@ class IntegrityScanner:
 
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)  # 30s timeout
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 try:
                     proc.kill()
                 except (ProcessLookupError, OSError):

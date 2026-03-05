@@ -14,6 +14,7 @@ Cache is stored as a JSON file under .warden/cache/classification_cache.json
 with a maximum of MAX_ENTRIES entries (FIFO eviction, oldest first).
 """
 
+import functools
 import hashlib
 import json
 import time
@@ -31,6 +32,20 @@ _TTL_SECONDS = 7 * 24 * 3600  # 7 days
 
 def _content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:16]
+
+
+@functools.lru_cache(maxsize=8)
+def _get_config_hash(project_root: Path) -> str:
+    """Cached warden.yaml hash — computed once per project_root per process."""
+    for cfg_name in ("warden.yaml", ".warden/config.yaml"):
+        cfg_path = project_root / cfg_name
+        if cfg_path.exists():
+            try:
+                return _content_hash(cfg_path.read_text())
+            except OSError:
+                pass
+            break
+    return ""
 
 
 class ClassificationCache:
@@ -117,16 +132,7 @@ class ClassificationCache:
         file_parts = sorted(f"{cf.path}:{_content_hash(cf.content or '')}" for cf in code_files)
         frame_part = ",".join(sorted(str(fid) for fid in available_frame_ids))
 
-        config_hash = ""
-        if project_root:
-            for cfg_name in ("warden.yaml", ".warden/config.yaml"):
-                cfg_path = project_root / cfg_name
-                if cfg_path.exists():
-                    try:
-                        config_hash = _content_hash(cfg_path.read_text())
-                    except OSError:
-                        pass
-                    break
+        config_hash = _get_config_hash(project_root) if project_root else ""
 
         raw = "|".join([*file_parts, frame_part, config_hash])
         return hashlib.sha256(raw.encode()).hexdigest()

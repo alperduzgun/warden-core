@@ -76,7 +76,7 @@ class LSPDiagnosticsAnalyzer:
                 # LSP servers typically send diagnostics within 1-2 seconds
                 try:
                     await asyncio.wait_for(diagnostics_received.wait(), timeout=3.0)
-                except asyncio.TimeoutError:
+                except (asyncio.TimeoutError, TimeoutError):
                     logger.debug("lsp_diagnostics_timeout", file=code_file.path, language=language)
                     # Continue with empty diagnostics if no response
 

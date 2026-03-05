@@ -9,6 +9,7 @@ Based on C# implementation:
 Public API:
 - LlmProvider: Provider enum
 - LlmRequest/LlmResponse: Request/response types
+- StructuredPrompt: Cacheable prompt separation
 - AnalysisResult/ClassificationResult: Analysis types
 - LlmConfiguration: Configuration management
 - ILlmClient: Provider interface
@@ -21,6 +22,9 @@ from .factory import create_client, create_client_with_fallback_async, create_pr
 from .prompts import (
     ANALYSIS_SYSTEM_PROMPT,
     CLASSIFICATION_SYSTEM_PROMPT,
+    build_analysis_prompt,
+    build_chaos_prompt,
+    build_classification_prompt,
     generate_analysis_request,
     generate_classification_request,
 )
@@ -33,6 +37,7 @@ from .types import (
     LlmProvider,
     LlmRequest,
     LlmResponse,
+    StructuredPrompt,
 )
 
 __all__ = [
@@ -44,6 +49,7 @@ __all__ = [
     "LlmProvider",
     "LlmRequest",
     "LlmResponse",
+    "StructuredPrompt",
     "AnalysisIssue",
     "AnalysisResult",
     "ClassificationCharacteristics",
@@ -57,6 +63,9 @@ __all__ = [
     # Prompts
     "ANALYSIS_SYSTEM_PROMPT",
     "generate_analysis_request",
+    "build_analysis_prompt",
     "CLASSIFICATION_SYSTEM_PROMPT",
     "generate_classification_request",
+    "build_classification_prompt",
+    "build_chaos_prompt",
 ]

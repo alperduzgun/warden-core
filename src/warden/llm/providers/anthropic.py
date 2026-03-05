@@ -7,7 +7,10 @@ Based on C# AnthropicClient.cs:
 API Documentation: https://docs.anthropic.com/claude/reference
 """
 
+from __future__ import annotations
+
 import time
+from typing import Any
 
 import httpx
 
@@ -15,7 +18,7 @@ from warden.shared.infrastructure.resilience import resilient
 
 from ..config import ProviderConfig
 from ..registry import ProviderRegistry
-from ..types import LlmProvider, LlmRequest, LlmResponse
+from ..types import LlmProvider, LlmRequest, LlmResponse, StructuredPrompt
 from .base import ILlmClient
 
 
@@ -47,6 +50,34 @@ class AnthropicClient(ILlmClient):
     @property
     def provider(self) -> LlmProvider:
         return LlmProvider.ANTHROPIC
+
+    @staticmethod
+    def build_system_payload(system_prompt: str, structured: StructuredPrompt | None = None) -> Any:
+        """Build the ``system`` field for the Anthropic API payload.
+
+        When a ``StructuredPrompt`` is provided the system message is split
+        into two content blocks: the first carries a ``cache_control``
+        hint (``{"type": "ephemeral"}``) so that the stable system context
+        can be cached across calls, while the second block contains the
+        variable file context without caching.
+
+        When no structured prompt is supplied the plain ``system_prompt``
+        string is used directly (backwards compatible).
+        """
+        if structured is None:
+            return system_prompt
+
+        return [
+            {
+                "type": "text",
+                "text": structured.system_context,
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": structured.file_context,
+            },
+        ]
 
     @resilient(name="provider_send", timeout_seconds=60.0)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
@@ -99,6 +130,85 @@ class AnthropicClient(ILlmClient):
                 )
 
             # Extract usage information
+            usage = result.get("usage", {})
+
+            return LlmResponse(
+                content=result["content"][0]["text"],
+                success=True,
+                provider=self.provider,
+                model=result.get("model") or request.model or self._default_model,
+                prompt_tokens=usage.get("input_tokens"),
+                completion_tokens=usage.get("output_tokens"),
+                total_tokens=usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
+                duration_ms=duration_ms,
+            )
+
+        except httpx.HTTPStatusError as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            response_text = e.response.text[:200] if e.response.text else "No response body"
+            error_msg = f"HTTP {e.response.status_code}: {response_text}"
+            return LlmResponse(
+                content="", success=False, error_message=error_msg, provider=self.provider, duration_ms=duration_ms
+            )
+
+        except Exception as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            return LlmResponse(
+                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
+            )
+
+    async def send_structured_async(self, structured: StructuredPrompt, request: LlmRequest) -> LlmResponse:
+        """Send a request using a StructuredPrompt with cache_control hints.
+
+        The system_context portion of the structured prompt is marked with
+        Anthropic's ``cache_control: {"type": "ephemeral"}`` so it can be
+        cached across multiple file analyses within the same scan run.
+
+        Args:
+            structured: StructuredPrompt with system_context and file_context
+            request: LLM request parameters (system_prompt is overridden)
+
+        Returns:
+            LlmResponse with content or error
+        """
+        start_time = time.time()
+
+        try:
+            from warden.llm.global_rate_limiter import GlobalRateLimiter
+
+            limiter = await GlobalRateLimiter.get_instance()
+            await limiter.acquire("anthropic", tokens=request.max_tokens)
+
+            headers = {
+                "x-api-key": self._api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+
+            payload = {
+                "model": request.model or self._default_model,
+                "system": self.build_system_payload(request.system_prompt, structured),
+                "messages": [{"role": "user", "content": request.user_message}],
+                "temperature": request.temperature,
+                "max_tokens": request.max_tokens,
+            }
+
+            async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
+                response = await client.post(f"{self._base_url}/v1/messages", headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            if not result.get("content"):
+                return LlmResponse(
+                    content="",
+                    success=False,
+                    error_message="No response from Anthropic",
+                    provider=self.provider,
+                    duration_ms=duration_ms,
+                )
+
             usage = result.get("usage", {})
 
             return LlmResponse(

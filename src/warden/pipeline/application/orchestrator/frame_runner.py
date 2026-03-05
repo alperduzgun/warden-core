@@ -2,6 +2,7 @@
 Frame runner for executing validation frames.
 
 Handles the execution of individual frames with rules and dependencies.
+Supports incremental persistence via PartialResultsWriter (#101).
 """
 
 import asyncio
@@ -39,7 +40,7 @@ from .suppression_filter import SuppressionFilter
 # See: Bearer pkg/commands/process/filelist/timeout/timeout.go
 _FILE_TIMEOUT_MIN_S: float = 5.0  # floor: minimum timeout for any file
 _FILE_TIMEOUT_LOCAL_S: float = 120.0  # floor for local/slow providers (Ollama, Claude Code, Codex)
-_FILE_TIMEOUT_MAX_S: float = 60.0  # ceiling: no single file gets more than this
+_FILE_TIMEOUT_MAX_S: float = 300.0  # ceiling: must be >= _FILE_TIMEOUT_LOCAL_S (120s)
 _FILE_BYTES_PER_SECOND: int = 10_000  # conservative parse + LLM throughput rate
 _LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama", "claude_code", "codex"})
 
@@ -94,6 +95,25 @@ def calculate_per_file_timeout(
     return max(min_timeout, min(proportional, max_timeout))
 
 
+_BATCH_TIMEOUT_MIN_S: float = 300.0  # floor: 5 files × 60s minimum
+_BATCH_TIMEOUT_MAX_S: float = 1800.0  # ceiling: 5 files × 300s maximum
+
+
+def calculate_batch_timeout(
+    code_files: list,
+    *,
+    provider: str = "",
+) -> float:
+    """Sum per-file timeouts for a batch chunk.
+
+    Replaces the static config.frame_timeout for batch execution so that
+    large files or slow local providers get proportionally more time.
+    Clamped to [300s, 1800s] to prevent runaway batches.
+    """
+    total = sum(calculate_per_file_timeout(cf.size_bytes, provider=provider) for cf in code_files)
+    return min(_BATCH_TIMEOUT_MAX_S, max(_BATCH_TIMEOUT_MIN_S, total))
+
+
 @dataclass
 class ContextInjectionMetrics:
     """Track context injection health."""
@@ -118,6 +138,7 @@ class FrameRunner:
         rule_executor: RuleExecutor | None = None,
         llm_service: Any | None = None,
         semantic_search_service: Any | None = None,
+        partial_results_writer: Any | None = None,
     ):
         self.config = config or PipelineConfig()
         self.progress_callback = progress_callback
@@ -126,6 +147,10 @@ class FrameRunner:
         self.semantic_search_service = semantic_search_service
         self.ignore_matcher: IgnoreMatcher | None = None
         self._findings_cache: FindingsCache | None = None
+        self._partial_writer = partial_results_writer
+        # Sentinel: None = not yet loaded; "" = loaded but absent; str = content
+        self._arch_directives: str | None = None
+        self._arch_directives_loaded: bool = False
 
     @async_error_handler(fallback_value=None, log_level="error", context_keys=["frame_id"], reraise=False)
     async def execute_frame_with_rules_async(
@@ -310,27 +335,29 @@ class FrameRunner:
                 )
 
         # Inject architectural directives from .warden/architecture.md (Gap 4: global directives)
-        # Read once per pipeline run, not per-file. Provides human-authored architectural rules.
-        project_root = getattr(context, "project_root", None) or Path.cwd()
-        arch_file_candidates = [
-            project_root / ".warden" / "rules" / "architecture.md",
-            project_root / ".warden" / "architecture.md",
-        ]
-        for arch_path in arch_file_candidates:
-            if arch_path.is_file():
-                try:
-                    arch_content = arch_path.read_text(encoding="utf-8")[:500]
-                    if arch_content.strip():
-                        frame.architectural_directives = arch_content.strip()
-                        logger.debug(
-                            "architectural_directives_injected",
-                            frame_id=frame.frame_id,
-                            source=str(arch_path),
-                            chars=len(arch_content),
-                        )
-                except Exception as e:
-                    logger.debug("architectural_directives_read_failed", error=str(e))
-                break
+        # Cached at first call per FrameRunner instance — not re-read per frame.
+        if not self._arch_directives_loaded:
+            self._arch_directives_loaded = True
+            _arch_root = getattr(context, "project_root", None) or Path.cwd()
+            for arch_path in [
+                _arch_root / ".warden" / "rules" / "architecture.md",
+                _arch_root / ".warden" / "architecture.md",
+            ]:
+                if arch_path.is_file():
+                    try:
+                        content = arch_path.read_text(encoding="utf-8")[:500].strip()
+                        if content:
+                            self._arch_directives = content
+                    except Exception as e:
+                        logger.debug("architectural_directives_read_failed", error=str(e))
+                    break
+        if self._arch_directives:
+            frame.architectural_directives = self._arch_directives
+            logger.debug(
+                "architectural_directives_injected",
+                frame_id=frame.frame_id,
+                chars=len(self._arch_directives),
+            )
 
         # Inject prior findings for cross-frame awareness (Tier 1: Context-Awareness)
         # BATCH 3: Add metrics tracking
@@ -602,8 +629,24 @@ class FrameRunner:
                             self.progress_callback(
                                 "progress_update", {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path}
                             )
+
+                        # Persist partial results incrementally (#101)
+                        if self._partial_writer is not None and result is not None:
+                            try:
+                                findings_dicts = [
+                                    f.to_json() if hasattr(f, "to_json") else {"message": str(f)}
+                                    for f in (result.findings or [])
+                                ]
+                                self._partial_writer.append(
+                                    str(c_file.path),
+                                    frame.frame_id,
+                                    findings_dicts,
+                                )
+                            except Exception:
+                                pass  # best-effort persistence
+
                         return result
-                    except asyncio.TimeoutError:
+                    except (asyncio.TimeoutError, TimeoutError):
                         logger.warning(
                             "frame_file_timeout",
                             frame=frame.frame_id,
@@ -624,7 +667,7 @@ class FrameRunner:
                             ),
                             location=f"{c_file.path}:1",
                         )
-                        return CodeFrameResult(
+                        timeout_result = CodeFrameResult(
                             frame_id=frame.frame_id,
                             frame_name=frame.name,
                             status="timeout",
@@ -634,6 +677,19 @@ class FrameRunner:
                             findings=[timeout_finding],
                             metadata={"timeout": True, "timeout_s": per_file_timeout},
                         )
+
+                        # Persist timeout finding incrementally (#101)
+                        if self._partial_writer is not None:
+                            try:
+                                self._partial_writer.append(
+                                    str(c_file.path),
+                                    frame.frame_id,
+                                    [timeout_finding.to_json()],
+                                )
+                            except Exception:
+                                pass
+
+                        return timeout_result
                     except Exception as ex:
                         logger.error(
                             "frame_file_execution_error", frame=frame.frame_id, file=c_file.path, error=str(ex)
@@ -701,13 +757,83 @@ class FrameRunner:
                                 total_files_to_scan = len(files_to_scan)
                                 CHUNK_SIZE = 5
 
-                                for i in range(0, total_files_to_scan, CHUNK_SIZE):
-                                    chunk = files_to_scan[i : i + CHUNK_SIZE]
+                                # --- Cross-scan findings cache for batch path ---
+                                # Separate files with cache hits from those needing LLM.
+                                uncached_files: list[CodeFile] = []
+                                batch_cached_count = 0
+                                for cf in files_to_scan:
+                                    if self._findings_cache is not None and cf.content:
+                                        cached = self._findings_cache.get_findings(
+                                            frame.frame_id, str(cf.path), cf.content
+                                        )
+                                        if cached is not None:
+                                            logger.debug(
+                                                "findings_cache_hit",
+                                                frame=frame.frame_id,
+                                                file=cf.path,
+                                                cached_findings=len(cached),
+                                            )
+                                            batch_cached_count += 1
+                                            if cached:
+                                                has_critical = any(f.severity == "critical" for f in cached)
+                                                cached_is_blocker = any(f.is_blocker for f in cached)
+                                                cached_status = "failed" if has_critical else "warning"
+                                                f_results.append(
+                                                    CodeFrameResult(
+                                                        frame_id=frame.frame_id,
+                                                        frame_name=frame.name,
+                                                        status=cached_status,
+                                                        duration=0.0,
+                                                        issues_found=len(cached),
+                                                        is_blocker=cached_is_blocker,
+                                                        findings=cached,
+                                                        metadata={"from_cache": True},
+                                                    )
+                                                )
+                                            # cached == [] means clean file, no result needed
+                                            continue
+                                    uncached_files.append(cf)
+
+                                if batch_cached_count > 0:
+                                    logger.info(
+                                        "batch_findings_cache_summary",
+                                        frame=frame.frame_id,
+                                        cached=batch_cached_count,
+                                        uncached=len(uncached_files),
+                                    )
+                                    if self.progress_callback:
+                                        self.progress_callback(
+                                            "progress_update",
+                                            {
+                                                "increment": batch_cached_count,
+                                                "frame_id": frame.frame_id,
+                                                "cached": True,
+                                            },
+                                        )
+
+                                for i in range(0, len(uncached_files), CHUNK_SIZE):
+                                    chunk = uncached_files[i : i + CHUNK_SIZE]
+                                    _batch_provider = str(
+                                        getattr(getattr(context, "llm_config", None), "provider", "")
+                                        or getattr(context, "llm_provider", "")
+                                        or os.environ.get("WARDEN_LLM_PROVIDER", "")
+                                    ).lower()
+                                    chunk_timeout = calculate_batch_timeout(chunk, provider=_batch_provider)
                                     chunk_results = await asyncio.wait_for(
                                         frame.execute_batch_async(chunk),
-                                        timeout=getattr(self.config, "frame_timeout", 300.0),
+                                        timeout=chunk_timeout,
                                     )
                                     if chunk_results:
+                                        # Persist each result to findings cache (1:1 with chunk files)
+                                        if self._findings_cache is not None:
+                                            for cf, res in zip(chunk, chunk_results, strict=False):
+                                                if cf.content and res is not None:
+                                                    self._findings_cache.put_findings(
+                                                        frame.frame_id,
+                                                        str(cf.path),
+                                                        cf.content,
+                                                        res.findings or [],
+                                                    )
                                         f_results.extend(chunk_results)
                                         if self.progress_callback:
                                             self.progress_callback(
@@ -719,11 +845,40 @@ class FrameRunner:
                                                 },
                                             )
                             else:
+                                _provider = str(
+                                    os.environ.get("WARDEN_LLM_PROVIDER", "")
+                                    or getattr(getattr(self, "config", None), "provider", "")
+                                ).lower()
+                                _is_local = _provider in _LOCAL_PROVIDERS
+                                _env_raw = os.environ.get("WARDEN_FILE_CONCURRENCY")
+                                _cfg_raw = getattr(getattr(self, "config", None), "file_concurrency", 0)
+                                _concurrency = max(
+                                    1,
+                                    int(_env_raw or _cfg_raw or (2 if _is_local else 5)),
+                                )
+                                _sem = asyncio.Semaphore(_concurrency)
+
+                                async def _guarded(
+                                    c_file: CodeFile, _s: asyncio.Semaphore = _sem
+                                ) -> CodeFrameResult | None:
+                                    async with _s:
+                                        return await execute_single_file_async(c_file)
+
+                                raw = await asyncio.gather(
+                                    *[_guarded(cf) for cf in files_to_scan],
+                                    return_exceptions=True,
+                                )
                                 f_results = []
-                                for cf in files_to_scan:
-                                    result = await execute_single_file_async(cf)
-                                    if result:
-                                        f_results.append(result)
+                                for item in raw:
+                                    if isinstance(item, BaseException):
+                                        logger.warning(
+                                            "frame_file_gather_error",
+                                            frame=frame.frame_id,
+                                            error=str(item),
+                                        )
+                                        execution_errors += 1
+                                    elif item is not None:
+                                        f_results.append(item)
 
                             if isinstance(frame, Cleanable):
                                 await frame.cleanup()
@@ -745,7 +900,7 @@ class FrameRunner:
                                     if res and res.findings:
                                         frame_findings.extend(res.findings)
 
-                        except asyncio.TimeoutError:
+                        except (asyncio.TimeoutError, TimeoutError):
                             logger.warning("frame_batch_execution_timeout", frame=frame.frame_id)
                             execution_errors += 1
                         except Exception as ex:
@@ -779,7 +934,9 @@ class FrameRunner:
                     suppressions = frame.config["suppressions"]
                     if suppressions and frame_findings:
                         findings_before = len(frame_findings)
-                        frame_findings = SuppressionFilter.apply_config_suppressions(frame_findings, suppressions, context=context)
+                        frame_findings = SuppressionFilter.apply_config_suppressions(
+                            frame_findings, suppressions, context=context
+                        )
                         findings_after = len(frame_findings)
 
                         if findings_before != findings_after:
@@ -818,12 +975,15 @@ class FrameRunner:
                         "frame_executed_successfully", frame_id=frame.frame_id, files_scanned=files_scanned, findings=0
                     )
 
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 logger.error("frame_timeout", frame_id=frame.frame_id)
                 frame_result = FrameResult(
                     frame_id=frame.frame_id,
                     frame_name=frame.name,
                     status="timeout",
+                    duration=time.perf_counter() - frame_start_time,
+                    issues_found=0,
+                    is_blocker=False,
                     findings=[],
                 )
                 pipeline.frames_failed += 1
@@ -863,6 +1023,9 @@ class FrameRunner:
                         frame_id=frame.frame_id,
                         frame_name=frame.name,
                         status="error",
+                        duration=time.perf_counter() - frame_start_time,
+                        issues_found=0,
+                        is_blocker=False,
                         findings=[],
                     )
                     pipeline.frames_failed += 1

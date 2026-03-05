@@ -327,7 +327,7 @@ class PhaseOrchestrator:
                 timeout=timeout,
             )
 
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             # ID 29 - Timeout handler (include stuck phase for diagnostics)
             self.pipeline.status = PipelineStatus.FAILED
             current = getattr(context, "current_phase", "unknown")

@@ -65,12 +65,30 @@ class TestTaintCatalogDefault:
         assert "db.escape" in sql_sans
 
     def test_all_sink_types_covered(self):
-        expected_types = {"SQL-value", "CMD-argument", "HTML-content", "CODE-execution", "FILE-path"}
+        expected_types = {
+            "SQL-value",
+            "CMD-argument",
+            "HTML-content",
+            "CODE-execution",
+            "FILE-path",
+            "HTTP-request",
+            "URL-fetch",
+            "LOG-output",
+        }
         actual_types = set(self.catalog.sinks.values())
         assert expected_types.issubset(actual_types)
 
     def test_sanitizers_all_sink_types_present(self):
-        expected_keys = {"SQL-value", "CMD-argument", "HTML-content", "CODE-execution", "FILE-path"}
+        expected_keys = {
+            "SQL-value",
+            "CMD-argument",
+            "HTML-content",
+            "CODE-execution",
+            "FILE-path",
+            "HTTP-request",
+            "URL-fetch",
+            "LOG-output",
+        }
         assert expected_keys.issubset(set(self.catalog.sanitizers.keys()))
 
     def test_sources_dict_contains_two_languages(self):
@@ -84,6 +102,44 @@ class TestTaintCatalogDefault:
         c1.sources["python"].add("__SENTINEL__")
         assert "__SENTINEL__" not in c2.sources.get("python", set())
 
+    # ── URL-fetch sinks (Issue #91) ─────────────────────────────────────────
+
+    def test_url_fetch_sinks_present(self):
+        """JS SSRF sinks must be registered with URL-fetch type."""
+        assert self.catalog.sinks.get("fetch") == "URL-fetch"
+        assert self.catalog.sinks.get("axios.get") == "URL-fetch"
+        assert self.catalog.sinks.get("axios.post") == "URL-fetch"
+        assert self.catalog.sinks.get("http.request") == "URL-fetch"
+
+    def test_url_fetch_sanitizers_present(self):
+        """URL-fetch sanitizers must include URL validation functions."""
+        url_sans = self.catalog.sanitizers.get("URL-fetch", set())
+        assert len(url_sans) >= 1
+        assert "url.parse" in url_sans or "new URL" in url_sans or "validator.isURL" in url_sans
+
+    # ── LOG-output sinks (Issue #89) ────────────────────────────────────────
+
+    def test_log_output_python_sinks_present(self):
+        """Python logging sinks must be registered with LOG-output type."""
+        assert self.catalog.sinks.get("logging.info") == "LOG-output"
+        assert self.catalog.sinks.get("logging.error") == "LOG-output"
+        assert self.catalog.sinks.get("logger.info") == "LOG-output"
+        assert self.catalog.sinks.get("logger.error") == "LOG-output"
+        assert self.catalog.sinks.get("print") == "LOG-output"
+
+    def test_log_output_js_sinks_present(self):
+        """JS logging sinks must be registered with LOG-output type."""
+        assert self.catalog.sinks.get("console.log") == "LOG-output"
+        assert self.catalog.sinks.get("console.error") == "LOG-output"
+        assert self.catalog.sinks.get("console.warn") == "LOG-output"
+        assert self.catalog.sinks.get("console.debug") == "LOG-output"
+
+    def test_log_output_sanitizers_present(self):
+        """LOG-output sanitizers must include PII masking functions."""
+        log_sans = self.catalog.sanitizers.get("LOG-output", set())
+        assert len(log_sans) >= 1
+        assert "mask_pii" in log_sans or "redact" in log_sans
+
 
 class TestTaintCatalogDefaultYaml:
     """Tests for the default YAML catalog file loading."""
@@ -94,9 +150,231 @@ class TestTaintCatalogDefaultYaml:
             _DEFAULT_CATALOG_PATH,
         )
 
-        assert _DEFAULT_CATALOG_PATH.exists(), (
-            f"Default YAML catalog not found at {_DEFAULT_CATALOG_PATH}"
+        assert _DEFAULT_CATALOG_PATH.exists(), f"Default YAML catalog not found at {_DEFAULT_CATALOG_PATH}"
+
+    def test_default_yaml_is_valid(self):
+        """The shipped default YAML catalog must parse successfully."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
         )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        assert isinstance(data, dict)
+        assert "sources" in data
+        assert "sinks" in data
+        assert "sanitizers" in data
+        assert "assign_sinks" in data
+
+    def test_default_yaml_contains_python_sources(self):
+        """Default YAML must include core Python sources."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        py_sources = data["sources"]["python"]
+        assert "request.args" in py_sources
+        assert "request.form" in py_sources
+        assert "input" in py_sources
+        assert "os.environ" in py_sources
+
+    def test_default_yaml_contains_javascript_sources(self):
+        """Default YAML must include core JavaScript sources."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        js_sources = data["sources"]["javascript"]
+        assert "req.body" in js_sources
+        assert "req.query" in js_sources
+        assert "process.env" in js_sources
+
+    def test_default_yaml_contains_sinks(self):
+        """Default YAML must include core sinks."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sinks = data["sinks"]
+        assert sinks["cursor.execute"] == "SQL-value"
+        assert sinks["os.system"] == "CMD-argument"
+        assert sinks["eval"] == "CODE-execution"
+        assert sinks["open"] == "FILE-path"
+        assert sinks["db.query"] == "SQL-value"
+        assert sinks["innerHTML"] == "HTML-content"
+
+    def test_default_yaml_contains_url_fetch_sinks(self):
+        """Default YAML must include URL-fetch sinks for JS SSRF detection."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sinks = data["sinks"]
+        assert sinks["fetch"] == "URL-fetch"
+        assert sinks["axios.get"] == "URL-fetch"
+        assert sinks["axios.post"] == "URL-fetch"
+        assert sinks["http.request"] == "URL-fetch"
+        assert sinks["https.request"] == "URL-fetch"
+
+    def test_default_yaml_contains_log_output_sinks(self):
+        """Default YAML must include LOG-output sinks for PII leak detection."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sinks = data["sinks"]
+        assert sinks["logging.info"] == "LOG-output"
+        assert sinks["logger.info"] == "LOG-output"
+        assert sinks["print"] == "LOG-output"
+        assert sinks["console.log"] == "LOG-output"
+        assert sinks["console.error"] == "LOG-output"
+
+    def test_default_yaml_contains_sanitizers(self):
+        """Default YAML must include core sanitizers."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sanitizers = data["sanitizers"]
+        assert "parameterized_query" in sanitizers["SQL-value"]
+        assert "html.escape" in sanitizers["HTML-content"]
+        assert "shlex.quote" in sanitizers["CMD-argument"]
+        assert "DOMPurify.sanitize" in sanitizers["HTML-content"]
+
+    def test_default_yaml_contains_url_fetch_sanitizers(self):
+        """Default YAML must include URL-fetch sanitizers."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sanitizers = data["sanitizers"]
+        assert "URL-fetch" in sanitizers
+        url_sans = sanitizers["URL-fetch"]
+        assert "url.parse" in url_sans or "new URL" in url_sans or "validator.isURL" in url_sans
+
+    def test_default_yaml_contains_log_output_sanitizers(self):
+        """Default YAML must include LOG-output sanitizers for PII masking."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        sanitizers = data["sanitizers"]
+        assert "LOG-output" in sanitizers
+        log_sans = sanitizers["LOG-output"]
+        assert "mask_pii" in log_sans or "redact" in log_sans
+
+    def test_default_yaml_contains_assign_sinks(self):
+        """Default YAML must include JS assign sinks."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        with open(_DEFAULT_CATALOG_PATH, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        assert "innerHTML" in data["assign_sinks"]
+        assert "outerHTML" in data["assign_sinks"]
+
+    def test_load_default_yaml_returns_catalog(self):
+        """_load_default_yaml returns a valid TaintCatalog."""
+        catalog = TaintCatalog._load_default_yaml()
+        assert catalog is not None
+        assert "request.args" in catalog.sources.get("python", set())
+        assert "cursor.execute" in catalog.sinks
+        assert "innerHTML" in catalog.assign_sinks
+
+    def test_fallback_to_hardcoded_when_yaml_missing(self):
+        """When default YAML is missing, hardcoded constants are used."""
+        with patch(
+            "warden.validation.frames.security._internal.taint_catalog._DEFAULT_CATALOG_PATH",
+            Path("/nonexistent/path/taint_catalog.yaml"),
+        ):
+            catalog = TaintCatalog._load_default_yaml()
+            assert catalog is None
+
+            # Full get_default should still work via hardcoded fallback
+            catalog = TaintCatalog.get_default()
+            assert "request.args" in catalog.sources.get("python", set())
+            assert "cursor.execute" in catalog.sinks
+
+    def test_fallback_to_hardcoded_when_yaml_malformed(self):
+        """When default YAML is malformed, hardcoded constants are used."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(": broken: yaml: [")
+            tmp_path = Path(f.name)
+
+        try:
+            with patch(
+                "warden.validation.frames.security._internal.taint_catalog._DEFAULT_CATALOG_PATH",
+                tmp_path,
+            ):
+                catalog = TaintCatalog._load_default_yaml()
+                assert catalog is None
+
+                # Full get_default falls back to hardcoded
+                catalog = TaintCatalog.get_default()
+                assert "request.args" in catalog.sources.get("python", set())
+        finally:
+            tmp_path.unlink()
+
+    def test_yaml_and_hardcoded_produce_same_baseline(self):
+        """Default YAML catalog must match hardcoded constants for core entries."""
+        yaml_catalog = TaintCatalog._load_default_yaml()
+        hardcoded_catalog = TaintCatalog._build_from_hardcoded()
+
+        assert yaml_catalog is not None
+
+        # All hardcoded Python sources must be in YAML
+        for src in hardcoded_catalog.sources.get("python", set()):
+            assert src in yaml_catalog.sources.get("python", set()), f"Python source '{src}' missing from default YAML"
+
+        # All hardcoded JS sources must be in YAML
+        for src in hardcoded_catalog.sources.get("javascript", set()):
+            assert src in yaml_catalog.sources.get("javascript", set()), f"JS source '{src}' missing from default YAML"
+
+        # All hardcoded sinks must be in YAML
+        for sink_name, sink_type in hardcoded_catalog.sinks.items():
+            assert sink_name in yaml_catalog.sinks, f"Sink '{sink_name}' missing from default YAML"
+            assert yaml_catalog.sinks[sink_name] == sink_type, (
+                f"Sink '{sink_name}' type mismatch: YAML={yaml_catalog.sinks[sink_name]}, hardcoded={sink_type}"
+            )
+
+        # All hardcoded sanitizers must be in YAML
+        for sink_type, sans in hardcoded_catalog.sanitizers.items():
+            yaml_sans = yaml_catalog.sanitizers.get(sink_type, set())
+            for san in sans:
+                assert san in yaml_sans, f"Sanitizer '{san}' for {sink_type} missing from default YAML"
+
+        # All hardcoded assign sinks must be in YAML
+        for asink in hardcoded_catalog.assign_sinks:
+            assert asink in yaml_catalog.assign_sinks, f"Assign sink '{asink}' missing from default YAML"
+
+
+class TestTaintCatalogDefaultYaml:
+    """Tests for the default YAML catalog file loading."""
+
+    def test_default_yaml_file_exists(self):
+        """The shipped default YAML catalog file must exist."""
+        from warden.validation.frames.security._internal.taint_catalog import (
+            _DEFAULT_CATALOG_PATH,
+        )
+
+        assert _DEFAULT_CATALOG_PATH.exists(), f"Default YAML catalog not found at {_DEFAULT_CATALOG_PATH}"
 
     def test_default_yaml_is_valid(self):
         """The shipped default YAML catalog must parse successfully."""
@@ -204,9 +482,7 @@ class TestTaintCatalogDefaultYaml:
 
     def test_fallback_to_hardcoded_when_yaml_malformed(self):
         """When default YAML is malformed, hardcoded constants are used."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(": broken: yaml: [")
             tmp_path = Path(f.name)
 
@@ -233,39 +509,28 @@ class TestTaintCatalogDefaultYaml:
 
         # All hardcoded Python sources must be in YAML
         for src in hardcoded_catalog.sources.get("python", set()):
-            assert src in yaml_catalog.sources.get("python", set()), (
-                f"Python source '{src}' missing from default YAML"
-            )
+            assert src in yaml_catalog.sources.get("python", set()), f"Python source '{src}' missing from default YAML"
 
         # All hardcoded JS sources must be in YAML
         for src in hardcoded_catalog.sources.get("javascript", set()):
-            assert src in yaml_catalog.sources.get("javascript", set()), (
-                f"JS source '{src}' missing from default YAML"
-            )
+            assert src in yaml_catalog.sources.get("javascript", set()), f"JS source '{src}' missing from default YAML"
 
         # All hardcoded sinks must be in YAML
         for sink_name, sink_type in hardcoded_catalog.sinks.items():
-            assert sink_name in yaml_catalog.sinks, (
-                f"Sink '{sink_name}' missing from default YAML"
-            )
+            assert sink_name in yaml_catalog.sinks, f"Sink '{sink_name}' missing from default YAML"
             assert yaml_catalog.sinks[sink_name] == sink_type, (
-                f"Sink '{sink_name}' type mismatch: YAML={yaml_catalog.sinks[sink_name]}, "
-                f"hardcoded={sink_type}"
+                f"Sink '{sink_name}' type mismatch: YAML={yaml_catalog.sinks[sink_name]}, hardcoded={sink_type}"
             )
 
         # All hardcoded sanitizers must be in YAML
         for sink_type, sans in hardcoded_catalog.sanitizers.items():
             yaml_sans = yaml_catalog.sanitizers.get(sink_type, set())
             for san in sans:
-                assert san in yaml_sans, (
-                    f"Sanitizer '{san}' for {sink_type} missing from default YAML"
-                )
+                assert san in yaml_sans, f"Sanitizer '{san}' for {sink_type} missing from default YAML"
 
         # All hardcoded assign sinks must be in YAML
         for asink in hardcoded_catalog.assign_sinks:
-            assert asink in yaml_catalog.assign_sinks, (
-                f"Assign sink '{asink}' missing from default YAML"
-            )
+            assert asink in yaml_catalog.assign_sinks, f"Assign sink '{asink}' missing from default YAML"
 
 
 class TestTaintCatalogLoad:
@@ -295,9 +560,7 @@ class TestTaintCatalogLoad:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".warden").mkdir()
-            (root / ".warden" / "taint_catalog.yaml").write_text(
-                "sources:\n  javascript:\n    - ctx.request.body\n"
-            )
+            (root / ".warden" / "taint_catalog.yaml").write_text("sources:\n  javascript:\n    - ctx.request.body\n")
             catalog = TaintCatalog.load(root)
             assert "ctx.request.body" in catalog.sources.get("javascript", set())
             assert "req.body" in catalog.sources.get("javascript", set())
@@ -388,9 +651,7 @@ class TestTaintCatalogLoad:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".warden").mkdir()
-            (root / ".warden" / "taint_catalog.yaml").write_text(
-                "sources:\nsinks:\nsanitizers:\n"
-            )
+            (root / ".warden" / "taint_catalog.yaml").write_text("sources:\nsinks:\nsanitizers:\n")
             catalog = TaintCatalog.load(root)
             assert "request.args" in catalog.sources.get("python", set())
             assert "cursor.execute" in catalog.sinks
@@ -411,9 +672,7 @@ class TestTaintCatalogLoad:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".warden").mkdir()
-            (root / ".warden" / "taint_catalog.yaml").write_text(
-                "sources:\n  ruby:\n    - params[:id]\n"
-            )
+            (root / ".warden" / "taint_catalog.yaml").write_text("sources:\n  ruby:\n    - params[:id]\n")
             catalog = TaintCatalog.load(root)
             assert "params[:id]" in catalog.sources.get("ruby", set())
             # Other languages unaffected
@@ -462,9 +721,7 @@ def handler(req):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".warden").mkdir()
-            (root / ".warden" / "taint_catalog.yaml").write_text(
-                "sinks:\n  SQL-value:\n    - prisma.raw\n"
-            )
+            (root / ".warden" / "taint_catalog.yaml").write_text("sinks:\n  SQL-value:\n    - prisma.raw\n")
             catalog = TaintCatalog.load(root)
             analyzer = TaintAnalyzer(catalog=catalog)
 
@@ -483,9 +740,7 @@ def handler(req):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".warden").mkdir()
-            (root / ".warden" / "taint_catalog.yaml").write_text(
-                "sources:\n  javascript:\n    - ctx.request.body\n"
-            )
+            (root / ".warden" / "taint_catalog.yaml").write_text("sources:\n  javascript:\n    - ctx.request.body\n")
             catalog = TaintCatalog.load(root)
             analyzer = TaintAnalyzer(catalog=catalog)
 
@@ -500,9 +755,7 @@ def handler(req):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".warden").mkdir()
-            (root / ".warden" / "taint_catalog.yaml").write_text(
-                "sources:\n  python:\n    - custom.source\n"
-            )
+            (root / ".warden" / "taint_catalog.yaml").write_text("sources:\n  python:\n    - custom.source\n")
             catalog = TaintCatalog.load(root)
             analyzer = TaintAnalyzer(catalog=catalog)
 

@@ -1,6 +1,7 @@
 """Tests for ASTPreParser centralized cache."""
 
 import asyncio
+from concurrent.futures import BrokenExecutor
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -61,7 +62,7 @@ class TestASTPreParserPopulatesCache:
         context = _make_context()
         files = [_make_code_file("a.py"), _make_code_file("b.py")]
 
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -77,7 +78,7 @@ class TestASTPreParserPopulatesCache:
         context.ast_cache["a.py"] = _make_parse_result(file_path="a.py")
         files = [_make_code_file("a.py"), _make_code_file("b.py")]
 
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -105,7 +106,7 @@ class TestASTPreParserHandlesErrors:
 
         provider.parse = AsyncMock(side_effect=slow_then_fast)
 
-        parser = ASTPreParser(timeout=0.01)  # Very short timeout
+        parser = ASTPreParser(timeout=0.01, use_process_isolation=False)  # Very short timeout
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -128,7 +129,7 @@ class TestASTPreParserHandlesErrors:
 
         provider.parse = AsyncMock(side_effect=error_then_ok)
 
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -144,7 +145,7 @@ class TestASTPreParserLanguageHandling:
         # "brainfuck" won't map to CodeLanguage
         files = [_make_code_file("a.bf", language="brainfuck"), _make_code_file("b.py")]
 
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -159,7 +160,7 @@ class TestASTPreParserLanguageHandling:
 
         mock_registry.get_provider.return_value = None
 
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -170,7 +171,7 @@ class TestASTPreParserLanguageHandling:
         """Empty file list is a no-op."""
         context = _make_context()
 
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, [])
 
@@ -186,7 +187,7 @@ class TestASTPreParserMemoryLimit:
         context = _make_context(max_ast_cache_entries=5)
 
         files = [_make_code_file(f"src/f{i}.py") for i in range(20)]
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -198,7 +199,7 @@ class TestASTPreParserMemoryLimit:
         context = _make_context()
         files = [_make_code_file(f"src/f{i}.py") for i in range(3)]
 
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -212,7 +213,7 @@ class TestASTPreParserMemoryLimit:
 
         # Parse 10 files: f0..f9 (insertion order matters)
         files = [_make_code_file(f"src/f{i}.py") for i in range(10)]
-        parser = ASTPreParser()
+        parser = ASTPreParser(use_process_isolation=False)
         with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
             await parser.pre_parse_all_async(context, files)
 
@@ -225,3 +226,110 @@ class TestASTPreParserMemoryLimit:
         """The constant should be a positive integer within a sane range."""
         assert isinstance(_MAX_AST_CACHE_ENTRIES, int)
         assert 100 <= _MAX_AST_CACHE_ENTRIES <= 10_000
+
+
+class TestASTPreParserProcessIsolation:
+    """Tests for ProcessPoolExecutor-based crash isolation (#100)."""
+
+    def test_default_uses_process_isolation(self):
+        """Default constructor enables process isolation."""
+        parser = ASTPreParser()
+        assert parser._use_process_isolation is True
+
+    def test_can_disable_process_isolation(self):
+        """Process isolation can be explicitly disabled."""
+        parser = ASTPreParser(use_process_isolation=False)
+        assert parser._use_process_isolation is False
+
+    def test_max_workers_configurable(self):
+        """Worker count can be set via constructor."""
+        parser = ASTPreParser(max_workers=4)
+        assert parser._max_workers == 4
+
+    @pytest.mark.asyncio
+    async def test_process_isolation_handles_worker_crash(self, mock_registry):
+        """Worker crash (BrokenProcessPool) is caught and file marked as failed."""
+        context = _make_context()
+        files = [_make_code_file("crash.py"), _make_code_file("ok.py")]
+
+        parser = ASTPreParser(use_process_isolation=True)
+
+        # Mock the event loop's run_in_executor to simulate a worker crash
+        # for the first file and success for the second
+        call_count = 0
+
+        async def mock_run_in_executor(executor, fn, *args):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise BrokenExecutor("Worker crashed with segfault")
+            return _make_parse_result(file_path=args[2])
+
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+            with patch("asyncio.get_running_loop") as mock_loop:
+                loop = MagicMock()
+                loop.run_in_executor = AsyncMock(side_effect=mock_run_in_executor)
+                mock_loop.return_value = loop
+
+                await parser.pre_parse_all_async(context, files)
+
+        # crash.py should be marked as failed, ok.py should succeed
+        assert "crash.py" not in context.ast_cache
+        assert "ok.py" in context.ast_cache
+
+    @pytest.mark.asyncio
+    async def test_process_isolation_error_counted_as_failed(self, mock_registry):
+        """A worker crash increments the 'failed' counter, not 'errors'."""
+        context = _make_context()
+        files = [_make_code_file("segfault.py")]
+
+        parser = ASTPreParser(use_process_isolation=True)
+
+        async def mock_run_in_executor(executor, fn, *args):
+            raise BrokenExecutor("broken pool")
+
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+            with patch("asyncio.get_running_loop") as mock_loop:
+                loop = MagicMock()
+                loop.run_in_executor = AsyncMock(side_effect=mock_run_in_executor)
+                mock_loop.return_value = loop
+
+                # Should not raise
+                await parser.pre_parse_all_async(context, files)
+
+        assert "segfault.py" not in context.ast_cache
+
+    @pytest.mark.asyncio
+    async def test_process_isolation_timeout_still_works(self, mock_registry):
+        """Per-file timeout is respected even with process isolation."""
+        context = _make_context()
+        files = [_make_code_file("slow.py")]
+
+        parser = ASTPreParser(timeout=0.01, use_process_isolation=True)
+
+        async def mock_run_in_executor(executor, fn, *args):
+            await asyncio.sleep(10)  # Will be timed out
+            return _make_parse_result(file_path=args[2])
+
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+            with patch("asyncio.get_running_loop") as mock_loop:
+                loop = MagicMock()
+                loop.run_in_executor = AsyncMock(side_effect=mock_run_in_executor)
+                mock_loop.return_value = loop
+
+                await parser.pre_parse_all_async(context, files)
+
+        assert "slow.py" not in context.ast_cache
+
+    @pytest.mark.asyncio
+    async def test_in_process_fallback_on_disable(self, mock_registry):
+        """With isolation disabled, parsing uses the in-process path."""
+        context = _make_context()
+        files = [_make_code_file("a.py")]
+
+        parser = ASTPreParser(use_process_isolation=False)
+        with patch.object(parser, "_get_registry", new_callable=AsyncMock, return_value=mock_registry):
+            await parser.pre_parse_all_async(context, files)
+
+        assert "a.py" in context.ast_cache
+        assert context.ast_cache["a.py"].status == ParseStatus.SUCCESS

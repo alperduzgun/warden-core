@@ -30,7 +30,6 @@ logger = structlog.get_logger(__name__)
 # Larger batches reduce the number of LLM round-trips at the cost of more
 # context tokens per request.
 _BATCH_SIZES: dict[str, int] = {
-    "ollama": 5,  # Small local models (e.g. Qwen 3b, 2K context)
     "groq": 15,  # Fast cloud API, 32K+ context
     "openai": 15,  # Cloud API, 128K context
     "azure_openai": 15,
@@ -43,7 +42,7 @@ _BATCH_SIZES: dict[str, int] = {
     "claude_code": 25,
     "codex": 25,
 }
-_DEFAULT_BATCH_SIZE = 5
+_DEFAULT_BATCH_SIZE = 5  # CI: single-file batches via config override
 
 
 class TriageService:
@@ -132,12 +131,14 @@ Rules:
         client.
         """
         # 1. OrchestratedLlmClient with fast tier → use first fast client
+        # Always return here (with default fallback) to avoid bleeding into the
+        # wrapper's .provider, which reflects the smart tier, not triage's tier.
+        # Use isinstance(list) guard to avoid MagicMock auto-attribute truthy hit.
         fast_clients = getattr(llm_client, "fast_clients", None)
-        if fast_clients:
+        if isinstance(fast_clients, list) and fast_clients:
             first_fast = fast_clients[0]
             fast_provider = str(getattr(first_fast, "provider", "")).lower()
-            if fast_provider in _BATCH_SIZES:
-                return _BATCH_SIZES[fast_provider]
+            return _BATCH_SIZES.get(fast_provider, _DEFAULT_BATCH_SIZE)
 
         # 2. Direct provider attribute (non-orchestrated or single-tier)
         provider_str = str(getattr(llm_client, "provider", "")).lower()
@@ -276,6 +277,7 @@ FILES:
             use_fast_tier=True,
             temperature=0.01,
             max_tokens=min(2000, 300 * len(code_files)),
+            timeout_seconds=45.0,  # Triage is simple classification; 45s is ample.
         )
 
         response = await self.llm.send_async(request)
@@ -329,7 +331,12 @@ FILES:
         prompt = f"File Path: {code_file.path}\n\nCode:\n```{code_file.language}\n{truncated}```"
 
         request = LlmRequest(
-            system_prompt=self.SYSTEM_PROMPT, user_message=prompt, use_fast_tier=True, temperature=0.1, max_tokens=250
+            system_prompt=self.SYSTEM_PROMPT,
+            user_message=prompt,
+            use_fast_tier=True,
+            temperature=0.1,
+            max_tokens=250,
+            timeout_seconds=45.0,  # Triage is simple classification; 45s is ample.
         )
 
         response = await self.llm.send_async(request)
@@ -427,3 +434,6 @@ FILES:
             risk_score=RiskScore(score=score, confidence=1.0, reasoning=reason, category="heuristic"),
             processing_time_ms=(time.time() - start_time) * 1000,
         )
+
+
+# ci-test-1772180239

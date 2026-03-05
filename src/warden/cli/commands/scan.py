@@ -117,7 +117,7 @@ async def _generate_smart_failure_summary(critical_count: int, frames_failed: in
         console.print("\n[bold red]🤖 Qwen Analysis:[/bold red]")
         console.print(f"[white]{response.content}[/white]")
 
-    except asyncio.TimeoutError:
+    except (asyncio.TimeoutError, TimeoutError):
         console.print("\n[dim]⚠️  AI Analysis timed out (skipped)[/dim]")
     except Exception:
         # Silent fail - this is an enhancement, not a critical path
@@ -393,6 +393,11 @@ def scan_command(
         "--contract-mode",
         help="Run data flow contract analysis (DEAD_WRITE, MISSING_WRITE, NEVER_POPULATED).",
     ),
+    resume: bool = typer.Option(
+        False,
+        "--resume",
+        help="Resume a previously interrupted scan, skipping already-scanned files.",
+    ),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -535,6 +540,19 @@ def scan_command(
             except Exception as e:
                 console.print(f"[yellow]⚠️  Intelligence load failed: {e}[/yellow]")
 
+        # Resume support (#101): if --resume and partial results exist, load them
+        resume_keys: set[tuple[str, str]] | None = None
+        if resume:
+            from warden.pipeline.application.orchestrator.partial_results_writer import (
+                PartialResultsWriter,
+            )
+
+            if PartialResultsWriter.has_partial_results(Path.cwd()):
+                resume_keys = PartialResultsWriter.load_completed_keys(Path.cwd())
+                console.print(f"[green]Resuming scan: {len(resume_keys)} file/frame pairs already completed[/green]")
+            else:
+                console.print("[yellow]No partial results found, starting fresh scan[/yellow]")
+
         exit_code = asyncio.run(
             _run_scan_async(
                 paths,
@@ -554,6 +572,7 @@ def scan_command(
                 force=force,
                 benchmark=benchmark,
                 contract_mode=contract_mode,
+                resume=resume,
             )
         )
 
@@ -596,6 +615,7 @@ def scan_command(
                         force=force,
                         benchmark=benchmark,
                         contract_mode=contract_mode,
+                        resume=resume,
                     )
                 )
                 if exit_code != 0:
@@ -666,6 +686,17 @@ async def _process_stream_events(
 
     from warden.cli.commands import _scan_ux as _UX
 
+    # ── Phase checklist (Issue #202) ─────────────────────────────────────
+    from warden.cli.commands._phase_checklist_renderer import (
+        normalise_phase_name as _norm_phase,
+    )
+    from warden.cli.commands._phase_checklist_renderer import (
+        render_checklist_rows as _render_checklist,
+    )
+    from warden.pipeline.domain.phase_checklist import PhaseChecklist
+
+    _phase_checklist = PhaseChecklist.from_defaults()
+
     def _flush_phase() -> None:
         """Collapse the current phase into a summary row (+ dim step subtitle)."""
         nonlocal _phase_passed, _phase_failed, _phase_issues, _phase_start, _last_phase, _phase_steps
@@ -728,18 +759,26 @@ async def _process_stream_events(
         counter_str = f" ({processed_units}/{total_units})" if total_units > 0 else ""
         frame_hint = f"  [dim]{current_frame}[/dim]" if current_frame and current_frame != current_phase else ""
 
-        issues_str = f"  [bold red]{_total_issues_so_far} issue{'s' if _total_issues_so_far != 1 else ''}[/bold red]" if _total_issues_so_far > 0 else ""
+        issues_str = (
+            f"  [bold red]{_total_issues_so_far} issue{'s' if _total_issues_so_far != 1 else ''}[/bold red]"
+            if _total_issues_so_far > 0
+            else ""
+        )
 
         active_tbl = Table.grid(padding=(0, 1))
         active_tbl.add_column(no_wrap=True)
         active_tbl.add_column(no_wrap=False)
         active_tbl.add_row(
             _spinner_widget,
-            Text.from_markup(f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}{issues_str}"),
+            Text.from_markup(
+                f"[white]{current_phase}[/white]{frame_hint}[dim]{counter_str}[/dim]{clock_str}{issues_str}"
+            ),
         )
 
         # ── Build content block ──────────────────────────────────────────────
-        content: list = [*phase_summary_rows]
+        # Phase checklist at the top (Issue #202)
+        checklist_rows = _render_checklist(_phase_checklist)
+        content: list = [*checklist_rows, Text(""), *phase_summary_rows]
 
         # Phase hint: only when no live status is already shown in spinner row
         phase_hint_text = _UX.PHASE_HINTS.get(current_phase, "")
@@ -824,10 +863,29 @@ async def _process_stream_events(
                             current_frame = ""
                             _last_phase = label
 
+                        # Update phase checklist (Issue #202)
+                        _cl_name = _norm_phase(data.get("phase_name", data.get("phase", "")))
+                        if _cl_name:
+                            _phase_checklist.mark_phase_running(_cl_name)
+
                         phase_total = data.get("total_units", 0)
                         if phase_total > 0:
                             total_units = phase_total
                             processed_units = 0
+
+                    # ── phase completed (Issue #202) ───────────────────────────
+                    elif evt == "phase_completed":
+                        if bench_collector is not None:
+                            bench_collector.on_event("phase_completed", data)
+                        _cl_name = _norm_phase(data.get("phase_name", data.get("phase", "")))
+                        if _cl_name:
+                            _phase_checklist.mark_phase_done(_cl_name)
+
+                    # ── phase skipped (Issue #202) ─────────────────────────────
+                    elif evt == "phase_skipped":
+                        _cl_name = _norm_phase(data.get("phase_name", data.get("phase", "")))
+                        if _cl_name:
+                            _phase_checklist.mark_phase_skipped(_cl_name)
 
                     # ── per-frame activity ───────────────────────────────────
                     elif evt == "progress_update":
@@ -896,6 +954,10 @@ async def _process_stream_events(
                 elif event_type == "result":
                     final_result_data = event["data"]
                     _flush_phase()  # collapse final phase
+                    # Mark any still-running phase as done (Issue #202)
+                    active = _phase_checklist.active_phase
+                    if active:
+                        active.mark_done()
                     current_phase = "Complete"
                     current_frame = ""
 
@@ -1428,6 +1490,24 @@ Updated: {scan_time}
         pass  # Silent fail for aux file
 
 
+def _update_tech_debt_file(final_result_data: dict, verbose: bool) -> None:
+    """Update .warden/TECH_DEBT.md with god class and large file findings."""
+    try:
+        from warden.reports.tech_debt_generator import TechDebtGenerator
+
+        generator = TechDebtGenerator(project_root=Path.cwd())
+        result = generator.generate(final_result_data)
+        if result:
+            try:
+                rel = result.relative_to(Path.cwd())
+            except ValueError:
+                rel = result
+            console.print(f"  [dim]Updated tech debt report: {rel}[/dim]")
+    except Exception as e:
+        if verbose:
+            console.print(f"[yellow]Warning: Tech debt update failed: {e}[/yellow]")
+
+
 def _update_baseline(
     final_result_data: dict,
     intelligence_context: dict | None,
@@ -1498,6 +1578,7 @@ async def _run_scan_async(
     force: bool = False,
     benchmark: bool = False,
     contract_mode: bool = False,
+    resume: bool = False,
 ) -> int:
     """Async implementation of scan command."""
 
@@ -1645,6 +1726,10 @@ async def _run_scan_async(
         # 5. Write AI status file
         if final_result_data:
             _write_ai_status_file(final_result_data)
+
+        # 5.5 Update .warden/TECH_DEBT.md with antipattern findings
+        if final_result_data:
+            _update_tech_debt_file(final_result_data, verbose)
 
         # 6. Update baseline
         if update_baseline and final_result_data:

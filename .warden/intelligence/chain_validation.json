@@ -1,388 +1,286 @@
 {
   "schemaVersion": "1.0.0",
-  "totalChainsChecked": 50,
+  "totalChainsChecked": 37,
   "confirmed": 0,
   "unconfirmed": 0,
-  "errors": 50,
+  "errors": 37,
   "entries": [
     {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "__future__.annotations",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
       "targetFqn": "json",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "datetime.datetime",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "os",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "pathlib.Path",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "re",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "rich.box.SIMPLE_HEAVY",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "rich.console.Console",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "rich.table.Table",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "rich.text.Text",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "collector.BenchmarkReport",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "collector.FrameEntry",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "collector.PhaseEntry",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py",
-      "targetFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter",
-      "targetFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter.display",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "undetermined"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter",
-      "targetFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter.save",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "undetermined"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter",
-      "targetFqn": "src/warden/benchmark/reporter.py::BenchmarkReporter.load_previous",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "undetermined"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/collector.py",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
       "targetFqn": "time",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py",
-      "targetFqn": "dataclasses.dataclass",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "pathlib.Path",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py",
-      "targetFqn": "datetime.datetime",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "typing.TYPE_CHECKING",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py",
-      "targetFqn": "uuid.uuid4",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "psutil",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py",
-      "targetFqn": "src/warden/benchmark/collector.py::PhaseEntry",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "structlog",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py",
-      "targetFqn": "src/warden/benchmark/collector.py::FrameEntry",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.analysis.domain.triage_heuristics.is_heuristic_safe",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkReport",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.analysis.domain.triage_models.RiskScore",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkReport",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkReport.llm_overhead_pct",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.analysis.domain.triage_models.TriageDecision",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.analysis.domain.triage_models.TriageLane",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.llm.providers.base.ILlmClient",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.llm.types.LlmRequest",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "warden.validation.domain.frame.CodeFile",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "source_node_missing"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService.__init__",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkReport",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkReport.to_dict",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._determine_batch_size",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector.__init__",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService.batch_assess_risk_async",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector.on_event",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._flush_cache",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector._close_current_phase",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._get_llm_batch_score_async",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector.finalize",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._parse_batch_response",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "src/warden/benchmark/collector.py::BenchmarkCollector",
-      "targetFqn": "src/warden/benchmark/collector.py::BenchmarkCollector._resolve_provider_model",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._is_obviously_safe",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "undetermined"
     },
     {
-      "sourceFqn": "src/warden/benchmark/__init__.py",
-      "targetFqn": "collector.BenchmarkCollector",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._get_llm_score_async",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._parse_response",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._extract_json",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._get_safe_batch_size",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._determine_lane",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py::TriageService",
+      "targetFqn": "src/warden/analysis/application/triage_service.py::TriageService._create_decision",
+      "chainDepth": 0,
+      "lspConfirmed": false,
+      "lspError": "undetermined"
+    },
+    {
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/shared/utils/llm_context.py",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/__init__.py",
-      "targetFqn": "collector.BenchmarkReport",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/analysis/application/triage_cache.py",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/__init__.py",
-      "targetFqn": "collector.FrameEntry",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/llm/providers/base.py",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/__init__.py",
-      "targetFqn": "collector.PhaseEntry",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/validation/domain/frame.py",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/benchmark/__init__.py",
-      "targetFqn": "reporter.BenchmarkReporter",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/analysis/domain/triage_models.py",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/classification/__init__.py",
-      "targetFqn": "warden.classification.application.classification_phase.ClassificationPhase",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/analysis/domain/triage_heuristics.py",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     },
     {
-      "sourceFqn": "src/warden/classification/application/classification_prompts.py",
-      "targetFqn": "json",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/classification_prompts.py",
-      "targetFqn": "typing.Any",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/classification_prompts.py",
-      "targetFqn": "warden.analysis.domain.project_context.Framework",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/classification_prompts.py",
-      "targetFqn": "warden.analysis.domain.project_context.ProjectType",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "json",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "enum.Enum",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "typing.Any",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "warden.analysis.application.llm_phase_base.LLMPhaseBase",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "warden.analysis.application.llm_phase_base.LLMPhaseConfig",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "warden.analysis.domain.project_context.Framework",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "warden.analysis.domain.project_context.ProjectType",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "warden.classification.application.classification_prompts.format_classification_user_prompt",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "warden.classification.application.classification_prompts.get_classification_system_prompt",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "warden.shared.infrastructure.logging.get_logger",
-      "chainDepth": 0,
-      "lspConfirmed": false,
-      "lspError": "source_node_missing"
-    },
-    {
-      "sourceFqn": "src/warden/classification/application/llm_classification_phase.py",
-      "targetFqn": "src/warden/classification/application/llm_classification_phase.py::SuppressionReason",
+      "sourceFqn": "src/warden/analysis/application/triage_service.py",
+      "targetFqn": "src/warden/llm/types.py",
       "chainDepth": 0,
       "lspConfirmed": false,
       "lspError": "source_node_missing"
     }
   ],
   "deadSymbols": [
-    "src/warden/benchmark/reporter.py::BenchmarkReporter",
-    "src/warden/benchmark/reporter.py::BenchmarkReporter.display",
-    "src/warden/benchmark/reporter.py::BenchmarkReporter.save",
-    "src/warden/benchmark/reporter.py::BenchmarkReporter.load_previous",
-    "src/warden/benchmark/collector.py::PhaseEntry",
-    "src/warden/benchmark/collector.py::FrameEntry",
-    "src/warden/benchmark/collector.py::BenchmarkReport",
-    "src/warden/benchmark/collector.py::BenchmarkReport.llm_overhead_pct",
-    "src/warden/benchmark/collector.py::BenchmarkReport.to_dict",
-    "src/warden/benchmark/collector.py::BenchmarkCollector",
-    "src/warden/benchmark/collector.py::BenchmarkCollector.__init__",
-    "src/warden/benchmark/collector.py::BenchmarkCollector.on_event",
-    "src/warden/benchmark/collector.py::BenchmarkCollector._close_current_phase",
-    "src/warden/benchmark/collector.py::BenchmarkCollector.finalize",
-    "src/warden/benchmark/collector.py::BenchmarkCollector._resolve_provider_model",
-    "src/warden/classification/application/classification_prompts.py::get_classification_system_prompt",
-    "src/warden/classification/application/classification_prompts.py::format_classification_user_prompt",
-    "src/warden/classification/application/llm_classification_phase.py::SuppressionReason",
-    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase",
-    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.__init__",
-    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.phase_name",
-    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.get_system_prompt",
-    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.format_user_prompt",
-    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.parse_llm_response",
-    "src/warden/classification/application/llm_classification_phase.py::LLMClassificationPhase.classify_batch_async"
+    "src/warden/analysis/application/triage_service.py::TriageService",
+    "src/warden/analysis/application/triage_service.py::TriageService.__init__",
+    "src/warden/analysis/application/triage_service.py::TriageService._determine_batch_size",
+    "src/warden/analysis/application/triage_service.py::TriageService.batch_assess_risk_async",
+    "src/warden/analysis/application/triage_service.py::TriageService._flush_cache",
+    "src/warden/analysis/application/triage_service.py::TriageService._get_llm_batch_score_async",
+    "src/warden/analysis/application/triage_service.py::TriageService._parse_batch_response",
+    "src/warden/analysis/application/triage_service.py::TriageService._is_obviously_safe",
+    "src/warden/analysis/application/triage_service.py::TriageService._get_llm_score_async",
+    "src/warden/analysis/application/triage_service.py::TriageService._parse_response",
+    "src/warden/analysis/application/triage_service.py::TriageService._extract_json",
+    "src/warden/analysis/application/triage_service.py::TriageService._get_safe_batch_size",
+    "src/warden/analysis/application/triage_service.py::TriageService._determine_lane",
+    "src/warden/analysis/application/triage_service.py::TriageService._create_decision"
   ],
   "lspAvailable": true,
-  "generated_at": "2026-02-25T20:00:32.708576+00:00"
+  "generated_at": "2026-02-27T07:56:22.790213+00:00"
 }

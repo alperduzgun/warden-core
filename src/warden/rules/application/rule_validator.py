@@ -690,7 +690,7 @@ class CustomRuleValidator:
                     process.communicate(),
                     timeout=timeout,
                 )
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, TimeoutError):
                 # Kill process on timeout
                 try:
                     process.kill()

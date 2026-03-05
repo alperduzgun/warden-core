@@ -65,6 +65,7 @@ class PropertyFrame(ValidationFrame, BatchExecutable):
     version = "1.0.0"
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
+    minimum_triage_lane: str = "middle_lane"  # Skip FAST files; LLM-heavy frame
 
     # Property check patterns
     PATTERNS = {
@@ -239,6 +240,26 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
     async def _batch_llm_analysis(self, code_files: list[CodeFile]) -> dict[str, list[Finding]]:
         """Run batched LLM analysis across multiple files."""
         findings_map: dict[str, list[Finding]] = {f.path: [] for f in code_files}
+
+        # Guard: skip LLM on slow local providers (mirrors llm_phase_base threshold).
+        from warden.llm.provider_speed_benchmark import (
+            ProviderSpeedBenchmarkService,
+            get_benchmark_service,
+        )
+
+        _PROPERTY_MIN_VIABLE_TOKENS = 80  # Must match _MIN_VIABLE_TOKENS in llm_phase_base
+        if ProviderSpeedBenchmarkService._is_local_provider(self.llm_service):
+            _svc = get_benchmark_service()
+            _safe = await _svc.get_safe_max_tokens(self.llm_service, phase_timeout_s=120.0, default_max_tokens=800)
+            if _safe < _PROPERTY_MIN_VIABLE_TOKENS:
+                logger.warning(
+                    "llm_skipped_budget_below_viable",
+                    phase="property",
+                    max_tokens=_safe,
+                    min_viable=_PROPERTY_MIN_VIABLE_TOKENS,
+                    note="fallback_to_rules",
+                )
+                return findings_map
 
         try:
             from warden.llm.types import LlmRequest

@@ -1,5 +1,6 @@
 """Execute all pipeline phases sequentially with progress tracking."""
 
+import asyncio
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
@@ -172,7 +173,11 @@ class PipelinePhaseRunner:
         if getattr(self.config, "ci_mode", False):
             self.config.enable_fortification = False
             self.config.enable_cleaning = False
-            logger.info("ci_mode_active", skipped_phases=["fortification", "cleaning"])
+            self.config.enable_issue_validation = False
+            logger.info(
+                "ci_mode_active",
+                skipped_phases=["fortification", "cleaning", "issue_validation"],
+            )
 
         # Phase 0: PRE-ANALYSIS
         context.current_phase = "Pre-Analysis"
@@ -193,7 +198,7 @@ class PipelinePhaseRunner:
 
             # Populate Data Dependency Graph when contract mode is enabled
             if getattr(context, "contract_mode", False):
-                self._populate_data_dependency_graph(context)
+                self._populate_data_dependency_graph(context, code_files)
 
             # Phase 0.8: LSP Audit (optional, zero LLM cost)
             await self._populate_lsp_audit_async(context)
@@ -209,11 +214,21 @@ class PipelinePhaseRunner:
             )
 
         if getattr(self.config, "use_llm", True) and self.config.analysis_level != AnalysisLevel.BASIC:
-            if self._is_single_tier_provider():
-                # CLI-tool providers (Codex, Claude Code) spawn a subprocess per
-                # LLM call (~20s each).  Running 100+ triage calls is prohibitive.
-                # Use heuristic-only triage: safe files → FAST, rest → MIDDLE.
-                logger.info("triage_bypass_single_tier", provider=self._detect_primary_provider())
+            _provider = self._detect_primary_provider()
+            _ci_ollama = getattr(self.config, "ci_mode", False) and "ollama" in _provider
+            if self._is_single_tier_provider() or _ci_ollama:
+                # Two cases where LLM triage is skipped in favour of heuristics:
+                # 1. CLI-tool providers (Codex, Claude Code): subprocess-per-call ~20s each.
+                # 2. Ollama in CI mode: batch_size=1 + 90s timeout + 2 retries means
+                #    N files × 180s >> pipeline timeout (e.g. 552 × 180 = 99 360s >> 1800s).
+                #    Heuristic triage is fast (<1s) and coverage is equivalent — safe files
+                #    still receive FAST lane, all others receive MIDDLE (full analysis).
+                logger.info(
+                    "triage_bypass_heuristic",
+                    provider=_provider,
+                    reason="ci_ollama" if _ci_ollama else "single_tier",
+                    file_count=len(code_files),
+                )
                 self._apply_heuristic_triage(context, code_files)
             else:
                 logger.info("phase_enabled", phase="TRIAGE", enabled=True)
@@ -291,6 +306,11 @@ class PipelinePhaseRunner:
                     {"phase": "Verification", "phase_name": "Verification", "total_units": findings_count},
                 )
             await self.post_processor.verify_findings_async(context)
+            if self._progress_callback:
+                self._progress_callback(
+                    "phase_completed",
+                    {"phase": "Verification", "phase_name": "Verification"},
+                )
 
         # Phase 4: FORTIFICATION
         context.current_phase = "Fortification"
@@ -438,7 +458,11 @@ class PipelinePhaseRunner:
             ast_root = getattr(ast_data, "ast_root", None)
             if ast_root is not None:
                 self._extract_intelligence_from_ast(
-                    ast_root, cf.path, intel, entry_point_set, ASTNodeType,
+                    ast_root,
+                    cf.path,
+                    intel,
+                    entry_point_set,
+                    ASTNodeType,
                 )
                 continue
 
@@ -586,7 +610,9 @@ class PipelinePhaseRunner:
                         }
                     )
 
-    def _populate_data_dependency_graph(self, context: PipelineContext) -> None:
+    def _populate_data_dependency_graph(
+        self, context: PipelineContext, code_files: list[CodeFile] | None = None
+    ) -> None:
         """Populate the DataDependencyGraph when contract_mode is enabled.
 
         Runs the shared ``DataDependencyService`` once per pipeline and stores
@@ -607,7 +633,8 @@ class PipelinePhaseRunner:
                 logger.warning("ddg_population_skipped", reason="project_root not set")
                 return
 
-            service = DataDependencyService(_Path(str(project_root)))
+            all_paths = [_Path(cf.path) for cf in code_files] if code_files else None
+            service = DataDependencyService(_Path(str(project_root)), all_files=all_paths)
             ddg = service.build()
             context.data_dependency_graph = ddg
             logger.info(
@@ -703,7 +730,9 @@ class PipelinePhaseRunner:
                 unconfirmed=chain_validation.unconfirmed,
                 dead_symbols=len(chain_validation.dead_symbols),
             )
-        except TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
+            # asyncio.TimeoutError ≠ built-in TimeoutError in Python 3.10;
+            # they were unified in Python 3.11.  Catch both for 3.10 compat.
             logger.warning("lsp_audit_timeout", timeout=30.0)
         except Exception as e:
             logger.warning("lsp_audit_failed", error=str(e))

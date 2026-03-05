@@ -4,6 +4,10 @@ Chaos Engineering & Resilience System Prompt
 Performs Failure Mode & Effects Analysis (FMEA) on code.
 """
 
+from __future__ import annotations
+
+from warden.llm.types import StructuredPrompt
+
 CHAOS_SYSTEM_PROMPT = """You are a Chaos Engineer. Your mindset: "Everything will fail. The question is HOW and WHEN."
 
 ## YOUR APPROACH (Context-Aware Chaos Engineering)
@@ -119,3 +123,26 @@ Think like a chaos engineer:
 3. What resilience patterns are MISSING?
 
 Return JSON with your analysis."""
+
+
+def build_chaos_prompt(
+    code: str, language: str, file_path: str | None = None, context: dict | None = None
+) -> StructuredPrompt:
+    """
+    Build a structured prompt for chaos/resilience analysis, separating
+    cacheable system context from variable file content.
+
+    Args:
+        code: Source code to analyze
+        language: Programming language
+        file_path: Optional file path for context
+        context: Optional dict with detected dependencies/triggers
+
+    Returns:
+        StructuredPrompt with system_context (cacheable) and file_context (variable)
+    """
+    file_context = generate_chaos_request(code, language, file_path, context)
+    return StructuredPrompt(
+        system_context=CHAOS_SYSTEM_PROMPT,
+        file_context=file_context,
+    )

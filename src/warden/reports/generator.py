@@ -478,18 +478,24 @@ class ReportGenerator:
                     rem_code = self._get_val(remediation, "code", "")
                     rem_description = self._get_val(remediation, "description", "")
                     if rem_code and file_path:
-                        result["fixes"] = [{
-                            "description": {"text": rem_description},
-                            "artifactChanges": [{
-                                "artifactLocation": {"uri": self._to_relative_uri(file_path)},
-                                "replacements": [{
-                                    "deletedRegion": {
-                                        "startLine": max(1, self._get_val(finding, "line", 1)),
-                                    },
-                                    "insertedContent": {"text": rem_code},
-                                }]
-                            }]
-                        }]
+                        result["fixes"] = [
+                            {
+                                "description": {"text": rem_description},
+                                "artifactChanges": [
+                                    {
+                                        "artifactLocation": {"uri": self._to_relative_uri(file_path)},
+                                        "replacements": [
+                                            {
+                                                "deletedRegion": {
+                                                    "startLine": max(1, self._get_val(finding, "line", 1)),
+                                                },
+                                                "insertedContent": {"text": rem_code},
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        ]
 
                 run["results"].append(result)
 

@@ -266,6 +266,7 @@ class ResilienceFrame(ValidationFrame, TaintAware):
     version = "3.1.0"  # v3.1: Added VectorDB semantic search for related patterns
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
+    minimum_triage_lane: str = "middle_lane"  # Skip FAST files; LLM-heavy frame
 
     # Configuration (fail-fast defaults)
     DEFAULT_TIMEOUT_SECONDS: float = 30.0
@@ -588,7 +589,7 @@ class ResilienceFrame(ValidationFrame, TaintAware):
                             [{"name": c.name, "file": c.location} for c in callees[: context.MAX_CALLEES_IN_CONTEXT]]
                         )
 
-                except asyncio.TimeoutError:
+                except (asyncio.TimeoutError, TimeoutError):
                     logger.debug("lsp_timeout", func=func_name, timeout=self.LSP_CALL_TIMEOUT)
                     continue
 
@@ -668,7 +669,7 @@ class ResilienceFrame(ValidationFrame, TaintAware):
 
                 logger.debug("semantic_search_complete", query=query[:50], results_found=len(related_patterns))
 
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             logger.debug("semantic_search_timeout")
         except Exception as e:
             logger.debug("semantic_search_failed", error=str(e))
@@ -916,7 +917,7 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                 logger.warning("chaos_llm_failed", error=response.error_message)
                 self._record_llm_failure()
 
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             logger.warning("chaos_llm_timeout", timeout=self._timeout)
             self._record_llm_failure()
         except Exception as e:

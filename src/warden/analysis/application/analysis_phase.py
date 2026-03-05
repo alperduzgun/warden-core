@@ -382,7 +382,7 @@ class AnalysisPhase:
 
             return analyzer_results
 
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             logger.warning(
                 "file_analysis_timeout",
                 file=code_file.path,

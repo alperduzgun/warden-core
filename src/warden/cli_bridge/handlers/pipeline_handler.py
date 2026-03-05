@@ -120,7 +120,7 @@ class PipelineHandler(BaseHandler):
                         yield event
                         if event.get("type") == "result":
                             break
-                    except asyncio.TimeoutError:
+                    except (asyncio.TimeoutError, TimeoutError):
                         continue
 
                 result, context = await pipeline_task

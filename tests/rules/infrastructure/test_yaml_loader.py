@@ -32,7 +32,7 @@ rules:
     conditions:
       secrets:
         patterns:
-          - "api_key\\s*="
+          - 'api_key\\s*='
 
 ai_validation:
   enabled: true
@@ -73,12 +73,18 @@ exclude:
             await RulesYAMLLoader.load_from_file_async(Path("nonexistent.yaml"))
 
     @pytest.mark.asyncio
-    async def test_invalid_yaml_structure(self):
-        """Test invalid YAML structure raises error."""
+    async def test_missing_project_section_uses_defaults(self):
+        """Test that missing project section is tolerated with default values."""
         yaml_content = """
-# Missing project section
 rules:
-  - id: "test"
+  - id: "test-rule"
+    name: "Test Rule"
+    category: security
+    severity: critical
+    isBlocker: false
+    description: "Test"
+    enabled: true
+    type: ai
 """
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
@@ -86,8 +92,10 @@ rules:
             temp_path = Path(f.name)
 
         try:
-            with pytest.raises(ValueError, match="Missing 'project' section"):
-                await RulesYAMLLoader.load_from_file_async(temp_path)
+            config = await RulesYAMLLoader.load_from_file_async(temp_path)
+            assert config.project_name == "unknown"
+            assert config.language == "unknown"
+            assert len(config.rules) == 1
         finally:
             temp_path.unlink()
 
