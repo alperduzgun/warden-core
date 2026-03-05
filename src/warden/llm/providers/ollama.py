@@ -102,7 +102,13 @@ class OllamaClient(ILlmClient):
             sem = await limiter.concurrency_limit("ollama")
 
             async with sem:
-                payload = {
+                # Detect if the response is expected to be JSON so Ollama enforces grammar.
+                # Avoids markdown wrapping (```json...```) that breaks parse on 3b models.
+                _wants_json = (
+                    "json" in (request.system_prompt or "").lower()
+                    or "json" in (request.user_message or "").lower()[:200]
+                )
+                payload: dict = {
                     "model": model,
                     "messages": [
                         {"role": "system", "content": request.system_prompt},
@@ -111,6 +117,8 @@ class OllamaClient(ILlmClient):
                     "stream": True,
                     "options": {"temperature": request.temperature, "num_predict": request.max_tokens},
                 }
+                if _wants_json:
+                    payload["format"] = "json"
 
                 # Streaming: Ollama sends tokens as they are generated.
                 # read_timeout applies per-chunk (between tokens), NOT total generation time.

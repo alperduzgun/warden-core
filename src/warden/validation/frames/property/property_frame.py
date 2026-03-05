@@ -381,14 +381,23 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
         return None
 
     async def _serial_llm_fallback(self, code_files: list[CodeFile]) -> dict[str, list[Finding]]:
-        """Fallback: run LLM analysis file-by-file."""
+        """Fallback: run LLM analysis on all files concurrently (bounded to 3 parallel)."""
+        import asyncio as _asyncio
+
         findings_map: dict[str, list[Finding]] = {f.path: [] for f in code_files}
-        for code_file in code_files:
-            try:
-                llm_findings = await self._analyze_with_llm(code_file)
-                findings_map[code_file.path] = llm_findings
-            except Exception as e:
-                logger.warning("property_serial_fallback_failed", file=code_file.path, error=str(e))
+        sem = _asyncio.Semaphore(3)
+
+        async def _analyze_one(code_file: CodeFile) -> tuple[str, list[Finding]]:
+            async with sem:
+                try:
+                    return code_file.path, await self._analyze_with_llm(code_file)
+                except Exception as e:
+                    logger.warning("property_serial_fallback_failed", file=code_file.path, error=str(e))
+                    return code_file.path, []
+
+        results = await _asyncio.gather(*[_analyze_one(cf) for cf in code_files])
+        for path, finds in results:
+            findings_map[path] = finds
         return findings_map
 
     async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:

@@ -185,36 +185,29 @@ Rules:
             self._flush_cache()
             return decisions
 
-        # 3. Batch Processing for remaining files
+        # 3. Batch Processing for remaining files — all chunks fire in parallel.
+        # Each chunk is an independent LLM call; gather lets Ollama fast+smart tier race.
         requested_batch_size = self._requested_batch_size
+        batch_size = self._get_safe_batch_size(requested_batch_size)
 
-        i = 0
-        while i < len(files_to_process):
-            # Dynamic resource-check
-            batch_size = self._get_safe_batch_size(requested_batch_size)
-            chunk = files_to_process[i : i + batch_size]
+        chunks = [files_to_process[i : i + batch_size] for i in range(0, len(files_to_process), batch_size)]
 
+        async def _process_chunk(chunk: list) -> dict:
+            """Score one chunk; returns {file_path: decision} mapping."""
+            chunk_decisions: dict = {}
             try:
                 batch_scores = await self._get_llm_batch_score_async(chunk)
-
-                # Check for flat fallback (common on small models)
                 flat_fallback = batch_scores.get("_flat_fallback_")
 
                 for cf in chunk:
-                    # 1. Try exact path match
                     risk = batch_scores.get(cf.path)
-
-                    # 2. Try just the filename match (sometimes LLM trims paths)
                     if not risk:
                         filename = Path(cf.path).name
                         risk = next((v for k, v in batch_scores.items() if k.endswith(filename)), None)
-
-                    # 3. Use flat fallback if available
                     if not risk and flat_fallback:
                         risk = flat_fallback
 
                     if not risk:
-                        # Fallback to middle lane
                         logger.warning("triage_batch_missing_file", file=cf.path)
                         decision = self._create_decision(
                             cf, TriageLane.MIDDLE, 5, "Batch fallback: Missing from LLM response", start_time
@@ -227,22 +220,24 @@ Rules:
                             risk_score=risk,
                             processing_time_ms=(time.time() - start_time) * 1000,
                         )
-
-                    decisions[cf.path] = decision
-
-                    # Store in cache
-                    if self._cache:
-                        self._cache.put(cf.path, cf.content, decision)
-
+                    chunk_decisions[cf.path] = decision
             except Exception as e:
                 logger.error("triage_batch_failed", error=str(e), chunk_size=len(chunk))
-                # Fallback for entire chunk
                 for cf in chunk:
-                    decisions[cf.path] = self._create_decision(
+                    chunk_decisions[cf.path] = self._create_decision(
                         cf, TriageLane.MIDDLE, 5, f"Batch error: {e!s}", start_time
                     )
+            return chunk_decisions
 
-            i += len(chunk)
+        import asyncio as _asyncio
+
+        chunk_results = await _asyncio.gather(*[_process_chunk(c) for c in chunks])
+        for chunk_decisions in chunk_results:
+            for path, decision in chunk_decisions.items():
+                decisions[path] = decision
+                cf_obj = next((f for f in files_to_process if f.path == path), None)
+                if self._cache and cf_obj is not None:
+                    self._cache.put(cf_obj.path, cf_obj.content, decision)
 
         self._flush_cache()
         return decisions

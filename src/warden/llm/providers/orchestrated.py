@@ -60,7 +60,15 @@ class OrchestratedLlmClient(ILlmClient):
         self.fast_model = fast_model
 
         # Provider-level circuit breaker (issue #127)
-        self.circuit_breaker = circuit_breaker or ProviderCircuitBreaker()
+        # Local providers (Ollama) recover quickly — use 30s window instead of 5min.
+        if circuit_breaker is not None:
+            self.circuit_breaker = circuit_breaker
+        else:
+            from datetime import timedelta
+
+            _local = {LlmProvider.OLLAMA}
+            _recovery = timedelta(seconds=30) if smart_client.provider in _local else timedelta(minutes=5)
+            self.circuit_breaker = ProviderCircuitBreaker(open_duration=_recovery)
 
         # Initialize metrics collector
         if metrics_collector is None:
@@ -425,16 +433,34 @@ class OrchestratedLlmClient(ILlmClient):
             fallback_model=target_model,
         )
 
+    # TTL cache for availability checks — avoids re-probing on every request.
+    _avail_cache: dict[str, tuple[bool, float]] = {}
+    _AVAIL_TTL_S: float = 30.0
+
     async def is_available_async(self) -> bool:
         """
         Available if smart client OR any fast client is available.
+        Checks all clients in parallel and caches results for 30 s.
         """
-        if await self.smart_client.is_available_async():
-            return True
-        for client in self.fast_clients:
+        import time as _time
+
+        now = _time.monotonic()
+        cache_key = id(self)
+        cached = self._avail_cache.get(str(cache_key))
+        if cached is not None:
+            result, ts = cached
+            if now - ts < self._AVAIL_TTL_S:
+                return result
+
+        all_clients = [self.smart_client, *self.fast_clients]
+
+        async def _probe(client: ILlmClient) -> bool:
             try:
-                if await client.is_available_async():
-                    return True
+                return await client.is_available_async()
             except Exception:
-                continue
-        return False
+                return False
+
+        results = await asyncio.gather(*[_probe(c) for c in all_clients], return_exceptions=False)
+        available = any(results)
+        self._avail_cache[str(cache_key)] = (available, now)
+        return available

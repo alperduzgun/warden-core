@@ -459,12 +459,14 @@ Return ONLY a JSON array of objects in the EXACT order:
     def _generate_key(self, finding: Any) -> str:
         import hashlib
 
-        # Safe access using internal helper
-        loc = self._get(finding, "location") or ""
-        finding_id = self._get(finding, "id")
+        # Include file_path + line_number so the same rule firing on different files
+        # gets separate cache entries rather than reusing the first file's result.
+        finding_id = self._get(finding, "id") or ""
+        file_path = self._get(finding, "file_path") or self._get(finding, "location") or ""
+        line_number = str(self._get(finding, "line_number") or "")
         code = self._get(finding, "code") or ""
 
-        unique_str = f"{finding_id}:{code}:{loc}"
+        unique_str = f"{finding_id}:{file_path}:{line_number}:{code}"
         return hashlib.sha256(unique_str.encode()).hexdigest()
 
     def _check_cache(self, key: str) -> dict | None:
