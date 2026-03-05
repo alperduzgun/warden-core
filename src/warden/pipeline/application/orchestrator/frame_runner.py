@@ -604,8 +604,9 @@ class FrameRunner:
                     except Exception:
                         file_size = 0
 
+                    _llm_cfg = getattr(context, "llm_config", None)
                     _provider = str(
-                        getattr(getattr(context, "llm_config", None), "provider", "")
+                        (getattr(_llm_cfg, "provider", "") if _llm_cfg else "")
                         or getattr(context, "llm_provider", "")
                         or os.environ.get("WARDEN_LLM_PROVIDER", "")
                     ).lower()
@@ -813,8 +814,9 @@ class FrameRunner:
 
                                 for i in range(0, len(uncached_files), CHUNK_SIZE):
                                     chunk = uncached_files[i : i + CHUNK_SIZE]
+                                    _llm_cfg_batch = getattr(context, "llm_config", None)
                                     _batch_provider = str(
-                                        getattr(getattr(context, "llm_config", None), "provider", "")
+                                        (getattr(_llm_cfg_batch, "provider", "") if _llm_cfg_batch else "")
                                         or getattr(context, "llm_provider", "")
                                         or os.environ.get("WARDEN_LLM_PROVIDER", "")
                                     ).lower()
