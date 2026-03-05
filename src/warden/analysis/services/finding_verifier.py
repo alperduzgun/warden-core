@@ -383,17 +383,49 @@ Return ONLY a JSON array of objects in the EXACT order:
                 raise ValueError(f"LLM request failed: {response.error_message}")
 
             content = response.content.strip()
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].strip()
 
-            results = json.loads(content)
-            # Ensure results match batch size and are in order (or mapped by idx)
-            # For simplicity, we trust the LLM order but could sort by 'idx' if needed
+            # Extraction: Find JSON block even if LLM is chatty or uses markdown
+            json_str = content
+            if "```json" in content:
+                json_str = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                # Find the first block that looks like JSON array
+                match = re.search(r"(\[[\s\S]*\])", content)
+                if match:
+                    json_str = match.group(1).strip()
+
+            # Sanitization: Remove dangerous characters that break json.loads
+            json_str = re.sub(r"[\x00-\x1F\x7F]", "", json_str)
+
+            try:
+                results = json.loads(json_str)
+            except json.JSONDecodeError:
+                # Last resort: try to find anything that looks like an array
+                match = re.search(r"(\[[\s\S]*\])", json_str)
+                if match:
+                    results = json.loads(match.group(1))
+                else:
+                    raise
+
+            if not isinstance(results, list):
+                raise ValueError(f"LLM returned {type(results).__name__} instead of list")
+
+            # Validate indices and map back to batch size
+            if len(results) != len(batch):
+                logger.warning(
+                    "verifier_batch_size_mismatch",
+                    expected=len(batch),
+                    actual=len(results),
+                    message="LLM returned different number of items than requested. Using best-effort mapping."
+                )
+
             return results
         except Exception as e:
-            logger.warning("batch_llm_parsing_failed", error=str(e))
+            logger.warning(
+                "batch_llm_parsing_failed",
+                error=str(e),
+                content_preview=content[:200]
+            )
             # Fallback: Mark for manual review due to parsing error
             return [
                 {

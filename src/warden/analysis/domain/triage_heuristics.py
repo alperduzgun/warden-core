@@ -190,7 +190,27 @@ def is_heuristic_safe(code_file: CodeFile) -> bool:
     # If the file is just a set of definitions without active logic (if/for/while/try), it's safe.
     content = code_file.content
     if len(content) < 2000:  # Only check medium-sized files
-        logic_keywords = (" if ", " for ", " while ", " try ", " except ", " with ", " await ")
+        # Check for logic keywords with boundaries to reduce false positives/negatives
+        logic_keywords = (
+            " if ",
+            " if(",
+            "\nif ",
+            " for ",
+            " for(",
+            "\nfor ",
+            " while ",
+            " while(",
+            "\nwhile ",
+            " try:",
+            "\ntry:",
+            " except ",
+            " except:",
+            "\nexcept",
+            " with ",
+            "\nwith ",
+            " await ",
+            "\nawait ",
+        )
         has_logic = any(kw in content for kw in logic_keywords)
 
         # If no logic keywords AND it looks like a model/DTO, skip.

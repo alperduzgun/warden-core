@@ -224,6 +224,12 @@ def prepare_code_for_llm(
             logger.debug("prepare_code_ast_hints_failed", error=str(e))
 
     # 4. Plain truncation (always works)
+    logger.warning(
+        "llm_context_truncation_bias_risk",
+        file_path=file_path,
+        max_tokens=max_tokens,
+        message="File exceeded token budget and was truncated. Some logic may have been omitted from analysis."
+    )
     return _sanitize(
         truncate_content_for_llm(
             content,
