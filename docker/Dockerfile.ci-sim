@@ -1,0 +1,23 @@
+# CI Simulator image for warden scan
+# Uses Python 3.10 to match the lowest CI matrix target.
+
+FROM python:3.10-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        gcc \
+        g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install warden from source (copied at build time for layer caching).
+# The project source is also mounted at /source at runtime for scanning.
+COPY pyproject.toml setup.py README.md ./
+COPY src/ ./src/
+RUN pip install --no-cache-dir . 2>&1
+
+COPY docker/ci-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,0 +1,48 @@
+# CI Simulator: CPU-throttled Ollama + warden scan
+# Reproduces GitHub Actions-like slowness to expose benchmark timeout cascade.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.ci-sim.yml up --build
+#
+# The scan target can be overridden:
+#   SCAN_TARGET=src/warden/llm/ docker compose -f docker/docker-compose.ci-sim.yml up --build
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: warden-ci-ollama
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"   # Throttle to half a CPU — simulates GHA runner slowness
+          memory: "4G"
+    volumes:
+      - ollama-ci-models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags > /dev/null"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+
+  warden-scan:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ci-sim
+    container_name: warden-ci-scan
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_SERVICE_URL=http://ollama:11434
+      - SCAN_TARGET=${SCAN_TARGET:-src/warden/llm/}
+      # Force benchmark timeout in 3s so it fails on any hardware (simulates slow CI CPU)
+      - WARDEN_BENCHMARK_TIMEOUT_S=${WARDEN_BENCHMARK_TIMEOUT_S:-3}
+    volumes:
+      - ..:/source:ro
+    stdin_open: true
+    tty: true
+
+volumes:
+  ollama-ci-models:
+    name: warden-ci-ollama-models
