@@ -375,7 +375,7 @@ class OrchestratedLlmClient(ILlmClient):
                             timeout_seconds=request.timeout_seconds,
                             use_fast_tier=True,
                         )
-                        # Bound fallback — @resilient retry (2x120s) would block 4min otherwise.
+                        # Bound fallback — @resilient retry (2×120s) would block 4min otherwise.
                         fallback_response = await asyncio.wait_for(
                             fast_client.send_async(fallback_request),
                             timeout=request.timeout_seconds,

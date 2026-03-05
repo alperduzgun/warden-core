@@ -210,6 +210,7 @@ class ASTPreParser:
                     provider.parse(code_file.content, lang, code_file.path),
                     timeout=self._timeout,
                 )
+                # LRUCache.__setitem__ handles eviction automatically
                 context.ast_cache[code_file.path] = result
                 parsed += 1
             except (asyncio.TimeoutError, TimeoutError):
