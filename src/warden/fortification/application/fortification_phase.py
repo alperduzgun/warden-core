@@ -5,6 +5,7 @@ Generates security fixes and patches for identified vulnerabilities.
 Uses LLM to create context-aware, framework-specific solutions.
 """
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,11 @@ except ImportError:
     LLMService = None
 
 logger = get_logger(__name__)
+
+_SECURITY_SYSTEM_PROMPT = (
+    "You are a senior security engineer. Analyze security vulnerabilities "
+    "and generate precise, minimal code fixes that match the project style."
+)
 
 
 @dataclass
@@ -145,10 +151,16 @@ class FortificationPhase:
                     remaining=len(code_files),
                 )
 
-            for code_file in code_files:
-                res = await orchestrator.fortify_async(code_file)
+            # Parallel fortification: all files race concurrently (each is independent)
+            fortify_results = await asyncio.gather(
+                *[orchestrator.fortify_async(cf) for cf in code_files],
+                return_exceptions=True,
+            )
+            for code_file, res in zip(code_files, fortify_results):
+                if isinstance(res, BaseException):
+                    logger.error("fortify_file_failed", file=code_file.path, error=str(res))
+                    continue
                 all_actions.extend(res.actions)
-                # Map actions to fortifications for Panel
                 for action in res.actions:
                     all_fortifications.append(
                         Fortification(
@@ -161,16 +173,28 @@ class FortificationPhase:
                         )
                     )
 
-        # Legacy rule-based/llm fixes for validated issues
+        # Legacy rule-based/llm fixes for validated issues — parallel per issue type
         issues_by_type = self._group_issues_by_type(validated_issues)
-        for issue_type, issues in issues_by_type.items():
+        issue_type_items = list(issues_by_type.items())
+
+        async def _fixes_for_type(issue_type: str, issues: list) -> tuple[str, list, list]:
             if self.use_llm:
                 fixes = await self._generate_llm_fixes_async(issue_type, issues)
             else:
                 fixes = await self._generate_rule_based_fixes_async(issue_type, issues)
+            return issue_type, issues, fixes
 
+        gathered_fixes = await asyncio.gather(
+            *[_fixes_for_type(t, i) for t, i in issue_type_items],
+            return_exceptions=True,
+        )
+
+        for item in gathered_fixes:
+            if isinstance(item, BaseException):
+                logger.error("issue_type_fix_generation_failed", error=str(item))
+                continue
+            issue_type, issues, fixes = item
             for fix in fixes:
-                # Use the finding ID from the fix or the first issue in the group
                 fid = fix.get("finding_id")
                 if not fid and issues:
                     fid = issues[0].get("id")
@@ -231,15 +255,19 @@ class FortificationPhase:
                         issue_type.lower(), [f"secure {issue_type} handling", f"safe {issue_type} pattern"]
                     )
 
-                    # Search for similar patterns
-                    for query in queries[:2]:  # Limit to 2 queries
-                        results = await self.semantic_search_service.search(
-                            query=query,
-                            language=self.context.get("language", "python"),
-                            limit=2,
-                        )
-                        if results:
-                            semantic_context.extend(results)
+                    # Search for similar patterns in parallel (queries are independent)
+                    language = self.context.get("language", "python")
+                    search_results = await asyncio.gather(
+                        *[
+                            self.semantic_search_service.search(query=q, language=language, limit=2)
+                            for q in queries[:2]
+                        ],
+                        return_exceptions=True,
+                    )
+                    for r in search_results:
+                        if isinstance(r, BaseException) or not r:
+                            continue
+                        semantic_context.extend(r)
 
                     if semantic_context:
                         logger.info(
@@ -302,10 +330,6 @@ class FortificationPhase:
                     model = getattr(llm_cfg, "smart_model", None)
 
             # Step 3: Get LLM suggestions
-            _SECURITY_SYSTEM_PROMPT = (
-                "You are a senior security engineer. Analyze security vulnerabilities "
-                "and generate precise, minimal code fixes that match the project style."
-            )
             response = await self.llm_service.complete_async(
                 prompt=prompt,
                 system_prompt=_SECURITY_SYSTEM_PROMPT,

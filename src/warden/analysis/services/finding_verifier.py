@@ -139,17 +139,40 @@ Return ONLY a JSON object:
         if not remaining_after_cache:
             return verified_findings
 
-        # STEP 3: Batch LLM Verification
+        # STEP 3: Batch LLM Verification (token-aware batching)
         MAX_CONSECUTIVE_FAILURES = 3
-        requested_batch_size = 10
+        MAX_BATCH_TOKENS = 4000  # Safe token budget per batch
+        MAX_BATCH_SIZE = 10  # Hard cap
         logger.info("batch_verification_starting", count=len(remaining_after_cache))
+
+        # Build token-aware batches
+        _batches: list[list] = []
+        _cur_batch: list = []
+        _cur_tokens = 0
+        for _finding in remaining_after_cache:
+            _msg = getattr(_finding, "message", "") or (
+                _finding.get("message", "") if isinstance(_finding, dict) else ""
+            )
+            _code = getattr(_finding, "code", "") or (_finding.get("code", "") if isinstance(_finding, dict) else "")
+            _est = len(_msg.split()) + len(_code.split())
+            if _cur_tokens + _est > MAX_BATCH_TOKENS or len(_cur_batch) >= MAX_BATCH_SIZE:
+                if _cur_batch:
+                    _batches.append(_cur_batch)
+                _cur_batch = [_finding]
+                _cur_tokens = _est
+            else:
+                _cur_batch.append(_finding)
+                _cur_tokens += _est
+        if _cur_batch:
+            _batches.append(_cur_batch)
 
         i = 0
         consecutive_failures = 0
+        remaining_after_cache = [f for batch in _batches for f in batch]  # Flatten back for loop below
 
         while i < len(remaining_after_cache):
-            # Dynamic resource-check
-            batch_size = self._get_safe_batch_size(requested_batch_size)
+            # Dynamic resource-check — use token-aware batch boundary
+            batch_size = self._get_safe_batch_size(MAX_BATCH_SIZE)
             batch = remaining_after_cache[i : i + batch_size]
 
             try:
@@ -416,16 +439,12 @@ Return ONLY a JSON array of objects in the EXACT order:
                     "verifier_batch_size_mismatch",
                     expected=len(batch),
                     actual=len(results),
-                    message="LLM returned different number of items than requested. Using best-effort mapping."
+                    message="LLM returned different number of items than requested. Using best-effort mapping.",
                 )
 
             return results
         except Exception as e:
-            logger.warning(
-                "batch_llm_parsing_failed",
-                error=str(e),
-                content_preview=content[:200]
-            )
+            logger.warning("batch_llm_parsing_failed", error=str(e), content_preview=content[:200])
             # Fallback: Mark for manual review due to parsing error
             return [
                 {

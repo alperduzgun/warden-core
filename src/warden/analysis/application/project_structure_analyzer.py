@@ -618,10 +618,19 @@ class ProjectStructureAnalyzer:
         if "pytest.ini" in self.config_files or "pytest.toml" in self.config_files:
             return TestFramework.PYTEST
 
-        if any("pytest" in str(p).lower() for p in self.project_root.rglob("*requirements*.txt")):
+        _files = self._injected_files if self._injected_files is not None else []
+        _fallback = not _files
+        if _fallback:
+            _req_files = list(self.project_root.rglob("*requirements*.txt"))
+            _test_files = list(self.project_root.rglob("test_*.py"))
+        else:
+            _req_files = [f for f in _files if "requirements" in f.name.lower() and f.suffix == ".txt"]
+            _test_files = [f for f in _files if f.name.startswith("test_") and f.suffix == ".py"]
+
+        if any("pytest" in str(p).lower() for p in _req_files):
             return TestFramework.PYTEST
 
-        if any("unittest" in str(p).lower() for p in self.project_root.rglob("test_*.py")):
+        if any("unittest" in str(p).lower() for p in _test_files):
             return TestFramework.UNITTEST
 
         # JavaScript test frameworks
@@ -708,6 +717,7 @@ class ProjectStructureAnalyzer:
             self.config_files,
             self.special_dirs,
             self.file_extensions,
+            all_files=self._injected_files,
         )
         return detector.detect()
 

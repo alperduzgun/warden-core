@@ -27,6 +27,7 @@ class ConventionDetector:
         config_files: dict[str, str],
         special_dirs: dict[str, list[str]],
         file_extensions: set[str],
+        all_files: list | None = None,
     ):
         """
         Initialize convention detector.
@@ -36,11 +37,13 @@ class ConventionDetector:
             config_files: Detected configuration files
             special_dirs: Special directories found
             file_extensions: File extensions in project
+            all_files: Pre-discovered file list — avoids rglob
         """
         self.project_root = project_root
         self.config_files = config_files
         self.special_dirs = special_dirs
         self.file_extensions = file_extensions
+        self._all_files = all_files  # Pre-discovered file list — avoids rglob
 
     def detect(self) -> ProjectConventions:
         """
@@ -87,9 +90,11 @@ class ConventionDetector:
 
     def _detect_file_naming(self) -> str:
         """Detect file naming convention."""
-        # Sample all supported code files for naming convention
         _code_exts = get_code_extensions()
-        py_files = [f for ext in _code_exts for f in self.project_root.rglob(f"*{ext}")][:100]
+        if self._all_files is not None:
+            py_files = [f for f in self._all_files if f.suffix in _code_exts][:100]
+        else:
+            py_files = [f for ext in _code_exts for f in self.project_root.rglob(f"*{ext}")][:100]
 
         if not py_files:
             return ""
@@ -117,7 +122,10 @@ class ConventionDetector:
     def _detect_type_hints(self) -> bool:
         """Detect if Python type hints are used."""
         # Sample a few Python files (type hints are Python-specific)
-        py_files = list(self.project_root.rglob("*.py"))[:10]
+        if self._all_files is not None:
+            py_files = [f for f in self._all_files if f.suffix == ".py"][:10]
+        else:
+            py_files = list(self.project_root.rglob("*.py"))[:10]
 
         if not py_files:
             return False

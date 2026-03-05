@@ -93,7 +93,7 @@ class OrchestratedLlmClient(ILlmClient):
                 smart_tier=smart_client.provider.value,
                 fast_tier_chain=" -> ".join(fast_providers),
                 fast_providers=fast_providers,
-                concurrency=self.metrics.max_concurrency if hasattr(self.metrics, "max_concurrency") else "default",
+                concurrency=getattr(self.metrics, "max_concurrency", "default"),
             )
 
     @property
@@ -175,6 +175,8 @@ class OrchestratedLlmClient(ILlmClient):
                     message="Skipped providers with open circuits",
                 )
 
+            done: set = set()
+            pending: set = set()
             if eligible_clients:
                 # PARALLEL Fast Tier Execution (Global Optimization)
                 # All eligible fast providers race - fastest successful response wins
@@ -362,52 +364,58 @@ class OrchestratedLlmClient(ILlmClient):
                     error=response.error_message,
                     fast_clients_available=len(self.fast_clients),
                 )
-                for fast_client in self.fast_clients:
-                    # Skip providers with open circuits in fallback path too
-                    if cb.is_open(fast_client.provider):
-                        logger.debug(
-                            "smart_fallback_circuit_open_skip",
-                            provider=fast_client.provider.value,
-                        )
-                        continue
-                    try:
-                        if not await fast_client.is_available_async():
-                            continue
-                        fallback_request = LlmRequest(
+                # Filter circuit-open providers (circuit breaker replaces per-client is_available_async check)
+                eligible_fallback = [fc for fc in self.fast_clients if not cb.is_open(fc.provider)]
+
+                if eligible_fallback:
+                    # Race eligible fallback clients in parallel with a shared deadline
+                    # Avoids sequential 10s+ is_available_async + full-timeout cascade
+                    fallback_timeout = min(request.timeout_seconds * 0.5, 60.0)
+
+                    async def _try_fallback(fast_client: ILlmClient) -> tuple[ILlmClient, LlmResponse]:
+                        fb_request = LlmRequest(
                             system_prompt=request.system_prompt,
                             user_message=request.user_message,
                             model=self.fast_model,
                             max_tokens=request.max_tokens,
                             temperature=request.temperature,
-                            timeout_seconds=request.timeout_seconds,
+                            timeout_seconds=fallback_timeout,
                             use_fast_tier=True,
                         )
-                        # Bound fallback — @resilient retry (2x120s) would block 4min otherwise.
-                        fallback_response = await asyncio.wait_for(
-                            fast_client.send_async(fallback_request),
-                            timeout=request.timeout_seconds,
+                        fb_response = await asyncio.wait_for(
+                            fast_client.send_async(fb_request),
+                            timeout=fallback_timeout,
                         )
-                        if fallback_response.success and fallback_response.content:
-                            cb.record_success(fast_client.provider)
-                            logger.info(
-                                "smart_tier_fallback_succeeded",
-                                provider=fast_client.provider.value,
-                            )
-                            return self._ensure_attribution(
-                                fallback_response,
-                                fallback_provider=fast_client.provider,
-                                fallback_model=self.fast_model,
-                            )
-                        else:
-                            cb.record_failure(fast_client.provider)
-                    except Exception as fallback_err:
-                        cb.record_failure(fast_client.provider)
-                        logger.debug(
-                            "smart_tier_fallback_failed",
-                            provider=fast_client.provider.value,
-                            error=str(fallback_err),
+                        return fast_client, fb_response
+
+                    fb_tasks = [asyncio.create_task(_try_fallback(fc)) for fc in eligible_fallback]
+                    fb_done: set = set()
+                    fb_pending: set = set(fb_tasks)
+                    try:
+                        fb_done, fb_pending = await asyncio.wait(
+                            fb_tasks, timeout=fallback_timeout, return_when=asyncio.FIRST_COMPLETED
                         )
-                        continue
+                    except Exception:
+                        fb_done, fb_pending = set(), set(fb_tasks)
+
+                    for fb_task in fb_pending:
+                        fb_task.cancel()
+
+                    for fb_task in fb_done:
+                        try:
+                            fc, fb_response = fb_task.result()
+                            if fb_response.success and fb_response.content:
+                                cb.record_success(fc.provider)
+                                logger.info("smart_tier_fallback_succeeded", provider=fc.provider.value)
+                                return self._ensure_attribution(
+                                    fb_response,
+                                    fallback_provider=fc.provider,
+                                    fallback_model=self.fast_model,
+                                )
+                            else:
+                                cb.record_failure(fc.provider)
+                        except Exception as fallback_err:
+                            logger.debug("smart_tier_fallback_failed", error=str(fallback_err))
 
             raise ExternalServiceError(f"Smart tier failed: {response.error_message}")
 

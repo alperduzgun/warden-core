@@ -141,24 +141,18 @@ class TestSmartTierFallback:
         """When smart tier returns empty content, should try fast clients."""
         smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
         smart_client.send_async = AsyncMock(
-            return_value=LlmResponse(
-                content="", success=False, error_message="Empty content in response"
-            )
+            return_value=LlmResponse(content="", success=False, error_message="Empty content in response")
         )
 
         fast_client = _make_client(provider_val=LlmProvider.OLLAMA, available=True)
-        fast_client.send_async = AsyncMock(
-            return_value=LlmResponse(content="fallback result", success=True)
-        )
+        fast_client.send_async = AsyncMock(return_value=LlmResponse(content="fallback result", success=True))
 
         orchestrated = OrchestratedLlmClient(
             smart_client=smart_client,
             fast_clients=[fast_client],
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         response = await orchestrated.send_async(request)
 
         assert response.success is True
@@ -170,9 +164,7 @@ class TestSmartTierFallback:
         """When smart tier fails and no fast clients, should raise."""
         smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
         smart_client.send_async = AsyncMock(
-            return_value=LlmResponse(
-                content="", success=False, error_message="Empty content in response"
-            )
+            return_value=LlmResponse(content="", success=False, error_message="Empty content in response")
         )
 
         orchestrated = OrchestratedLlmClient(
@@ -180,36 +172,35 @@ class TestSmartTierFallback:
             fast_clients=[],
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         with pytest.raises(ExternalServiceError, match="Smart tier failed"):
             await orchestrated.send_async(request)
 
     @pytest.mark.asyncio
     async def test_smart_failure_skips_unavailable_fast_clients(self):
-        """Should skip fast clients that report unavailable."""
+        """Should skip fast clients whose circuit breaker is open."""
+        from warden.llm.circuit_breaker import ProviderCircuitBreaker
+
         smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
         smart_client.send_async = AsyncMock(
-            return_value=LlmResponse(
-                content="", success=False, error_message="Empty content"
-            )
+            return_value=LlmResponse(content="", success=False, error_message="Empty content")
         )
 
         unavailable_fast = _make_client(provider_val=LlmProvider.OLLAMA, available=False)
         available_fast = _make_client(provider_val=LlmProvider.GROQ, available=True)
-        available_fast.send_async = AsyncMock(
-            return_value=LlmResponse(content="groq result", success=True)
-        )
+        available_fast.send_async = AsyncMock(return_value=LlmResponse(content="groq result", success=True))
+
+        # Pre-open OLLAMA circuit so it gets skipped in the fallback path
+        cb = ProviderCircuitBreaker(fail_threshold=1)
+        cb.record_failure(LlmProvider.OLLAMA)
 
         orchestrated = OrchestratedLlmClient(
             smart_client=smart_client,
             fast_clients=[unavailable_fast, available_fast],
+            circuit_breaker=cb,
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         response = await orchestrated.send_async(request)
 
         assert response.success is True
@@ -221,9 +212,7 @@ class TestSmartTierFallback:
         """When smart and all fast clients fail, raises original smart error."""
         smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
         smart_client.send_async = AsyncMock(
-            return_value=LlmResponse(
-                content="", success=False, error_message="Empty content in response"
-            )
+            return_value=LlmResponse(content="", success=False, error_message="Empty content in response")
         )
 
         fast_client = _make_client(provider_val=LlmProvider.OLLAMA, available=True)
@@ -234,9 +223,7 @@ class TestSmartTierFallback:
             fast_clients=[fast_client],
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         with pytest.raises(ExternalServiceError, match="Empty content in response"):
             await orchestrated.send_async(request)
 
@@ -245,31 +232,23 @@ class TestSmartTierFallback:
         """Fast client returning empty content should be skipped."""
         smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
         smart_client.send_async = AsyncMock(
-            return_value=LlmResponse(
-                content="", success=False, error_message="Empty content"
-            )
+            return_value=LlmResponse(content="", success=False, error_message="Empty content")
         )
 
         # First fast client returns success but empty content
         fast1 = _make_client(provider_val=LlmProvider.OLLAMA, available=True)
-        fast1.send_async = AsyncMock(
-            return_value=LlmResponse(content="", success=True)
-        )
+        fast1.send_async = AsyncMock(return_value=LlmResponse(content="", success=True))
 
         # Second fast client returns actual content
         fast2 = _make_client(provider_val=LlmProvider.GROQ, available=True)
-        fast2.send_async = AsyncMock(
-            return_value=LlmResponse(content="real result", success=True)
-        )
+        fast2.send_async = AsyncMock(return_value=LlmResponse(content="real result", success=True))
 
         orchestrated = OrchestratedLlmClient(
             smart_client=smart_client,
             fast_clients=[fast1, fast2],
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         response = await orchestrated.send_async(request)
 
         assert response.content == "real result"
@@ -301,9 +280,7 @@ class TestResponseAttribution:
             smart_model="gpt-4o",
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         response = await orchestrated.send_async(request)
 
         assert response.success is True
@@ -329,9 +306,7 @@ class TestResponseAttribution:
             smart_model="claude-3-5-sonnet-20241022",
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         response = await orchestrated.send_async(request)
 
         assert response.success is True
@@ -357,9 +332,7 @@ class TestResponseAttribution:
             smart_model="gpt-4o",  # Generic name
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         response = await orchestrated.send_async(request)
 
         assert response.success is True
@@ -371,9 +344,7 @@ class TestResponseAttribution:
         """When smart fails and fast fallback succeeds, attribution is populated."""
         smart_client = _make_client(provider_val=LlmProvider.OPENAI, available=True)
         smart_client.send_async = AsyncMock(
-            return_value=LlmResponse(
-                content="", success=False, error_message="Smart failed"
-            )
+            return_value=LlmResponse(content="", success=False, error_message="Smart failed")
         )
 
         fast_client = _make_client(provider_val=LlmProvider.OLLAMA, available=True)
@@ -392,9 +363,7 @@ class TestResponseAttribution:
             fast_model="qwen2.5-coder:3b",
         )
 
-        request = LlmRequest(
-            system_prompt="test", user_message="test", use_fast_tier=False
-        )
+        request = LlmRequest(system_prompt="test", user_message="test", use_fast_tier=False)
         response = await orchestrated.send_async(request)
 
         assert response.success is True
@@ -434,9 +403,7 @@ class TestResponseAttribution:
 
     def test_ensure_attribution_static_method(self):
         """Unit test for _ensure_attribution helper."""
-        response = LlmResponse(
-            content="test", success=True, provider=None, model=None
-        )
+        response = LlmResponse(content="test", success=True, provider=None, model=None)
 
         result = OrchestratedLlmClient._ensure_attribution(
             response,
@@ -468,9 +435,7 @@ class TestResponseAttribution:
 
     def test_ensure_attribution_handles_none_fallbacks(self):
         """_ensure_attribution with None fallbacks should not crash."""
-        response = LlmResponse(
-            content="test", success=True, provider=None, model=None
-        )
+        response = LlmResponse(content="test", success=True, provider=None, model=None)
 
         result = OrchestratedLlmClient._ensure_attribution(
             response,

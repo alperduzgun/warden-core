@@ -163,10 +163,24 @@ class FrameExecutor:
                         "progress_update",
                         {"phase": "Validating Rules", "increment": 0},
                     )
+                # Parallel rule validation — files are independent (no shared state)
+                _sem = asyncio.Semaphore(10)
+                _rule_validator = self.rule_validator  # capture to avoid None narrowing loss in closure
+
+                async def _validate_file(cf):
+                    async with _sem:
+                        return await _rule_validator.validate_file_async(cf.path)
+
+                _validation_results = await asyncio.gather(
+                    *[_validate_file(cf) for cf in filtered_files],
+                    return_exceptions=True,
+                )
                 global_violations = []
-                for code_file in filtered_files:
-                    file_violations = await self.rule_validator.validate_file_async(code_file.path)
-                    global_violations.extend(file_violations)
+                for _result in _validation_results:
+                    if isinstance(_result, BaseException):
+                        logger.warning("rule_validation_file_failed", error=str(_result))
+                        continue
+                    global_violations.extend(_result)
                     if self.progress_callback:
                         self.progress_callback("progress_update", {"increment": 1})
 

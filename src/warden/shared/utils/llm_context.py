@@ -42,7 +42,7 @@ BUDGET_DEFAULT = "default"
 # Overridable via LlmConfiguration.token_budgets or config.yaml llm.token_budgets
 # ---------------------------------------------------------------------------
 DEFAULT_TOKEN_BUDGETS: dict[str, dict[str, int]] = {
-    BUDGET_SECURITY: {"deep": 2400, "fast": 400},
+    BUDGET_SECURITY: {"deep": 2400, "fast": 800},
     BUDGET_RESILIENCE: {"deep": 3000, "fast": 500},
     BUDGET_PROPERTY: {"deep": 2000, "fast": 400},
     BUDGET_FUZZ: {"deep": 2000, "fast": 400},
@@ -228,7 +228,7 @@ def prepare_code_for_llm(
         "llm_context_truncation_bias_risk",
         file_path=file_path,
         max_tokens=max_tokens,
-        message="File exceeded token budget and was truncated. Some logic may have been omitted from analysis."
+        message="File exceeded token budget and was truncated. Some logic may have been omitted from analysis.",
     )
     return _sanitize(
         truncate_content_for_llm(
