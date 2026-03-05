@@ -4,6 +4,7 @@ Batch Processor Module
 Batch LLM processing for security findings verification.
 """
 
+import asyncio
 import json
 from typing import Any
 
@@ -56,25 +57,21 @@ async def batch_verify_security_findings(
 
     logger.info("security_batch_llm_verification", total_findings=len(all_findings_with_context), batches=len(batches))
 
-    # Process each batch
-    verified_findings_map: dict[str, list[Any]] = {path: [] for path in findings_map}
-
-    for i, batch in enumerate(batches):
+    # Process all batches in parallel — each batch is an independent LLM call (closes #304)
+    async def _run_batch(i: int, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         try:
-            logger.debug(f"Processing security batch {i + 1}/{len(batches)}")
-            verified_batch = await _verify_security_batch(batch, code_files, llm_service, semantic_context)
-
-            # Map back to files
-            for item in verified_batch:
-                file_path = item["file_path"]
-                verified_findings_map[file_path].append(item["finding"])
-
+            logger.debug("processing_security_batch", index=i + 1, total=len(batches))
+            return await _verify_security_batch(batch, code_files, llm_service, semantic_context)
         except Exception as e:
             logger.error("security_batch_verification_failed", batch=i, error=str(e))
-            # Fallback: keep original findings
-            for item in batch:
-                file_path = item["file_path"]
-                verified_findings_map[file_path].append(item["finding"])
+            return batch  # conservative fallback: keep original items
+
+    batch_results = await asyncio.gather(*[_run_batch(i, b) for i, b in enumerate(batches)])
+
+    verified_findings_map: dict[str, list[Any]] = {path: [] for path in findings_map}
+    for verified_batch in batch_results:
+        for item in verified_batch:
+            verified_findings_map[item["file_path"]].append(item["finding"])
 
     return verified_findings_map
 

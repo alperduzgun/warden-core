@@ -198,7 +198,7 @@ class PipelinePhaseRunner:
 
             # Populate Data Dependency Graph when contract mode is enabled
             if getattr(context, "contract_mode", False):
-                self._populate_data_dependency_graph(context)
+                self._populate_data_dependency_graph(context, code_files)
 
             # Phase 0.8: LSP Audit (optional, zero LLM cost)
             await self._populate_lsp_audit_async(context)
@@ -306,6 +306,11 @@ class PipelinePhaseRunner:
                     {"phase": "Verification", "phase_name": "Verification", "total_units": findings_count},
                 )
             await self.post_processor.verify_findings_async(context)
+            if self._progress_callback:
+                self._progress_callback(
+                    "phase_completed",
+                    {"phase": "Verification", "phase_name": "Verification"},
+                )
 
         # Phase 4: FORTIFICATION
         context.current_phase = "Fortification"
@@ -605,7 +610,9 @@ class PipelinePhaseRunner:
                         }
                     )
 
-    def _populate_data_dependency_graph(self, context: PipelineContext) -> None:
+    def _populate_data_dependency_graph(
+        self, context: PipelineContext, code_files: list[CodeFile] | None = None
+    ) -> None:
         """Populate the DataDependencyGraph when contract_mode is enabled.
 
         Runs the shared ``DataDependencyService`` once per pipeline and stores
@@ -626,7 +633,8 @@ class PipelinePhaseRunner:
                 logger.warning("ddg_population_skipped", reason="project_root not set")
                 return
 
-            service = DataDependencyService(_Path(str(project_root)))
+            all_paths = [_Path(cf.path) for cf in code_files] if code_files else None
+            service = DataDependencyService(_Path(str(project_root)), all_files=all_paths)
             ddg = service.build()
             context.data_dependency_graph = ddg
             logger.info(

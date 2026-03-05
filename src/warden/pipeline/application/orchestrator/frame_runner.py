@@ -148,6 +148,9 @@ class FrameRunner:
         self.ignore_matcher: IgnoreMatcher | None = None
         self._findings_cache: FindingsCache | None = None
         self._partial_writer = partial_results_writer
+        # Sentinel: None = not yet loaded; "" = loaded but absent; str = content
+        self._arch_directives: str | None = None
+        self._arch_directives_loaded: bool = False
 
     @async_error_handler(fallback_value=None, log_level="error", context_keys=["frame_id"], reraise=False)
     async def execute_frame_with_rules_async(
@@ -332,27 +335,29 @@ class FrameRunner:
                 )
 
         # Inject architectural directives from .warden/architecture.md (Gap 4: global directives)
-        # Read once per pipeline run, not per-file. Provides human-authored architectural rules.
-        project_root = getattr(context, "project_root", None) or Path.cwd()
-        arch_file_candidates = [
-            project_root / ".warden" / "rules" / "architecture.md",
-            project_root / ".warden" / "architecture.md",
-        ]
-        for arch_path in arch_file_candidates:
-            if arch_path.is_file():
-                try:
-                    arch_content = arch_path.read_text(encoding="utf-8")[:500]
-                    if arch_content.strip():
-                        frame.architectural_directives = arch_content.strip()
-                        logger.debug(
-                            "architectural_directives_injected",
-                            frame_id=frame.frame_id,
-                            source=str(arch_path),
-                            chars=len(arch_content),
-                        )
-                except Exception as e:
-                    logger.debug("architectural_directives_read_failed", error=str(e))
-                break
+        # Cached at first call per FrameRunner instance — not re-read per frame.
+        if not self._arch_directives_loaded:
+            self._arch_directives_loaded = True
+            _arch_root = getattr(context, "project_root", None) or Path.cwd()
+            for arch_path in [
+                _arch_root / ".warden" / "rules" / "architecture.md",
+                _arch_root / ".warden" / "architecture.md",
+            ]:
+                if arch_path.is_file():
+                    try:
+                        content = arch_path.read_text(encoding="utf-8")[:500].strip()
+                        if content:
+                            self._arch_directives = content
+                    except Exception as e:
+                        logger.debug("architectural_directives_read_failed", error=str(e))
+                    break
+        if self._arch_directives:
+            frame.architectural_directives = self._arch_directives
+            logger.debug(
+                "architectural_directives_injected",
+                frame_id=frame.frame_id,
+                chars=len(self._arch_directives),
+            )
 
         # Inject prior findings for cross-frame awareness (Tier 1: Context-Awareness)
         # BATCH 3: Add metrics tracking

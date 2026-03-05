@@ -50,10 +50,14 @@ class DataDependencyService:
 
     Args:
         project_root: Root directory of the project.
+        all_files: Pre-discovered file list from the pipeline. When provided,
+            rglob is skipped and this list is filtered to ``.py`` files only.
+            Falls back to rglob when ``None`` (standalone / test usage).
     """
 
-    def __init__(self, project_root: str | Path) -> None:
+    def __init__(self, project_root: str | Path, all_files: list[Path] | None = None) -> None:
         self.project_root = Path(project_root)
+        self._all_files = all_files  # Pre-discovered file list (pipeline injection)
         self._builder = DataDependencyBuilder(project_root)
 
     # ------------------------------------------------------------------
@@ -89,11 +93,19 @@ class DataDependencyService:
     def _collect_python_files(self) -> list[Path]:
         """Collect ``.py`` files, excluding virtualenv/cache/generated dirs.
 
+        When ``all_files`` was provided at init time, filters that list to
+        ``.py`` files only (no rglob). Falls back to rglob for standalone
+        usage (e.g. ``build_ddg_for_project()``).
+
         Returns:
             Sorted list of absolute :class:`Path` objects for Python source
             files within ``project_root``, with excluded directories filtered
             out.
         """
+        if self._all_files is not None:
+            return sorted(p for p in self._all_files if p.suffix == ".py")
+
+        # Fallback: rglob (standalone usage, e.g. build_ddg_for_project())
         result: list[Path] = []
         for py_file in self.project_root.rglob("*.py"):
             if self._is_excluded(py_file):
