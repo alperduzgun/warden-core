@@ -200,7 +200,7 @@ class ClaudeCodeClient(ILlmClient):
             is_error = result.get("is_error", False) if isinstance(result, dict) else False
             if is_error or (isinstance(result, dict) and result.get("type") == "error"):
                 error_msg = result.get("error") or result.get("message") or "Unknown Claude Code error"
-                logger.error("claude_code_explicit_error", error=error_msg, raw_output=output[:500])
+                logger.error("claude_code_explicit_error", error=error_msg, output_bytes=len(output))
                 return self._error_response(f"Claude error: {error_msg}", model, duration_ms)
 
             # Detect max-turns exhaustion (model used tool calls, ran out of turns)
@@ -233,7 +233,7 @@ class ClaudeCodeClient(ILlmClient):
             if not content.strip():
                 logger.error(
                     "claude_code_empty_content_json",
-                    raw_output=output[:1000],
+                    output_bytes=len(output),
                     parsed_keys=list(result.keys()) if isinstance(result, dict) else type(result),
                 )
                 return self._error_response("Empty content in response", model, duration_ms)

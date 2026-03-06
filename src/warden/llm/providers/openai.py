@@ -6,6 +6,7 @@ Based on C# OpenAIClient.cs
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -89,7 +90,17 @@ class OpenAIClient(ILlmClient):
 
             limiter = await GlobalRateLimiter.get_instance()
             provider_name = "azure" if self._provider == LlmProvider.AZURE_OPENAI else "openai"
-            await limiter.acquire(provider_name, tokens=request.max_tokens)
+            try:
+                await limiter.acquire(provider_name, tokens=request.max_tokens + request.estimated_prompt_tokens)
+            except asyncio.TimeoutError:
+                # Rate-limit queue timeout — skip this call, do not trip circuit breaker (#311)
+                return LlmResponse(
+                    content="",
+                    success=False,
+                    error_message=f"{provider_name} rate-limit queue timeout — provider skipped",
+                    provider=self.provider,
+                    duration_ms=0,
+                )
 
             headers = {"Content-Type": "application/json"}
 
@@ -201,7 +212,7 @@ class OpenAIClient(ILlmClient):
 
             limiter = await GlobalRateLimiter.get_instance()
             provider_name = "azure" if self._provider == LlmProvider.AZURE_OPENAI else "openai"
-            await limiter.acquire(provider_name, tokens=request.max_tokens)
+            await limiter.acquire(provider_name, tokens=request.max_tokens + request.estimated_prompt_tokens)
 
             headers = {"Content-Type": "application/json"}
 

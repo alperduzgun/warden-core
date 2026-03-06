@@ -73,7 +73,7 @@ class GeminiClient(ILlmClient):
             from warden.llm.global_rate_limiter import GlobalRateLimiter
 
             limiter = await GlobalRateLimiter.get_instance()
-            await limiter.acquire("gemini", tokens=request.max_tokens)
+            await limiter.acquire("gemini", tokens=request.max_tokens + request.estimated_prompt_tokens)
 
             # Prepare headers with API key (secure method)
             headers = {"Content-Type": "application/json", "x-goog-api-key": self._api_key}

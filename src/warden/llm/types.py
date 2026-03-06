@@ -69,6 +69,15 @@ class LlmRequest(BaseDomainModel):
     timeout_seconds: float = 90.0
     use_fast_tier: bool = False  # If True, use local/fast model if available
 
+    @property
+    def estimated_prompt_tokens(self) -> int:
+        """Rough estimate of input tokens for rate-limit budgeting (4 chars ≈ 1 token).
+
+        Used by providers to reserve both prompt and completion tokens from the
+        rate limiter, preventing silent TPM overruns when the prompt is large.
+        """
+        return (len(self.system_prompt) + len(self.user_message)) // 4
+
 
 class LlmResponse(BaseDomainModel):
     """Response from LLM provider"""

@@ -77,8 +77,14 @@ class FindingsCache:
 
     @staticmethod
     def cache_key(frame_id: str, file_path: str, content: str) -> str:
+        import os as _os
+
         h = FindingsCache.content_hash(content)
-        return f"{frame_id}:{file_path}:{h}"
+        # Normalize to collapse "./" / "../" and duplicate separators so that
+        # equivalent paths (e.g. "./src/foo.py" vs "src/foo.py") map to the
+        # same cache key and don't cause spurious misses.
+        normalized = _os.path.normpath(file_path)
+        return f"{frame_id}:{normalized}:{h}"
 
     def get_findings(self, frame_id: str, file_path: str, content: str) -> list[Finding] | None:
         """Return deserialized ``Finding`` objects on hit, or *None* on miss.

@@ -96,7 +96,7 @@ class AnthropicClient(ILlmClient):
             from warden.llm.global_rate_limiter import GlobalRateLimiter
 
             limiter = await GlobalRateLimiter.get_instance()
-            await limiter.acquire("anthropic", tokens=request.max_tokens)
+            await limiter.acquire("anthropic", tokens=request.max_tokens + request.estimated_prompt_tokens)
 
             headers = {
                 "x-api-key": self._api_key,
@@ -151,6 +151,17 @@ class AnthropicClient(ILlmClient):
                 content="", success=False, error_message=error_msg, provider=self.provider, duration_ms=duration_ms
             )
 
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            # Transient connectivity issue — do not treat as permanent provider failure (#313)
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"Connection error (transient): {type(e).__name__}",
+                provider=self.provider,
+                duration_ms=duration_ms,
+            )
+
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
             return LlmResponse(
@@ -177,7 +188,7 @@ class AnthropicClient(ILlmClient):
             from warden.llm.global_rate_limiter import GlobalRateLimiter
 
             limiter = await GlobalRateLimiter.get_instance()
-            await limiter.acquire("anthropic", tokens=request.max_tokens)
+            await limiter.acquire("anthropic", tokens=request.max_tokens + request.estimated_prompt_tokens)
 
             headers = {
                 "x-api-key": self._api_key,
@@ -228,6 +239,17 @@ class AnthropicClient(ILlmClient):
             error_msg = f"HTTP {e.response.status_code}: {response_text}"
             return LlmResponse(
                 content="", success=False, error_message=error_msg, provider=self.provider, duration_ms=duration_ms
+            )
+
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            duration_ms = int((time.time() - start_time) * 1000)
+            # Transient connectivity issue — do not treat as permanent provider failure (#313)
+            return LlmResponse(
+                content="",
+                success=False,
+                error_message=f"Connection error (transient): {type(e).__name__}",
+                provider=self.provider,
+                duration_ms=duration_ms,
             )
 
         except Exception as e:
