@@ -99,7 +99,7 @@ class OllamaClient(ILlmClient):
 
             limiter = await GlobalRateLimiter.get_instance()
             await limiter.acquire("ollama", tokens=request.max_tokens + request.estimated_prompt_tokens)
-            sem = await limiter.concurrency_limit("ollama")
+            sem = limiter.concurrency_limit("ollama")
 
             async with sem:
                 # Detect if the response is expected to be JSON so Ollama enforces grammar.

@@ -74,6 +74,12 @@ class TokenBucketLimiter:
                 self._lock.release()
                 await asyncio.sleep(wait)
                 await self._lock.acquire()
+                # Recalculate after wakeup: other coroutines may have refilled tokens.
+                # Also deduct n so the rate-limit invariant is maintained. (#308)
+                now2 = time.time()
+                self.tokens = min(self.burst, self.tokens + (now2 - self.last) * self.tpm / 60)
+                self.last = now2
+                self.tokens = max(0.0, self.tokens - n)
             else:
                 self.tokens -= n
             self._lock.release()

@@ -109,8 +109,12 @@ class GlobalRateLimiter:
             self._semaphores[provider] = asyncio.Semaphore(limit)
         return self._semaphores[provider]
 
-    async def concurrency_limit(self, provider: str):
-        """Context manager for provider-specific concurrency limiting."""
+    def concurrency_limit(self, provider: str) -> asyncio.Semaphore:
+        """Return the concurrency semaphore for a provider. (#314)
+
+        Not async — semaphore creation is synchronous dict lookup.
+        Callers use: ``async with limiter.concurrency_limit(provider):``
+        """
         provider_key = provider.lower()
         # For local LLMs, allow up to 3 concurrent requests so fast+smart tier can race.
         # 3 is empirically safe on 8-core machines; CI overrides via WARDEN_OLLAMA_CONCURRENCY.
@@ -121,8 +125,7 @@ class GlobalRateLimiter:
         except ValueError:
             _local_limit = 3
         limit = _local_limit if ("ollama" in provider_key or "qwen" in provider_key) else 10
-        sem = self._get_semaphore(provider_key, limit=limit)
-        return sem
+        return self._get_semaphore(provider_key, limit=limit)
 
     def get_limiter(self, provider: str = "default") -> RateLimiter:
         """

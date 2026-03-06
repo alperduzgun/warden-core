@@ -7,6 +7,7 @@ Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
 
 import contextlib
 import os
+import urllib.parse
 from dataclasses import dataclass, field
 
 from .types import LlmProvider
@@ -251,6 +252,22 @@ def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
         return asyncio.run(load_llm_config_async(config_override))
 
 
+def _validate_ollama_endpoint(url: str) -> bool:
+    """Block SSRF targets — only allow safe Ollama endpoints. (#310)"""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = parsed.hostname or ""
+        # Block cloud metadata services and link-local addresses
+        blocked_prefixes = ("169.254.", "fd00:", "fe80:", "::ffff:169.254.")
+        if any(host.startswith(p) for p in blocked_prefixes):
+            return False
+        return True
+    except Exception:
+        return False
+
+
 async def _check_ollama_availability(endpoint: str) -> bool:
     """
     Fast check if Ollama is running using httpx.
@@ -475,7 +492,17 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
 
     ollama_endpoint = "http://localhost:11434"
     if ollama_host_secret and hasattr(ollama_host_secret, "found") and ollama_host_secret.found:
-        ollama_endpoint = ollama_host_secret.value or ollama_endpoint
+        candidate = ollama_host_secret.value or ollama_endpoint
+        if _validate_ollama_endpoint(candidate):
+            ollama_endpoint = candidate
+        else:
+            import structlog as _structlog
+
+            _structlog.get_logger(__name__).warning(
+                "ollama_endpoint_blocked_ssrf",
+                endpoint=candidate,
+                message="OLLAMA_HOST rejected — falling back to localhost",
+            )
 
     config.ollama.endpoint = ollama_endpoint
     config.ollama.enabled = True  # Enabled by default for dual-tier fallback

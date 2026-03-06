@@ -1,12 +1,11 @@
 import asyncio
+import os
 
 from warden.shared.infrastructure.logging import get_logger
 
 from ..circuit_breaker import ProviderCircuitBreaker
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
-
-import os
 
 logger = get_logger(__name__)
 
@@ -397,7 +396,8 @@ class OrchestratedLlmClient(ILlmClient):
                         )
                         return fast_client, fb_response
 
-                    fb_tasks = [asyncio.create_task(_try_fallback(fc)) for fc in eligible_fallback]
+                    fb_task_to_client: dict = {asyncio.create_task(_try_fallback(fc)): fc for fc in eligible_fallback}
+                    fb_tasks = list(fb_task_to_client.keys())
                     fb_done: set = set()
                     fb_pending: set = set(fb_tasks)
                     try:
@@ -407,7 +407,11 @@ class OrchestratedLlmClient(ILlmClient):
                     except Exception:
                         fb_done, fb_pending = set(), set(fb_tasks)
 
+                    # Record failures for timed-out tasks before cancelling (#309)
                     for fb_task in fb_pending:
+                        pending_client = fb_task_to_client.get(fb_task)
+                        if pending_client is not None:
+                            cb.record_failure(pending_client.provider)
                         fb_task.cancel()
 
                     for fb_task in fb_done:
@@ -424,6 +428,10 @@ class OrchestratedLlmClient(ILlmClient):
                             else:
                                 cb.record_failure(fc.provider)
                         except Exception as fallback_err:
+                            # Task raised (timeout or exception) — record failure for circuit breaker (#309)
+                            fc = fb_task_to_client.get(fb_task)
+                            if fc is not None:
+                                cb.record_failure(fc.provider)
                             logger.debug("smart_tier_fallback_failed", error=str(fallback_err))
 
             raise ExternalServiceError(f"Smart tier failed: {response.error_message}")
