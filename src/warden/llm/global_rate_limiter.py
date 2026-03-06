@@ -116,7 +116,10 @@ class GlobalRateLimiter:
         # 3 is empirically safe on 8-core machines; CI overrides via WARDEN_OLLAMA_CONCURRENCY.
         import os as _os
 
-        _local_limit = int(_os.environ.get("WARDEN_OLLAMA_CONCURRENCY", "3"))
+        try:
+            _local_limit = int(_os.environ.get("WARDEN_OLLAMA_CONCURRENCY", "3"))
+        except ValueError:
+            _local_limit = 3
         limit = _local_limit if ("ollama" in provider_key or "qwen" in provider_key) else 10
         sem = self._get_semaphore(provider_key, limit=limit)
         return sem

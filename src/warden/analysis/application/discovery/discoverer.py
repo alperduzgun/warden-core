@@ -240,13 +240,14 @@ class FileDiscoverer:
 
         return discovered_files
 
-    def _walk_directory(self, directory: Path, current_depth: int) -> list[Path]:
+    def _walk_directory(self, directory: Path, current_depth: int, _visited: set[Path] | None = None) -> list[Path]:
         """
         Recursively walk directory tree.
 
         Args:
             directory: Directory to walk
             current_depth: Current recursion depth
+            _visited: Set of resolved real paths already visited (prevents symlink loops)
 
         Returns:
             List of file paths
@@ -254,6 +255,9 @@ class FileDiscoverer:
         # Check max depth
         if self.max_depth is not None and current_depth > self.max_depth:
             return []
+
+        if _visited is None:
+            _visited = set()
 
         paths: list[Path] = []
 
@@ -266,8 +270,16 @@ class FileDiscoverer:
                 if item.is_file():
                     paths.append(item)
                 elif item.is_dir():
-                    # Recurse into subdirectory
-                    sub_paths = self._walk_directory(item, current_depth + 1)
+                    if item.is_symlink():
+                        # Resolve the symlink target; skip if already visited to break loops
+                        try:
+                            resolved = item.resolve()
+                        except OSError:
+                            continue
+                        if resolved in _visited:
+                            continue
+                        _visited.add(resolved)
+                    sub_paths = self._walk_directory(item, current_depth + 1, _visited)
                     paths.extend(sub_paths)
         except (PermissionError, OSError):
             # Skip directories we can't read

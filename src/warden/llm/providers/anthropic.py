@@ -96,7 +96,7 @@ class AnthropicClient(ILlmClient):
             from warden.llm.global_rate_limiter import GlobalRateLimiter
 
             limiter = await GlobalRateLimiter.get_instance()
-            await limiter.acquire("anthropic", tokens=request.max_tokens)
+            await limiter.acquire("anthropic", tokens=request.max_tokens + request.estimated_prompt_tokens)
 
             headers = {
                 "x-api-key": self._api_key,
@@ -177,7 +177,7 @@ class AnthropicClient(ILlmClient):
             from warden.llm.global_rate_limiter import GlobalRateLimiter
 
             limiter = await GlobalRateLimiter.get_instance()
-            await limiter.acquire("anthropic", tokens=request.max_tokens)
+            await limiter.acquire("anthropic", tokens=request.max_tokens + request.estimated_prompt_tokens)
 
             headers = {
                 "x-api-key": self._api_key,

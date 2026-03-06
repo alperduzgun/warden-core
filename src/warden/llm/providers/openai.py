@@ -89,7 +89,7 @@ class OpenAIClient(ILlmClient):
 
             limiter = await GlobalRateLimiter.get_instance()
             provider_name = "azure" if self._provider == LlmProvider.AZURE_OPENAI else "openai"
-            await limiter.acquire(provider_name, tokens=request.max_tokens)
+            await limiter.acquire(provider_name, tokens=request.max_tokens + request.estimated_prompt_tokens)
 
             headers = {"Content-Type": "application/json"}
 
@@ -201,7 +201,7 @@ class OpenAIClient(ILlmClient):
 
             limiter = await GlobalRateLimiter.get_instance()
             provider_name = "azure" if self._provider == LlmProvider.AZURE_OPENAI else "openai"
-            await limiter.acquire(provider_name, tokens=request.max_tokens)
+            await limiter.acquire(provider_name, tokens=request.max_tokens + request.estimated_prompt_tokens)
 
             headers = {"Content-Type": "application/json"}
 

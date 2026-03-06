@@ -405,7 +405,10 @@ class ReportGenerator:
 
                 # Handle file path - Finding has 'location' usually as 'file:line'
                 location_str = self._get_val(finding, "location", "unknown")
-                file_path = location_str.split(":")[0] if ":" in location_str else location_str
+                # rfind handles Windows drive letters (e.g. "C:\src\file.py:42" → "C:\src\file.py")
+                # A drive-letter colon sits at index 1; any colon at index > 1 separates path from line.
+                _lc = location_str.rfind(":")
+                file_path = location_str[:_lc] if _lc > 1 else location_str
 
                 # Skip malformed findings that would produce invalid SARIF entries
                 if not rule_id or not location_str or location_str == "unknown":
@@ -511,7 +514,8 @@ class ReportGenerator:
             for sf in suppressed_findings:
                 rule_id = str(self._get_val(sf, "id", "unknown")).lower().replace(" ", "-")
                 location_str = self._get_val(sf, "location", "unknown")
-                file_path = location_str.split(":")[0] if ":" in location_str else location_str
+                _lc = location_str.rfind(":")
+                file_path = location_str[:_lc] if _lc > 1 else location_str
                 if not rule_id or not file_path or file_path == "unknown":
                     continue
                 line_num = 1

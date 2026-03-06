@@ -76,6 +76,7 @@ class OrchestratedLlmClient(ILlmClient):
 
             metrics_collector = LLMMetricsCollector()
         self.metrics = metrics_collector
+        self._avail_cache: dict[str, tuple[bool, float]] = {}
 
         if not self.fast_clients:
             # CLI-tool providers (Codex, Claude Code) are intentionally single-tier:
@@ -434,7 +435,6 @@ class OrchestratedLlmClient(ILlmClient):
         )
 
     # TTL cache for availability checks — avoids re-probing on every request.
-    _avail_cache: dict[str, tuple[bool, float]] = {}
     _AVAIL_TTL_S: float = 30.0
 
     async def is_available_async(self) -> bool:
@@ -457,10 +457,11 @@ class OrchestratedLlmClient(ILlmClient):
         async def _probe(client: ILlmClient) -> bool:
             try:
                 return await client.is_available_async()
-            except Exception:
+            except BaseException:
                 return False
 
-        results = await asyncio.gather(*[_probe(c) for c in all_clients], return_exceptions=False)
+        results = await asyncio.gather(*[_probe(c) for c in all_clients], return_exceptions=True)
+        results = [r if isinstance(r, bool) else False for r in results]
         available = any(results)
         self._avail_cache[str(cache_key)] = (available, now)
         return available
