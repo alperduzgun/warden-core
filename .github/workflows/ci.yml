@@ -206,10 +206,10 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .warden/baseline.sarif
-          key: warden-baseline-${{ github.ref_name }}-${{ hashFiles('pyproject.toml') }}
+          key: warden-baseline-${{ contains(github.ref, 'refs/tags/') && 'main' || github.ref_name }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
-            warden-baseline-${{ github.ref_name }}-
             warden-baseline-main-
+            warden-baseline-dev-
 
       # Verify Code Intelligence disabled in CI: warden refresh --force runs
       # tree-sitter AST analysis on all 557 files before Ollama is ready,
