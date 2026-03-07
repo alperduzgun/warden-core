@@ -108,10 +108,9 @@ class InputValidationFortifier(BaseFortifier):
 
         try:
             response = await self._llm_provider.complete_async(
+                prompt,
                 system_prompt="You are a security expert. Add input validation to Python functions. Return ONLY the modified code.",
-                user_prompt=prompt,
-                temperature=0.0,  # Idempotency
-                max_tokens=3000,
+                max_tokens=800,
             )
 
             if not response or not response.content:
