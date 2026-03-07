@@ -129,20 +129,39 @@ class ProviderSpeedBenchmarkService:
         """
         Return True for Ollama, Claude Code, Codex, or localhost endpoints.
 
-        Checks the provider enum/string value first, then falls back to
-        inspecting the endpoint URL for loopback addresses.
+        Checks the original client first (handles direct OllamaClient), then
+        falls back to unwrapping OrchestratedLlmClient to catch smart=Cloud +
+        fast=[Ollama] setups where .provider returns the Cloud provider.
         """
+        # Check original client directly first (handles OllamaClient, MagicMock in tests)
         provider_raw: Any = getattr(client, "provider", "")
-        # getattr handles both enum (.value) and plain string providers
         provider_str = str(getattr(provider_raw, "value", provider_raw)).lower()
 
         if provider_str in ProviderSpeedBenchmarkService._LOCAL_PROVIDER_VALUES:
             return True
 
-        # Detect generic local HTTP endpoint (LMStudio, LocalAI, etc.)
+        # Detect generic local HTTP endpoint on original client
         endpoint = getattr(client, "endpoint", getattr(client, "_endpoint", ""))
         str_endpoint = str(endpoint).lower()
-        return any(loopback in str_endpoint for loopback in ("localhost", "127.0.0.1", "::1", "0:0:0:0:0:0:0:1"))
+        if any(loopback in str_endpoint for loopback in ("localhost", "127.0.0.1", "::1", "0:0:0:0:0:0:0:1")):
+            return True
+
+        # Fallback: unwrap OrchestratedLlmClient and re-check the smart client.
+        # Only proceeds when the original client didn't match — avoids double-
+        # checking plain providers and keeps mock compatibility (direct mocks
+        # already matched via provider above).
+        actual = getattr(client, "smart_client", None)
+        if actual is not None and actual is not client:
+            provider_raw = getattr(actual, "provider", "")
+            provider_str = str(getattr(provider_raw, "value", provider_raw)).lower()
+            if provider_str in ProviderSpeedBenchmarkService._LOCAL_PROVIDER_VALUES:
+                return True
+            endpoint = getattr(actual, "endpoint", getattr(actual, "_endpoint", ""))
+            str_endpoint = str(endpoint).lower()
+            if any(loopback in str_endpoint for loopback in ("localhost", "127.0.0.1", "::1", "0:0:0:0:0:0:0:1")):
+                return True
+
+        return False
 
     @staticmethod
     def _get_cache_key(client: Any) -> str:
@@ -322,7 +341,10 @@ class ProviderSpeedBenchmarkService:
             if cache_key in self._cache:
                 result, cached_at = self._cache[cache_key]
                 if time.monotonic() - cached_at < self.CACHE_TTL_S:
-                    return self._calculate(result.tok_per_sec, phase_timeout_s, apply_floor=not result.timed_out)
+                    safe = self._calculate(result.tok_per_sec, phase_timeout_s, apply_floor=not result.timed_out)
+                    if hasattr(client, "set_safe_num_predict"):
+                        client.set_safe_num_predict(safe)
+                    return safe
 
             try:
                 result = await asyncio.wait_for(
@@ -381,6 +403,18 @@ class ProviderSpeedBenchmarkService:
                         client.set_safe_num_predict(conservative)
                     return conservative
 
+                # Non-timeout error: cache a synthetic result so subsequent phases
+                # use the config default directly instead of re-running the failing benchmark.
+                self._cache[cache_key] = (
+                    ProviderSpeedResult(
+                        cache_key=cache_key,
+                        tok_per_sec=0.0,
+                        safe_max_tokens=default_max_tokens,
+                        measured_at=time.monotonic(),
+                        timed_out=True,  # Treat as timed-out so apply_floor=False on cache hits
+                    ),
+                    time.monotonic(),
+                )
                 logger.warning(
                     "benchmark_failed",
                     provider=cache_key,
