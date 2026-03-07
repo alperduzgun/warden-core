@@ -95,6 +95,11 @@ class FortificationResult(BaseDomainModel):
     summary: str = ""
     duration: float = 0.0
     timestamp: datetime = Field(default_factory=datetime.now)
+    # Code-modification fields used by the fortification orchestrator chain
+    original_code: str = ""
+    fortified_code: str = ""
+    error_message: str = ""
+    fortifier_name: str = ""
 
     def to_json(self) -> dict[str, Any]:
         """Serialize to Panel-compatible JSON."""
