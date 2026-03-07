@@ -251,6 +251,8 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
         if ProviderSpeedBenchmarkService._is_local_provider(self.llm_service):
             _svc = get_benchmark_service()
             _safe = await _svc.get_safe_max_tokens(self.llm_service, phase_timeout_s=120.0, default_max_tokens=800)
+            if hasattr(self.llm_service, "set_safe_num_predict"):
+                self.llm_service.set_safe_num_predict(_safe)
             if _safe < _PROPERTY_MIN_VIABLE_TOKENS:
                 logger.warning(
                     "llm_skipped_budget_below_viable",
@@ -571,6 +573,8 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
             if ProviderSpeedBenchmarkService._is_local_provider(client):
                 _svc = get_benchmark_service()
                 _output_max = await _svc.get_safe_max_tokens(client, phase_timeout_s=45.0, default_max_tokens=400)
+                if hasattr(client, "set_safe_num_predict"):
+                    client.set_safe_num_predict(_output_max)
             else:
                 _output_max = 800
 

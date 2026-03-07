@@ -53,6 +53,9 @@ class OllamaClient(ILlmClient):
         # Calibrated at scan startup once the speed benchmark completes.
         _gen_buf = ProviderSpeedBenchmarkService.BENCHMARK_TIMEOUT_S / 3
         self._read_timeout: float = ProviderSpeedBenchmarkService.BENCHMARK_TIMEOUT_S + _gen_buf
+        # Safe output-token cap: updated by set_safe_num_predict() after benchmark.
+        # Defaults to MAX_TOKENS_CEILING so behaviour is unchanged until calibrated.
+        self._safe_num_predict: int = ProviderSpeedBenchmarkService.MAX_TOKENS_CEILING
 
         logger.debug("ollama_client_initialized", endpoint=self._endpoint, default_model=self._default_model)
 
@@ -66,6 +69,17 @@ class OllamaClient(ILlmClient):
 
         floor = ProviderSpeedBenchmarkService.BENCHMARK_TIMEOUT_S / 3
         self._read_timeout = max(floor, seconds)
+
+    def set_safe_num_predict(self, tokens: int) -> None:
+        """Set the maximum output tokens Ollama will generate per request.
+
+        Called by ProviderSpeedBenchmarkService after measuring hardware throughput.
+        Acts as a hard cap in send_async(): min(request.max_tokens, self._safe_num_predict).
+        This ensures callers that omit max_tokens (default=4000) never cause a timeout
+        on CPU-only hardware regardless of which frame constructs the LlmRequest.
+        """
+        self._safe_num_predict = max(1, tokens)
+        logger.debug("ollama_safe_num_predict_set", tokens=self._safe_num_predict)
 
     @property
     def provider(self) -> LlmProvider:
@@ -115,7 +129,10 @@ class OllamaClient(ILlmClient):
                         {"role": "user", "content": request.user_message},
                     ],
                     "stream": True,
-                    "options": {"temperature": request.temperature, "num_predict": request.max_tokens},
+                    "options": {
+                        "temperature": request.temperature,
+                        "num_predict": min(request.max_tokens, self._safe_num_predict),
+                    },
                 }
                 if _wants_json:
                     payload["format"] = "json"

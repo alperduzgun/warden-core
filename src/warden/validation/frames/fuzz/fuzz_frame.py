@@ -300,6 +300,8 @@ Output must be a valid JSON object with the following structure:
             if ProviderSpeedBenchmarkService._is_local_provider(client):
                 _svc = get_benchmark_service()
                 _safe = await _svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
+                if hasattr(client, "set_safe_num_predict"):
+                    client.set_safe_num_predict(_safe)
                 if _safe < _FUZZ_MIN_VIABLE_TOKENS:
                     logger.warning(
                         "llm_skipped_budget_below_viable",

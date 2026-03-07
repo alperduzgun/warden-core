@@ -907,6 +907,8 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                 _safe_tokens = await _svc.get_safe_max_tokens(
                     self.llm_service, phase_timeout_s=self._timeout, default_max_tokens=200
                 )
+                if hasattr(self.llm_service, "set_safe_num_predict"):
+                    self.llm_service.set_safe_num_predict(_safe_tokens)
             else:
                 _safe_tokens = 800
 

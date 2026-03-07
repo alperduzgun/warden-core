@@ -726,6 +726,8 @@ You have deep understanding of:
         if ProviderSpeedBenchmarkService._is_local_provider(self.llm):
             _svc = get_benchmark_service()
             _max_tokens = await _svc.get_safe_max_tokens(self.llm, phase_timeout_s=45.0, default_max_tokens=200)
+            if hasattr(self.llm, "set_safe_num_predict"):
+                self.llm.set_safe_num_predict(_max_tokens)
         else:
             _max_tokens = 600
 
