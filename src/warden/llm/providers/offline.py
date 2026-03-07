@@ -36,7 +36,12 @@ class OfflineClient(ILlmClient):
         return True
 
     async def complete_async(
-        self, prompt: str, system_prompt: str = "", model: str | None = None, use_fast_tier: bool = False
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        model: str | None = None,
+        use_fast_tier: bool = False,
+        max_tokens: int = 2000,
     ) -> LlmResponse:
         # Satisfy the LlmRequest type contract instead of passing None (#210)
         return await self.send_async(LlmRequest(system_prompt=system_prompt, user_message=prompt))

@@ -314,7 +314,12 @@ class OpenAIClient(ILlmClient):
             return False
 
     async def complete_async(
-        self, prompt: str, system_prompt: str = "You are a helpful coding assistant.", model: str | None = None
+        self,
+        prompt: str,
+        system_prompt: str = "You are a helpful coding assistant.",
+        model: str | None = None,
+        use_fast_tier: bool = False,
+        max_tokens: int = 2000,
     ) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
@@ -323,6 +328,8 @@ class OpenAIClient(ILlmClient):
             prompt: User prompt
             system_prompt: System prompt (optional)
             model: Model name override (optional)
+            use_fast_tier: Ignored for OpenAI (always smart tier)
+            max_tokens: Maximum tokens to generate
 
         Returns:
             LlmResponse object with content and token usage
@@ -335,7 +342,7 @@ class OpenAIClient(ILlmClient):
             system_prompt=system_prompt,
             model=model or self._default_model,
             temperature=0.0,  # Idempotency
-            max_tokens=2000,
+            max_tokens=max_tokens,
             timeout_seconds=30.0,
         )
 
