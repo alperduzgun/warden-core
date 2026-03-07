@@ -265,6 +265,12 @@ jobs:
           WARDEN_LLM_PROVIDER: "ollama"
           WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
           OLLAMA_HOST: http://localhost:11434
+          # Limit Ollama concurrency to 1: CPU-only Ollama serialises requests
+          # internally; extra connections hold semaphore slots for no benefit. (#319)
+          WARDEN_OLLAMA_CONCURRENCY: "1"
+          # Limit file-level concurrency to 1: prevents asyncio.wait_for timeouts
+          # from firing while a file's request is still queued in the Ollama semaphore. (#320)
+          WARDEN_FILE_CONCURRENCY: "1"
         run: |
           # =============================================================
           # SCAN STRATEGY (both paths use Ollama)
