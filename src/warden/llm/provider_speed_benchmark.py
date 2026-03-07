@@ -11,6 +11,7 @@ Singleton pattern mirrors GlobalRateLimiter (global_rate_limiter.py).
 """
 
 import asyncio
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -54,14 +55,25 @@ class ProviderSpeedBenchmarkService:
 
     # Tuning constants
     SAFETY_MARGIN: float = 0.75
-    BENCHMARK_TIMEOUT_S: float = 90.0  # 3b model on CPU needs ~60s prefill; 30s too tight
+    # Benchmark timeout: override via WARDEN_BENCHMARK_TIMEOUT env var.
+    # Default: 30s in CI (model is pre-warmed by ci.yml warmup step),
+    # 90s elsewhere (cold model on slow CPU may need ~60s for prefill).
+    _IS_CI: bool = os.environ.get("CI", "").lower() == "true" or os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+    BENCHMARK_TIMEOUT_S: float = float(
+        os.environ.get(
+            "WARDEN_BENCHMARK_TIMEOUT",
+            "30"
+            if (os.environ.get("CI", "").lower() == "true" or os.environ.get("GITHUB_ACTIONS", "").lower() == "true")
+            else "90",
+        )
+    )
     BENCHMARK_TOKEN_COUNT: int = 20
     CACHE_TTL_S: float = 300.0  # 5 minutes
     MAX_TOKENS_CEILING: int = 4000
     MAX_TOKENS_FLOOR: int = 150  # 3b @ ~3 tok/s = ~50s; fits within 120s read_timeout
 
     # Read timeout constants (derived from BENCHMARK_TIMEOUT_S)
-    READ_TIMEOUT_FLOOR_S: float = 30.0    # BENCHMARK_TIMEOUT_S / 3
+    READ_TIMEOUT_FLOOR_S: float = 30.0  # BENCHMARK_TIMEOUT_S / 3
     READ_TIMEOUT_DEFAULT_S: float = 120.0  # BENCHMARK_TIMEOUT_S + FLOOR
     READ_TIMEOUT_CEILING_S: float = 300.0  # 3 * BENCHMARK_TIMEOUT_S + FLOOR
     READ_TIMEOUT_SAFETY_MARGIN: float = 1.5
