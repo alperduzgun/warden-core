@@ -464,10 +464,20 @@ Return JSON:
             # Acquire rate limit before sending
             await self.rate_limiter.acquire_async(estimated_tokens)
 
+        from warden.llm.provider_speed_benchmark import ProviderSpeedBenchmarkService
+
+        _svc = ProviderSpeedBenchmarkService.get_instance()
+        # Phase 0 runs before the benchmark is calibrated by Phase 1 frames.
+        # Calling get_safe_max_tokens() here triggers the benchmark once and
+        # propagates _safe_num_predict so all subsequent Phase 0 calls are protected.
+        _max_tokens = await _svc.get_safe_max_tokens(self.llm, phase_timeout_s=90.0, default_max_tokens=400)
+        if hasattr(self.llm, "set_safe_num_predict"):
+            self.llm.set_safe_num_predict(_max_tokens)
+
         request = LlmRequest(
             system_prompt="You are an expert code analyzer. Analyze multiple files efficiently and accurately.",
             user_message=batch_prompt,
-            max_tokens=2000,
+            max_tokens=_max_tokens,
             temperature=0.0,
             use_fast_tier=True,  # Use local Qwen for batch analysis
         )
