@@ -474,10 +474,19 @@ Return strictly JSON:
 }}"""
 
         try:
+            from warden.llm.provider_speed_benchmark import ProviderSpeedBenchmarkService
+
+            _svc = ProviderSpeedBenchmarkService.get_instance()
+            # Phase 0 runs before the benchmark calibrates _safe_num_predict.
+            # Trigger it here so the cap is active for this and all subsequent calls.
+            _max_tokens = await _svc.get_safe_max_tokens(self.llm, phase_timeout_s=90.0, default_max_tokens=300)
+            if hasattr(self.llm, "set_safe_num_predict"):
+                self.llm.set_safe_num_predict(_max_tokens)
+
             request = LlmRequest(
                 system_prompt="You are an expert security and architectural analyzer. Help identify when developers bypass project-specific abstractions.",
                 user_message=prompt,
-                max_tokens=1000,
+                max_tokens=_max_tokens,
                 temperature=0.0,
             )
 
