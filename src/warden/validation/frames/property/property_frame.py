@@ -275,11 +275,14 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
 
             combined = "\n".join(parts)
 
+            # Use the safe token budget computed above for local providers; cloud gets 800.
+            _output_max = _safe if ProviderSpeedBenchmarkService._is_local_provider(self.llm_service) else 800
             request = LlmRequest(
                 system_prompt=self.BATCH_SYSTEM_PROMPT,
                 user_message=f"Analyze these {len(code_files)} files:\n\n{combined}",
                 temperature=0.1,
                 use_fast_tier=True,
+                max_tokens=_output_max,
             )
 
             response = await self.llm_service.send_with_tools_async(request)
@@ -559,16 +562,24 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
 
             client = self.llm_service
 
+            from warden.llm.provider_speed_benchmark import ProviderSpeedBenchmarkService, get_benchmark_service
             from warden.shared.utils.llm_context import BUDGET_PROPERTY, prepare_code_for_llm, resolve_token_budget
 
             budget = resolve_token_budget(BUDGET_PROPERTY, is_fast_tier=True)
             truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
+
+            if ProviderSpeedBenchmarkService._is_local_provider(client):
+                _svc = get_benchmark_service()
+                _output_max = await _svc.get_safe_max_tokens(client, phase_timeout_s=45.0, default_max_tokens=400)
+            else:
+                _output_max = 800
 
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
                 user_message=f"Analyze this {code_file.language} code:\n\n{truncated}",
                 temperature=0.1,
                 use_fast_tier=True,
+                max_tokens=_output_max,
             )
 
             response = await client.send_with_tools_async(request)
