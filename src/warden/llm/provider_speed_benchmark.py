@@ -386,7 +386,10 @@ class ProviderSpeedBenchmarkService:
                     provider=cache_key,
                     reason=reason,
                     fallback=default_max_tokens,
+                    note="error→config_fallback",
                 )
+                if hasattr(client, "set_safe_num_predict"):
+                    client.set_safe_num_predict(default_max_tokens)
                 return default_max_tokens
 
 
