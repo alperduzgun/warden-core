@@ -166,8 +166,13 @@ class LLMClassificationPhase(LLMPhaseBase):
                 prompt = self._format_classification_batch_user_prompt(
                     project_type, framework, batch_files, file_contexts, previous_issues
                 )
+                # In CI+Ollama: fast_clients is empty after factory.py #316 fix,
+                # so use_fast_tier=True is a no-op. As defence-in-depth, detect
+                # Ollama provider directly and skip fast tier routing.
+                _provider_raw = getattr(self.llm, "provider", "")
+                _is_ollama = "ollama" in str(_provider_raw).lower()
                 response = await self._call_llm_with_retry_async(
-                    system_prompt=system_prompt, user_prompt=prompt, use_fast_tier=True
+                    system_prompt=system_prompt, user_prompt=prompt, use_fast_tier=not _is_ollama
                 )
                 if not response or not response.content:
                     raise RuntimeError("LLM returned no content after retries")
