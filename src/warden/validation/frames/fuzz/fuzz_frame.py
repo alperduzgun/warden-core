@@ -17,6 +17,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
+from warden.shared.chunking import ChunkingConfig, ChunkingService
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
     FrameApplicability,
@@ -30,7 +31,7 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
-from warden.validation.domain.mixins import TaintAware
+from warden.validation.domain.mixins import ChunkingAware, TaintAware
 
 if TYPE_CHECKING:
     from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -38,7 +39,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class FuzzFrame(ValidationFrame, TaintAware):
+class FuzzFrame(ValidationFrame, TaintAware, ChunkingAware):
     """
     Fuzz testing validation frame.
 
@@ -64,6 +65,14 @@ class FuzzFrame(ValidationFrame, TaintAware):
     author = "Warden Team"
     applicability = [FrameApplicability.ALL]
     minimum_triage_lane: str = "middle_lane"  # Skip FAST files; LLM-heavy frame
+
+    # Chunk-based LLM analysis: fast tier only (0.5b ~30 tok/s -> 3x10s <= 45s)
+    # Smart tier (3b) leaves max_chunks_per_file=1 → falls through to truncation.
+    chunking_config: ChunkingConfig = ChunkingConfig(
+        max_chunk_tokens=700,  # matches BUDGET_FUZZ fast tier
+        max_chunks_per_file=3,
+        min_chunk_lines=5,
+    )
 
     # Fuzz patterns (language-agnostic)
     PATTERNS = {
@@ -190,10 +199,19 @@ Output must be a valid JSON object with the following structure:
                         )
                     )
 
-        # Run LLM analysis if available
+        # Run LLM analysis if available (chunk-aware)
         if hasattr(self, "llm_service") and self.llm_service:
-            llm_findings = await self._analyze_with_llm(code_file, file_taint_paths)
-            findings.extend(llm_findings)
+            service = ChunkingService()
+            if service.should_chunk(code_file, self.chunking_config):
+                ast_cache = getattr(context, "ast_cache", None) if context else None
+                chunks = service.chunk(code_file, ast_cache, self.chunking_config)
+                logger.info("fuzz_chunked_analysis", file=code_file.path, chunks=len(chunks))
+                for chunk in chunks:
+                    raw = await self._analyze_chunk_with_llm(chunk, file_taint_paths)
+                    findings.extend(service.reconcile(chunk, raw, self.frame_id))
+            else:
+                llm_findings = await self._analyze_with_llm(code_file, file_taint_paths)
+                findings.extend(llm_findings)
 
         # Determine status
         status = "passed" if len(findings) == 0 else "warning"
@@ -278,25 +296,62 @@ Output must be a valid JSON object with the following structure:
         return findings
 
     async def _analyze_with_llm(self, code_file: CodeFile, taint_paths: list | None = None) -> list[Finding]:
+        """Analyze full-file code with LLM (delegates to shared inner method)."""
+        logger.info("fuzz_llm_analysis_started", file=code_file.path)
+        return await self._analyze_with_llm_inner(code_file, taint_paths)
+
+    async def _analyze_chunk_with_llm(
+        self,
+        chunk: Any,
+        taint_paths: list | None = None,
+    ) -> list[Finding]:
+        """Analyze a single CodeChunk with the LLM.
+
+        The chunk content already has absolute line numbers prefixed (e.g.
+        ``"151: def foo():"``), so the LLM should report them as-is.
+        ChunkingService.reconcile() validates and corrects them afterwards.
         """
-        Analyze code using LLM for deeper fuzzing insights.
-        """
+        from warden.shared.chunking import ChunkingService
+
+        service = ChunkingService()
+        header = service.build_prompt_header(chunk)
+
+        # Build a temporary CodeFile-like object so _analyze_with_llm can
+        # be reused unchanged (it only accesses .content, .path, .language).
+        class _ChunkProxy:
+            def __init__(self, chunk_obj: Any, original_path: str) -> None:
+                self.content = chunk_obj.content
+                self.path = original_path
+                self.language = "python"  # default; chunk doesn't store language
+
+        proxy = _ChunkProxy(chunk, chunk.file_path)
+
+        # Inject chunk header into the taint context slot so it reaches the prompt
+        # without modifying _analyze_with_llm's signature.
+        original_taint = taint_paths or []
+        findings = await self._analyze_with_llm_inner(proxy, original_taint, extra_prefix=header)
+        return findings
+
+    async def _analyze_with_llm_inner(
+        self,
+        code_file: Any,
+        taint_paths: list | None = None,
+        extra_prefix: str = "",
+    ) -> list[Finding]:
+        """Core LLM call — used by both full-file and chunk paths."""
         findings: list[Finding] = []
         try:
             from warden.llm.types import AnalysisResult, LlmRequest
 
-            logger.info("fuzz_llm_analysis_started", file=code_file.path)
+            client = self.llm_service  # type: ignore[attr-defined]
 
-            client = self.llm_service
-
-            # Guard: skip LLM on slow local providers to avoid burning phase timeout.
-            # Mirrors the MIN_VIABLE check in llm_phase_base.analyze_with_llm_async().
             from warden.llm.provider_speed_benchmark import (
                 ProviderSpeedBenchmarkService,
                 get_benchmark_service,
             )
 
-            _FUZZ_MIN_VIABLE_TOKENS = 80  # Must match _MIN_VIABLE_TOKENS in llm_phase_base
+            _FUZZ_MIN_VIABLE_TOKENS = 80
+            _safe = 800
             if ProviderSpeedBenchmarkService._is_local_provider(client):
                 _svc = get_benchmark_service()
                 _safe = await _svc.get_safe_max_tokens(client, phase_timeout_s=120.0, default_max_tokens=800)
@@ -312,7 +367,6 @@ Output must be a valid JSON object with the following structure:
                     )
                     return findings
 
-            # Build taint context for LLM prompt
             taint_context = ""
             if taint_paths:
                 unsanitized = [p for p in taint_paths if not p.is_sanitized]
@@ -323,18 +377,19 @@ Output must be a valid JSON object with the following structure:
                             f"  - SOURCE: {tp.source.name} (line {tp.source.line})"
                             f" -> SINK: {tp.sink.name} [{tp.sink_type}] (line {tp.sink.line})\n"
                         )
-                    taint_context += "Focus fuzz testing on these input paths.\n"
 
             from warden.shared.utils.llm_context import BUDGET_FUZZ, prepare_code_for_llm, resolve_token_budget
 
             budget = resolve_token_budget(BUDGET_FUZZ)
+            # For chunk paths the content is already sized; for full-file paths
+            # prepare_code_for_llm applies the truncation cascade as before.
             truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
 
-            # Reuse the safe token budget computed above for local providers; cloud gets 800.
             _output_max = _safe if ProviderSpeedBenchmarkService._is_local_provider(client) else 800
+            user_message = f"{extra_prefix}Analyze this {code_file.language} code:\n\n{truncated}{taint_context}"
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
-                user_message=f"Analyze this {code_file.language} code:\n\n{truncated}{taint_context}",
+                user_message=user_message,
                 temperature=0.1,
                 max_tokens=_output_max,
             )
@@ -342,7 +397,6 @@ Output must be a valid JSON object with the following structure:
             response = await client.send_with_tools_async(request)
 
             if response.success and response.content:
-                # Handle markdown code blocks if present
                 content = response.content
                 if "```json" in content:
                     content = content.split("```json")[1].split("```")[0].strip()
@@ -350,7 +404,6 @@ Output must be a valid JSON object with the following structure:
                     content = content.split("```")[0].strip()
 
                 try:
-                    # from_json expects a dict; parse JSON string first if needed
                     import json as _json
 
                     parsed = _json.loads(content) if isinstance(content, str) else content
@@ -381,3 +434,8 @@ Output must be a valid JSON object with the following structure:
             logger.error("fuzz_llm_error", error=str(e))
 
         return findings
+
+    async def analyze_chunk_async(self, chunk: Any, context: Any) -> list[Any]:
+        """ChunkingAware implementation — analyze a single CodeChunk."""
+        taint_paths = self._taint_paths.get(chunk.file_path, [])
+        return await self._analyze_chunk_with_llm(chunk, taint_paths)

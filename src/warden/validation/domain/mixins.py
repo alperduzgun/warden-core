@@ -198,3 +198,48 @@ class CodeGraphAware(ABC):
                         imports, circular dependencies, and orphan files.
         """
         raise NotImplementedError
+
+
+class ChunkingAware(ABC):
+    """Opt-in mixin for chunk-based LLM analysis of large files.
+
+    Frames implementing this mixin receive AST-split CodeChunk objects
+    instead of the full file content.  The frame_runner multiplies the
+    per-file timeout by ``chunking_config.max_chunks_per_file`` so that
+    N sequential LLM calls can all complete within the budget.
+
+    Tier-aware ``max_chunks_per_file`` recommendation:
+    - fast tier (0.5b, ~30 tok/s): 3  — three 10 s calls fit inside 45 s
+    - smart tier (3b,  ~5 tok/s):  1  — disable chunking, use truncation
+
+    **Important:** Do NOT combine with ``BatchExecutable``.  Chunking
+    must be implemented inside ``execute_batch_async`` directly for batch
+    frames.
+
+    Example::
+
+        class MyFrame(ValidationFrame, ChunkingAware):
+            chunking_config = ChunkingConfig(max_chunk_tokens=700, max_chunks_per_file=3)
+
+            async def analyze_chunk_async(self, chunk, context):
+                # Analyze chunk.content, return list[Finding]
+                ...
+    """
+
+    @abstractmethod
+    async def analyze_chunk_async(self, chunk: Any, context: Any) -> list[Any]:
+        """Analyse a single CodeChunk and return raw findings.
+
+        Line numbers in the returned findings must reference the chunk's
+        numbered content (reconciliation is applied by ChunkingService
+        after this call returns).
+
+        Args:
+            chunk: CodeChunk with line-numbered content.
+            context: PipelineContext (may be None for standalone usage).
+
+        Returns:
+            List of Finding objects or dicts with raw (possibly relative)
+            line numbers.  ChunkingService.reconcile() will correct them.
+        """
+        raise NotImplementedError

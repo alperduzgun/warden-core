@@ -95,8 +95,8 @@ def calculate_per_file_timeout(
     return max(min_timeout, min(proportional, max_timeout))
 
 
-_BATCH_TIMEOUT_MIN_S: float = 300.0  # floor: 5 files × 60s minimum
-_BATCH_TIMEOUT_MAX_S: float = 1800.0  # ceiling: 5 files × 300s maximum
+_BATCH_TIMEOUT_MIN_S: float = 300.0  # floor: 5 files x 60s minimum
+_BATCH_TIMEOUT_MAX_S: float = 1800.0  # ceiling: 5 files x 300s maximum
 
 
 def calculate_batch_timeout(
@@ -610,6 +610,14 @@ class FrameRunner:
                         or os.environ.get("WARDEN_LLM_PROVIDER", "")
                     ).lower()
                     per_file_timeout = calculate_per_file_timeout(file_size, provider=_provider)
+
+                    # ChunkingAware frames make N sequential LLM calls per file;
+                    # extend the envelope so all chunks can complete in time.
+                    from warden.validation.domain.mixins import ChunkingAware
+
+                    if isinstance(frame, ChunkingAware):
+                        n = getattr(getattr(frame, "chunking_config", None), "max_chunks_per_file", 1)
+                        per_file_timeout = min(_FILE_TIMEOUT_MAX_S, per_file_timeout * max(1, n))
 
                     try:
                         coro = (
