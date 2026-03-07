@@ -718,10 +718,21 @@ You have deep understanding of:
 
 {prompt}"""
 
+        # Cap output tokens to fit within the per-file timeout (45s for local providers).
+        # 3000 was excessive: a 10-finding JSON response is ~226 tokens; at 5 tok/s that
+        # already hits the 45s boundary. Use get_safe_max_tokens for dynamic local sizing.
+        from warden.llm.provider_speed_benchmark import ProviderSpeedBenchmarkService, get_benchmark_service
+
+        if ProviderSpeedBenchmarkService._is_local_provider(self.llm):
+            _svc = get_benchmark_service()
+            _max_tokens = await _svc.get_safe_max_tokens(self.llm, phase_timeout_s=45.0, default_max_tokens=200)
+        else:
+            _max_tokens = 600
+
         request = LlmRequest(
             system_prompt=system_prompt,
             user_message=user_message,
-            max_tokens=3000,
+            max_tokens=_max_tokens,
             temperature=0.0,  # Deterministic for consistency
             use_fast_tier=True,
         )
