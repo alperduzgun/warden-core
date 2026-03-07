@@ -275,6 +275,9 @@ class FrameExecutor:
             async with semaphore:
                 return await self.frame_runner.execute_frame_with_rules_async(context, frame, code_files, pipeline)
 
+        # Build frame_id → frame mapping for error recovery
+        frame_map: dict[str, ValidationFrame] = {frame.frame_id: frame for frame in frames_to_execute}
+
         # Create named tasks so we can cancel remaining ones on blocker
         pending: set[asyncio.Task] = {
             asyncio.create_task(execute_with_semaphore_async(frame), name=frame.frame_id) for frame in frames_to_execute
@@ -286,11 +289,32 @@ class FrameExecutor:
             for task in done:
                 exc = task.exception()
                 if exc is not None:
+                    frame_id = task.get_name()
                     logger.warning(
                         "parallel_frame_task_error",
-                        frame_id=task.get_name(),
+                        frame_id=frame_id,
                         error=str(exc),
+                        error_type=type(exc).__name__,
                     )
+                    # Record a failed FrameResult so the aggregator accounts for it
+                    failed_frame = frame_map.get(frame_id)
+                    if failed_frame is not None:
+                        failed_result = FrameResult(
+                            frame_id=frame_id,
+                            frame_name=getattr(failed_frame, "name", frame_id),
+                            status="failed",
+                            duration=0.0,
+                            issues_found=0,
+                            is_blocker=False,
+                            findings=[],
+                            metadata={"error": str(exc), "error_type": type(exc).__name__},
+                        )
+                        context.frame_results[frame_id] = {
+                            "result": failed_result,
+                            "pre_violations": [],
+                            "post_violations": [],
+                        }
+                        pipeline.frames_failed += 1
                     continue
 
                 result: FrameResult | None = task.result()
