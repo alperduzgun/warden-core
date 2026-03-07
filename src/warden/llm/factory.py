@@ -173,9 +173,20 @@ def create_client(provider_or_config: LlmProvider | LlmConfiguration | str | Non
             )
     else:
         for fast_provider in getattr(config, "fast_tier_providers", [LlmProvider.OLLAMA]):
-            if fast_provider == provider and fast_provider not in _LOCAL_PROVIDERS:
-                # Cloud provider is already the smart_client — skip to avoid
-                # racing against the same API quota / rate limit.
+            _same_provider = fast_provider == provider
+            _same_model = config.fast_model == config.smart_model
+            if _same_provider and (fast_provider not in _LOCAL_PROVIDERS or _same_model):
+                # Skip when:
+                # 1. Cloud provider already is the smart_client (same API quota).
+                # 2. Local provider (e.g. Ollama) uses identical model for both tiers —
+                #    racing against the same instance/model wastes the fast_timeout
+                #    (20s CI / 30s local) before falling back to the same Ollama.
+                if _same_provider:
+                    _factory_logger.info(
+                        "fast_tier_skipped_same_provider",
+                        provider=fast_provider.value,
+                        reason="identical_model" if _same_model else "cloud_quota",
+                    )
                 continue
             try:
                 fast_cfg = config.get_provider_config(fast_provider)
