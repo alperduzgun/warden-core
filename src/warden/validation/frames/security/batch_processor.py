@@ -161,6 +161,7 @@ Return JSON array with verification results:
         request = LlmRequest(
             user_message=full_prompt,
             system_prompt="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives.",
+            max_tokens=600,  # JSON array for 10 findings ~200-400 tok; cap prevents Ollama over-allocation
         )
         response = await llm_service.send_with_tools_async(request)
 
