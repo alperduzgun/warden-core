@@ -899,10 +899,22 @@ Code:
 
 Identify external dependencies and missing resilience patterns. Return JSON."""
 
+            # Cap output tokens to fit within self._timeout at local provider throughput.
+            from warden.llm.provider_speed_benchmark import ProviderSpeedBenchmarkService, get_benchmark_service
+
+            if ProviderSpeedBenchmarkService._is_local_provider(self.llm_service):
+                _svc = get_benchmark_service()
+                _safe_tokens = await _svc.get_safe_max_tokens(
+                    self.llm_service, phase_timeout_s=self._timeout, default_max_tokens=200
+                )
+            else:
+                _safe_tokens = 800
+
             request = LlmRequest(
                 system_prompt=CHAOS_SYSTEM_PROMPT,
                 user_message=user_prompt,
                 temperature=0.0,  # Idempotent
+                max_tokens=_safe_tokens,
             )
 
             # Call LLM with timeout
