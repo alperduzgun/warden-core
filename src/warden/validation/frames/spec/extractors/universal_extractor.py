@@ -519,6 +519,7 @@ Extract details.
             system_prompt=get_tool_enhanced_prompt("You are a contract extraction specialist."),
             user_message=prompt,
             temperature=0.0,
+            max_tokens=250,  # Contract JSON ~100-200 tok; fits within wait_for(60s) at 5 tok/s CPU
         )
 
         try:

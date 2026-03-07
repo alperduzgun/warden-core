@@ -328,10 +328,13 @@ Output must be a valid JSON object with the following structure:
             budget = resolve_token_budget(BUDGET_FUZZ)
             truncated = prepare_code_for_llm(code_file.content, token_budget=budget)
 
+            # Reuse the safe token budget computed above for local providers; cloud gets 800.
+            _output_max = _safe if ProviderSpeedBenchmarkService._is_local_provider(client) else 800
             request = LlmRequest(
                 system_prompt=self.SYSTEM_PROMPT,
                 user_message=f"Analyze this {code_file.language} code:\n\n{truncated}{taint_context}",
                 temperature=0.1,
+                max_tokens=_output_max,
             )
 
             response = await client.send_with_tools_async(request)
