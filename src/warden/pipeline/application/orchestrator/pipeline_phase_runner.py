@@ -179,6 +179,22 @@ class PipelinePhaseRunner:
                 skipped_phases=["fortification", "cleaning", "issue_validation"],
             )
 
+            # For CPU-only local providers (Ollama), parallel frame execution
+            # provides no throughput benefit — Ollama serialises requests internally.
+            # Switch to SEQUENTIAL so asyncio.wait_for timeouts start only when
+            # a frame's requests are actually in flight, not while queued.
+            _provider = self._detect_primary_provider()
+            if "ollama" in _provider:
+                from warden.pipeline.domain.enums import ExecutionStrategy
+
+                self.config.strategy = ExecutionStrategy.SEQUENTIAL
+                self.config.parallel_limit = 1
+                logger.info(
+                    "ci_ollama_sequential_mode",
+                    provider=_provider,
+                    reason="CPU-only Ollama serialises requests; parallel frames add no throughput",
+                )
+
         # Phase 0: PRE-ANALYSIS
         context.current_phase = "Pre-Analysis"
         if self._progress_callback:
