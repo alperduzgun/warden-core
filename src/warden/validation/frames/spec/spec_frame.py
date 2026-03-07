@@ -476,7 +476,7 @@ class SpecFrame(ValidationFrame, Cleanable, ProjectContextAware):
                         # Create warning finding for timeout
                         timeout_finding = Finding(
                             id=f"{self.frame_id}-timeout-{consumer.name}-{provider.name}",
-                            severity="warning",
+                            severity="medium",
                             message=f"Gap analysis timed out comparing {consumer.name} vs {provider.name}",
                             location="project-level",
                             detail=f"Analysis exceeded {gap_analysis_timeout}s timeout. "
