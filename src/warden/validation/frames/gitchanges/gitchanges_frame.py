@@ -301,7 +301,7 @@ class GitChangesFrame(ValidationFrame):
             # For now, we just report that the line was changed
             finding = Finding(
                 id=f"{self.frame_id}-line-{line_num}",
-                severity="info",
+                severity="low",
                 message=f"Line {line_num} was added or modified",
                 location=f"{code_file.path}:{line_num}",
                 detail="This line was detected as changed in git diff",
@@ -313,7 +313,7 @@ class GitChangesFrame(ValidationFrame):
         if added_lines:
             summary_finding = Finding(
                 id=f"{self.frame_id}-summary",
-                severity="info",
+                severity="low",
                 message=f"Git changes detected: {len(added_lines)} lines added/modified",
                 location=f"{code_file.path}:1",
                 detail=self._create_summary_detail(file_diff, added_lines),

@@ -15,18 +15,20 @@ from unittest.mock import Mock, patch
 from warden.validation.domain.frame import CodeFile, FrameResult
 import sys
 
+
 @pytest.fixture(scope="module")
 def gitchanges_components():
     from warden.validation.infrastructure.frame_registry import FrameRegistry
+
     registry = FrameRegistry()
     registry.discover_all()
     frame_cls = registry.get_frame_by_id("gitchanges")
     if not frame_cls:
         pytest.skip("GitChangesFrame not found")
-    
+
     # Extract helper classes from the module where GitChangesFrame is defined
     # or from the git_diff_parser module directly (since we used absolute import)
-    
+
     if "git_diff_parser" in sys.modules:
         parser_module = sys.modules["git_diff_parser"]
         return {
@@ -35,7 +37,7 @@ def gitchanges_components():
             "FileDiff": getattr(parser_module, "FileDiff"),
             "DiffHunk": getattr(parser_module, "DiffHunk"),
         }
-    
+
     # Fallback to frame module if strict isolation used
     module = sys.modules[frame_cls.__module__]
     return {
@@ -401,7 +403,7 @@ class TestGitChangesFrame:
 
         # Should have summary + individual line findings
         assert len(findings) > 0
-        assert findings[0].severity == "info"
+        assert findings[0].severity == "low"
 
     def test_get_git_diff_staged_mode(self):
         """Test git diff command for staged mode."""
@@ -435,9 +437,7 @@ class TestGitChangesFrame:
 
     def test_get_git_diff_branch_mode(self):
         """Test git diff command for branch mode."""
-        frame = self.GitChangesFrame(
-            config={"compare_mode": "branch", "base_branch": "develop"}
-        )
+        frame = self.GitChangesFrame(config={"compare_mode": "branch", "base_branch": "develop"})
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout="diff output")
@@ -489,7 +489,6 @@ class TestGitChangesFrameIntegration:
     @pytest.fixture(autouse=True)
     def setup(self, gitchanges_components):
         self.GitChangesFrame = gitchanges_components["GitChangesFrame"]
-
 
     @pytest.mark.asyncio
     async def test_full_workflow_with_real_diff(self):
