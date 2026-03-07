@@ -409,7 +409,7 @@ class FrameRunner:
 
         # Inject taint paths into TaintAware frames
         if isinstance(frame, TaintAware):
-            if hasattr(context, "taint_paths") and context.taint_paths:
+            if hasattr(context, "taint_paths") and context.taint_paths is not None:
                 try:
                     frame.set_taint_paths(context.taint_paths)
                     logger.debug(
