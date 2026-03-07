@@ -119,26 +119,27 @@ llm:
   model: qwen2.5-coder:3b
   timeout: 300
   smart_model: qwen2.5-coder:3b
-  fast_model: qwen2.5-coder:3b
+  fast_model: qwen2.5-coder:0.5b
   token_budgets:
-    # CI 0.5b CPU: ~20 tok/s. Total prompt = code_budget + ~300 instruction tokens.
-    # Target: total prompt ≤ 700 tokens → 35s prefill → well within 60s WARDEN_FILE_TIMEOUT_MIN.
-    security: {deep: 400, fast: 150}
-    resilience: {deep: 400, fast: 150}
-    property: {deep: 300, fast: 100}
-    fuzz: {deep: 300, fast: 100}
-    orphan: {deep: 500, fast: 200}
-    fortification: {deep: 400, fast: 150}
-    triage: {deep: 400, fast: 300}
-    classification: {deep: 400, fast: 300}
-    analysis: {deep: 200, fast: 100}
+    # Two-tier (OASIS approach):
+    #   fast tier  → 0.5b @ ~30 tok/s CPU → generous budget, quick turnaround
+    #   smart tier → 3b   @ ~5  tok/s CPU → conservative, only for deep analysis
+    security: {deep: 400, fast: 300}
+    resilience: {deep: 400, fast: 300}
+    property: {deep: 300, fast: 200}
+    fuzz: {deep: 300, fast: 200}
+    orphan: {deep: 500, fast: 400}
+    fortification: {deep: 400, fast: 300}
+    triage: {deep: 400, fast: 400}
+    classification: {deep: 400, fast: 400}
+    analysis: {deep: 200, fast: 200}
   ci:
     provider: ollama
     smart_model: qwen2.5-coder:3b
     model: qwen2.5-coder:3b
     fast_tier_providers:
     - ollama
-    fast_model: qwen2.5-coder:3b
+    fast_model: qwen2.5-coder:0.5b
 project:
   description: Warden configuration for warden-core
   detected_at: '2025-12-24T16:35:53.922859'
@@ -176,7 +177,7 @@ settings:
     use_llm: false
   classification_config:
     enabled: true
-    model: qwen2.5-coder:3b
+    model: qwen2.5-coder:0.5b
     batch_size: 1
   timeout: 3600
 custom_rules:

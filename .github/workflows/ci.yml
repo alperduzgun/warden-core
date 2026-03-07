@@ -192,8 +192,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.ollama
-          key: ollama-models-${{ runner.os }}-qwen2.5-coder-3b
+          key: ollama-models-${{ runner.os }}-qwen2.5-coder-two-tier-v1
           restore-keys: |
+            ollama-models-${{ runner.os }}-qwen2.5-coder-two-tier-
             ollama-models-${{ runner.os }}-
 
       - name: Set up Node.js
@@ -230,7 +231,7 @@ jobs:
         env:
           # Server-side vars must be in the *serve* process environment,
           # not the scan step — Ollama reads these from its own process via os.Getenv().
-          OLLAMA_MAX_LOADED_MODELS: "1"
+          OLLAMA_MAX_LOADED_MODELS: "2"
           OLLAMA_FLASH_ATTENTION: "1"
           OLLAMA_CONTEXT_LENGTH: "4096"   # prompt ~2K + output 800 → 4K safe; default 32K wastes 8× RAM
         run: |
@@ -242,22 +243,31 @@ jobs:
             echo "::error::Ollama failed to start after 30s"
             exit 1
           fi
+          # Two-tier model setup (OASIS approach):
+          #   fast tier → qwen2.5-coder:0.5b (~30 tok/s CPU, benchmark safe)
+          #   smart tier → qwen2.5-coder:3b  (~5 tok/s CPU, deep analysis only)
+          if ollama list | grep -q "qwen2.5-coder:0.5b"; then
+            echo "Fast model (0.5b) already cached."
+          else
+            ollama pull qwen2.5-coder:0.5b
+          fi
           if ollama list | grep -q "qwen2.5-coder:3b"; then
-            echo "Model already cached."
+            echo "Smart model (3b) already cached."
           else
             ollama pull qwen2.5-coder:3b
           fi
-          # Warm up inference pipeline, not just model weights.
-          # Empty prompt loads weights into RAM but does NOT initialize LLAMA.CPP
-          # thread pools, KV cache, or computation graphs. The first real inference
-          # call (benchmark probe) would then bear the cold-start cost and exceed
-          # the benchmark timeout → benchmark_failed → tiny fallback budget.
-          # Generating 1 token here fully initialises the execution engine so the
-          # benchmark probe runs warm. keep_alive=-1 keeps the model resident.
+          # Warm up both models so they stay resident (OLLAMA_MAX_LOADED_MODELS=2).
+          # The benchmark probes the fast model first — it must be fully initialised
+          # (LLAMA.CPP thread pools, KV cache) or the benchmark times out → fallback
+          # budget=60 → min_viable=80 → all LLM calls skipped.
+          # keep_alive=-1 keeps both models in memory for the entire scan.
+          curl -s http://localhost:11434/api/generate \
+            -d '{"model":"qwen2.5-coder:0.5b","prompt":"hi","options":{"num_predict":1},"keep_alive":-1}' \
+            -o /dev/null
           curl -s http://localhost:11434/api/generate \
             -d '{"model":"qwen2.5-coder:3b","prompt":"hi","options":{"num_predict":1},"keep_alive":-1}' \
             -o /dev/null
-          echo "Ollama ready."
+          echo "Ollama ready (fast: 0.5b, smart: 3b)."
 
       - name: Run Warden Scan
         env:
