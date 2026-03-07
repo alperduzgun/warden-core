@@ -311,6 +311,8 @@ class ProviderSpeedBenchmarkService:
                     age_s=round(age, 1),
                     cached_max_tokens=safe,
                 )
+                if hasattr(client, "set_safe_num_predict"):
+                    client.set_safe_num_predict(safe)
                 return safe
 
         # Slow path: run benchmark (serialised per service instance)
@@ -328,7 +330,12 @@ class ProviderSpeedBenchmarkService:
                     timeout=self.BENCHMARK_TIMEOUT_S,
                 )
                 self._cache[cache_key] = (result, time.monotonic())
-                return self._calculate(result.tok_per_sec, phase_timeout_s)
+                safe = self._calculate(result.tok_per_sec, phase_timeout_s)
+                # Propagate the phase-specific cap to the client so send_async()
+                # enforces it even when callers omit max_tokens in LlmRequest.
+                if hasattr(client, "set_safe_num_predict"):
+                    client.set_safe_num_predict(safe)
+                return safe
 
             except Exception as exc:
                 # asyncio.TimeoutError.__str__() returns '' — show type name instead.
@@ -370,6 +377,8 @@ class ProviderSpeedBenchmarkService:
                         fallback=conservative,
                         note="timeout→conservative_budget",
                     )
+                    if hasattr(client, "set_safe_num_predict"):
+                        client.set_safe_num_predict(conservative)
                     return conservative
 
                 logger.warning(

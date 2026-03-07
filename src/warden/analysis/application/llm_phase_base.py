@@ -45,6 +45,24 @@ def _apply_read_timeout(client: Any, timeout_s: float) -> None:
             fast.set_read_timeout(timeout_s)
 
 
+def _apply_safe_num_predict(client: Any, tokens: int) -> None:
+    """Propagate a benchmark-derived output-token cap to all reachable OllamaClient instances.
+
+    Mirrors _apply_read_timeout traversal so the cap reaches Ollama whether it
+    is used as a direct client, a smart-tier client, or a fast-tier client inside
+    an OrchestratedLlmClient.
+    """
+    if hasattr(client, "set_safe_num_predict"):
+        client.set_safe_num_predict(tokens)
+        return
+    smart = getattr(client, "smart_client", None)
+    if smart is not None and hasattr(smart, "set_safe_num_predict"):
+        smart.set_safe_num_predict(tokens)
+    for fast in getattr(client, "fast_clients", []):
+        if hasattr(fast, "set_safe_num_predict"):
+            fast.set_safe_num_predict(tokens)
+
+
 @dataclass
 class LLMPhaseConfig:
     """Configuration for LLM-enhanced phase."""
@@ -556,6 +574,9 @@ class LLMPhaseBase(ABC):
             cache_key = svc._get_cache_key(self.llm)
             read_timeout = svc.get_safe_read_timeout(cache_key, estimated_tokens)
             _apply_read_timeout(self.llm, read_timeout)
+            # Also propagate the phase-specific token cap so any LlmRequest that
+            # omits max_tokens is silently protected inside OllamaClient.send_async().
+            _apply_safe_num_predict(self.llm, effective_max_tokens)
 
             # If the conservative budget is too small to produce a useful response,
             # bail out immediately instead of burning self.config.max_retries × timeout
