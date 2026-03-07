@@ -5,6 +5,7 @@ Adds try-except blocks, error handling, and validation to code.
 Detects risky operations (async, file I/O, network, database) and wraps them.
 """
 
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -97,8 +98,6 @@ class ErrorHandlingFortifier(BaseFortifier):
             )
             return FortificationResult(
                 success=True,
-                file_path=code_file.path,
-                issues_found=0,
                 suggestions=[],
                 summary="No error handling issues found",
                 fortifier_name=self.name,
@@ -113,12 +112,13 @@ class ErrorHandlingFortifier(BaseFortifier):
         # Create basic suggestions from static analysis
         fortification_suggestions = [
             Fortification(
-                issue_line=s.line_number,
-                issue_type=s.type,
-                description=s.description,
-                suggestion=f"Wrap this {s.type} in a try-except block to handle potential errors",
-                severity=s.severity,
-                code_snippet=self._get_code_snippet(code_file.content, s.line_number),
+                id=str(uuid.uuid4()),
+                title=f"{s.type}: {s.description}",
+                detail=f"Wrap this {s.type} in a try-except block to handle potential errors",
+                line_number=s.line_number,
+                severity=s.severity.lower(),
+                suggested_code=self._get_code_snippet(code_file.content, s.line_number),
+                file_path=code_file.path,
             )
             for s in suggestions
         ]
@@ -145,8 +145,6 @@ class ErrorHandlingFortifier(BaseFortifier):
 
         return FortificationResult(
             success=True,
-            file_path=code_file.path,
-            issues_found=len(suggestions),
             suggestions=fortification_suggestions,
             summary=f"Found {len(suggestions)} error handling issues",
             fortifier_name=self.name,
@@ -303,7 +301,7 @@ class ErrorHandlingFortifier(BaseFortifier):
             return suggestions
 
         # Build prompt for LLM (asking for suggestions, not code!)
-        issues_list = "\n".join(f"- Line {s.issue_line}: {s.description}" for s in suggestions)
+        issues_list = "\n".join(f"- Line {s.line_number}: {s.detail}" for s in suggestions)
 
         prompt = f"""You are a code safety expert. For each issue below, provide a specific suggestion on how to fix it.
 
@@ -338,15 +336,16 @@ Format: JSON array of objects with keys: issueLine (int), suggestion (string)"""
 
             enhanced = []
             for sug in suggestions:
-                llm_text = llm_map.get(sug.issue_line, sug.suggestion)
+                llm_text = llm_map.get(sug.line_number, sug.detail)
                 enhanced.append(
                     Fortification(
-                        issue_line=sug.issue_line,
-                        issue_type=sug.issue_type,
-                        description=sug.description,
-                        suggestion=llm_text,  # Enhanced by LLM
+                        id=sug.id,
+                        title=sug.title,
+                        detail=llm_text,  # Enhanced by LLM
+                        line_number=sug.line_number,
                         severity=sug.severity,
-                        code_snippet=sug.code_snippet,
+                        suggested_code=sug.suggested_code,
+                        file_path=sug.file_path,
                     )
                 )
 
