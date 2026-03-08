@@ -173,13 +173,15 @@ jobs:
           restore-keys: |
             warden-storage-chromadb1-${{ runner.os }}-
 
+      # NOTE: No restore-keys here — stale triage/findings data from a different
+      # commit causes warden to skip files it has "already seen", producing the
+      # "no files to scan" outcome.  We only restore on an exact SHA match (i.e.
+      # re-running the same job), and always start fresh for new commits.
       - name: Cache Warden Triage & Findings
         uses: actions/cache@v5
         with:
           path: .warden/cache/
           key: warden-cache-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            warden-cache-${{ runner.os }}-
 
       - name: Cache Ollama binary
         id: ollama-binary-cache
@@ -292,7 +294,7 @@ jobs:
             # --- FULL SCAN (manual trigger) ---
             echo "Manual dispatch — running full LLM scan on src/warden/ ..."
             set +e
-            warden scan src/warden --level standard --ci --format sarif --output warden.sarif
+            warden scan src/warden --level standard --ci --force --format sarif --output warden.sarif
             EXIT_CODE=$?
             set -e
             if [ $EXIT_CODE -eq 2 ]; then
@@ -344,7 +346,7 @@ jobs:
 
             set +e
             FILES=$(echo "$CHANGED_FILES" | tr '\n' ' ')
-            warden scan $FILES --level standard --ci --format sarif --output warden.sarif
+            warden scan $FILES --level standard --ci --force --format sarif --output warden.sarif
             EXIT_CODE=$?
             set -e
 
