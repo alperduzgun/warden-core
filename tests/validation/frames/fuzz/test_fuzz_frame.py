@@ -5,6 +5,7 @@ Tests the fuzz testing frame that detects missing edge case handling.
 """
 
 import pytest
+
 from warden.validation.domain.frame import CodeFile
 
 
@@ -12,6 +13,7 @@ from warden.validation.domain.frame import CodeFile
 def FuzzFrame():
     """Load FuzzFrame from registry."""
     from warden.validation.infrastructure.frame_registry import FrameRegistry
+
     registry = FrameRegistry()
     registry.discover_all()
     cls = registry.get_frame_by_id("fuzz")
@@ -35,10 +37,10 @@ async def test_fuzz_frame_initialization(FuzzFrame):
 @pytest.mark.asyncio
 async def test_fuzz_frame_detects_array_access_no_bounds(FuzzFrame):
     """Test detection of array access without bounds checking."""
-    code = '''
+    code = """
 def get_item(arr, index):
     return arr[index]  # BAD: No bounds checking
-'''
+"""
 
     code_file = CodeFile(
         path="array.py",
@@ -57,11 +59,11 @@ def get_item(arr, index):
 @pytest.mark.asyncio
 async def test_fuzz_frame_detects_type_conversion_no_validation(FuzzFrame):
     """Test detection of type conversion without validation."""
-    code = '''
+    code = """
 def process_input(user_input):
     age = int(user_input)  # BAD: No validation, can raise ValueError
     return age * 2
-'''
+"""
 
     code_file = CodeFile(
         path="converter.py",
@@ -78,8 +80,7 @@ def process_input(user_input):
 
     # Should have type conversion finding
     conversion_findings = [
-        f for f in result.findings
-        if "conversion" in f.message.lower() or "validation" in f.message.lower()
+        f for f in result.findings if "conversion" in f.message.lower() or "validation" in f.message.lower()
     ]
     assert len(conversion_findings) > 0
 
@@ -87,11 +88,11 @@ def process_input(user_input):
 @pytest.mark.asyncio
 async def test_fuzz_frame_detects_string_operations_no_empty_check(FuzzFrame):
     """Test detection of string operations without empty checks."""
-    code = '''
+    code = """
 def process_name(name):
     parts = name.split()  # BAD: No empty string check
     return parts[0].upper()
-'''
+"""
 
     code_file = CodeFile(
         path="string_ops.py",
@@ -106,10 +107,7 @@ def process_name(name):
     assert result.issues_found > 0
 
     # Should have string operation finding
-    string_findings = [
-        f for f in result.findings
-        if "string" in f.message.lower() or "empty" in f.message.lower()
-    ]
+    string_findings = [f for f in result.findings if "string" in f.message.lower() or "empty" in f.message.lower()]
     assert len(string_findings) > 0
 
 
@@ -150,10 +148,10 @@ def safe_get_item(arr, index):
 @pytest.mark.asyncio
 async def test_fuzz_frame_result_structure(FuzzFrame):
     """Test result has correct structure for Panel compatibility."""
-    code = '''
+    code = """
 def convert(x):
     return int(x)  # No validation
-'''
+"""
 
     code_file = CodeFile(
         path="test.py",
@@ -218,11 +216,11 @@ async def test_fuzz_frame_handles_empty_file(FuzzFrame):
 @pytest.mark.asyncio
 async def test_fuzz_frame_handles_comments_only(FuzzFrame):
     """Test frame handles files with only comments."""
-    code = '''
+    code = """
 # This is a comment
 # TODO: Implement function
 # Another comment
-'''
+"""
 
     code_file = CodeFile(
         path="comments.py",
@@ -240,14 +238,14 @@ async def test_fuzz_frame_handles_comments_only(FuzzFrame):
 @pytest.mark.asyncio
 async def test_fuzz_frame_multiple_issues(FuzzFrame):
     """Test frame detects multiple fuzz issues in same file."""
-    code = '''
+    code = """
 def bad_code(arr, index, user_input):
     # Multiple issues:
     value = arr[index]  # No bounds check
     number = int(user_input)  # No validation
     name = user_input.split()[0]  # No empty check
     return value + number
-'''
+"""
 
     code_file = CodeFile(
         path="multiple_issues.py",
@@ -264,12 +262,143 @@ def bad_code(arr, index, user_input):
 
 
 @pytest.mark.asyncio
+async def test_execute_async_uses_chunking_for_large_file(FuzzFrame):
+    """Large files trigger chunk-based LLM analysis (N calls, not 1)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    # Build a large enough file to exceed chunking_config.max_chunk_tokens
+    large_content = "def func_x(a, b):\n    return int(a) + int(b)\n\n" * 100
+
+    code_file = CodeFile(path="large.py", content=large_content, language="python")
+
+    frame = FuzzFrame()
+
+    # Mock LLM service that returns a minimal valid response
+    mock_llm = MagicMock()
+    from warden.llm.types import LlmResponse
+
+    mock_response = LlmResponse(
+        content='{"score": 7, "confidence": 0.8, "summary": "ok", "issues": []}',
+        success=True,
+        provider=None,
+        model="test",
+        prompt_tokens=10,
+        completion_tokens=5,
+        total_tokens=15,
+    )
+    mock_llm.send_with_tools_async = AsyncMock(return_value=mock_response)
+
+    # Set llm_service directly (ValidationFrame stores it as instance attribute)
+    frame.llm_service = mock_llm
+
+    with patch(
+        "warden.llm.provider_speed_benchmark.ProviderSpeedBenchmarkService._is_local_provider",
+        return_value=False,
+    ):
+        result = await frame.execute_async(code_file)
+
+    # The LLM must have been called more than once (chunking path)
+    assert mock_llm.send_with_tools_async.call_count >= 2
+    assert result.status in ["passed", "warning"]
+
+
+@pytest.mark.asyncio
+async def test_execute_async_skips_chunking_for_small_file(FuzzFrame):
+    """Small files use the single-call LLM path (no chunking)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    small_content = "def convert(x):\n    return int(x)\n"
+    code_file = CodeFile(path="small.py", content=small_content, language="python")
+
+    frame = FuzzFrame()
+
+    from warden.llm.types import LlmResponse
+
+    mock_llm = MagicMock()
+    mock_response = LlmResponse(
+        content='{"score": 7, "confidence": 0.8, "summary": "ok", "issues": []}',
+        success=True,
+        provider=None,
+        model="test",
+        prompt_tokens=10,
+        completion_tokens=5,
+        total_tokens=15,
+    )
+    mock_llm.send_with_tools_async = AsyncMock(return_value=mock_response)
+
+    frame.llm_service = mock_llm
+
+    with patch(
+        "warden.llm.provider_speed_benchmark.ProviderSpeedBenchmarkService._is_local_provider",
+        return_value=False,
+    ):
+        result = await frame.execute_async(code_file)
+
+    # Small file → single LLM call (full-file path)
+    assert mock_llm.send_with_tools_async.call_count == 1
+    assert result.status in ["passed", "warning"]
+
+
+@pytest.mark.asyncio
+async def test_analyze_chunk_async_returns_findings(FuzzFrame):
+    """analyze_chunk_async delegates correctly and returns findings list."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from warden.shared.chunking.models import CodeChunk
+
+    chunk = CodeChunk(
+        content="10: def foo(x):\n11:     return int(x)\n",
+        start_line=10,
+        end_line=11,
+        file_path="app.py",
+        chunk_index=0,
+        total_chunks=2,
+        chunk_type="function",
+    )
+
+    frame = FuzzFrame()
+
+    from warden.llm.types import LlmResponse
+
+    mock_llm = MagicMock()
+    issue_json = (
+        '{"score": 5, "confidence": 0.9, "summary": "unsafe",'
+        ' "issues": [{"severity": "medium", "category": "robustness",'
+        ' "title": "No validation", "description": "missing", "line": 10,'
+        ' "confidence": 0.9, "evidenceQuote": "int(x)", "codeSnippet": "int(x)"}]}'
+    )
+    mock_response = LlmResponse(
+        content=issue_json,
+        success=True,
+        provider=None,
+        model="test",
+        prompt_tokens=10,
+        completion_tokens=5,
+        total_tokens=15,
+    )
+    mock_llm.send_with_tools_async = AsyncMock(return_value=mock_response)
+
+    frame.llm_service = mock_llm
+
+    with patch(
+        "warden.llm.provider_speed_benchmark.ProviderSpeedBenchmarkService._is_local_provider",
+        return_value=False,
+    ):
+        findings = await frame.analyze_chunk_async(chunk, context=None)
+
+    assert isinstance(findings, list)
+    # Should have 1 finding matching our mocked response
+    assert len(findings) == 1
+    assert findings[0].severity == "medium"
+
+
+@pytest.mark.asyncio
 async def test_fuzz_frame_finding_has_location(FuzzFrame):
     """Test findings include location information."""
-    code = '''
+    code = """
 def convert(x):
     return int(x)
-'''
+"""
 
     code_file = CodeFile(
         path="test.py",

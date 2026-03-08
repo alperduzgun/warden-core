@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
 from warden.pipeline.application.orchestrator.result_aggregator import normalize_finding_to_dict
+from warden.shared.chunking import ChunkingConfig, ChunkingService
 from warden.shared.infrastructure.logging import get_logger
 from warden.validation.domain.enums import (
     FrameApplicability,
@@ -38,7 +39,7 @@ from warden.validation.domain.frame import (
     FrameResult,
     ValidationFrame,
 )
-from warden.validation.domain.mixins import TaintAware
+from warden.validation.domain.mixins import ChunkingAware, TaintAware
 
 if TYPE_CHECKING:
     from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -242,7 +243,7 @@ CHAOS_SYSTEM_PROMPT = get_tool_enhanced_prompt(_CHAOS_SYSTEM_PROMPT_BASE)
 # =============================================================================
 
 
-class ResilienceFrame(ValidationFrame, TaintAware):
+class ResilienceFrame(ValidationFrame, TaintAware, ChunkingAware):
     """
     Chaos Engineering Analysis Frame.
 
@@ -283,6 +284,14 @@ class ResilienceFrame(ValidationFrame, TaintAware):
     _llm_failure_count: int = 0
     _llm_circuit_opened_at: float | None = None
 
+    # Chunk-based LLM analysis (large-file support)
+    # max_chunk_tokens ≈ BUDGET_RESILIENCE; max_chunks_per_file=3 fits in 45 s Ollama budget.
+    chunking_config: ChunkingConfig = ChunkingConfig(
+        max_chunk_tokens=800,
+        max_chunks_per_file=3,
+        min_chunk_lines=10,  # chaos analysis needs enough context per unit
+    )
+
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize with optional config. Fail-fast on invalid config."""
         super().__init__(config)
@@ -298,6 +307,37 @@ class ResilienceFrame(ValidationFrame, TaintAware):
     def set_taint_paths(self, taint_paths: dict[str, list]) -> None:
         """TaintAware implementation — receive shared taint analysis results."""
         self._taint_paths = taint_paths
+
+    async def analyze_chunk_async(self, chunk: Any, context: Any) -> list[Any]:
+        """ChunkingAware implementation — analyze a single CodeChunk for resilience issues.
+
+        Creates a minimal CodeFile proxy from the chunk so that _analyze_with_llm
+        can be reused without modification.  A minimal ChaosContext is extracted
+        inline from the chunk content (imports + calls heuristic).
+        """
+
+        # Build a minimal CodeFile-like proxy from the chunk
+        class _ChunkProxy:
+            def __init__(self, chunk_obj: Any) -> None:
+                self.content = chunk_obj.content
+                self.path = chunk_obj.file_path
+                self.language = "python"
+                self.size_bytes = len(chunk_obj.content.encode())
+                self.line_count = chunk_obj.end_line - chunk_obj.start_line + 1
+                self.metadata = None
+
+        proxy = _ChunkProxy(chunk)
+
+        # Inline ChaosContext extraction for the chunk content (fast path)
+        chaos_ctx = await self._extract_structure(proxy)  # type: ignore[arg-type]
+
+        # Prepend chunk header so LLM knows the line range
+        from warden.shared.chunking import ChunkingService
+
+        header = ChunkingService().build_prompt_header(chunk)
+        proxy.content = header + proxy.content  # type: ignore[attr-defined]
+
+        return await self._analyze_with_llm(proxy, chaos_ctx)  # type: ignore[arg-type]
 
     async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
@@ -342,8 +382,17 @@ class ResilienceFrame(ValidationFrame, TaintAware):
 
             # STEP 4: LLM analysis (expensive, only if LLM available)
             if self._has_llm_service():
-                llm_findings = await self._analyze_with_llm(code_file, context, related_patterns)
-                findings.extend(llm_findings)
+                svc = ChunkingService()
+                if svc.should_chunk(code_file, self.chunking_config):
+                    ast_cache = getattr(self._pipeline_context, "ast_cache", None) if self._pipeline_context else None
+                    chunks = svc.chunk(code_file, ast_cache, self.chunking_config)
+                    logger.info("resilience_chunked_analysis", file=code_file.path, chunks=len(chunks))
+                    for chunk in chunks:
+                        raw = await self.analyze_chunk_async(chunk, self._pipeline_context)
+                        findings.extend(svc.reconcile(chunk, raw, self.frame_id))
+                else:
+                    llm_findings = await self._analyze_with_llm(code_file, context, related_patterns)
+                    findings.extend(llm_findings)
             else:
                 # Fallback: basic pattern detection without LLM
                 basic_findings = self._basic_analysis(code_file, context)

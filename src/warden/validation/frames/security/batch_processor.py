@@ -9,6 +9,9 @@ import json
 from typing import Any
 
 from warden.llm.types import LlmRequest
+from warden.shared.chunking import ChunkingConfig, ChunkingService
+
+_SECURITY_CHUNK_CONFIG = ChunkingConfig(max_chunk_tokens=600, max_chunks_per_file=3)
 
 try:
     from warden.shared.infrastructure.logging import get_logger
@@ -18,6 +21,25 @@ except ImportError:
     import logging
 
     logger = logging.getLogger(__name__)
+
+
+def _prepare_code_for_batch(code_file: Any) -> str:
+    """Return a compact code representation for batch LLM verification.
+
+    For large files, returns only the first chunk's content (which contains
+    the most relevant declarations).  For small files, returns the raw content
+    capped at 500 chars as before.
+    """
+    try:
+        svc = ChunkingService()
+        if svc.should_chunk(code_file, _SECURITY_CHUNK_CONFIG):
+            chunks = svc.chunk(code_file, ast_cache=None, config=_SECURITY_CHUNK_CONFIG)
+            if chunks:
+                header = svc.build_prompt_header(chunks[0])
+                return (header + chunks[0].content)[:600]
+    except Exception:
+        pass
+    return (code_file.content or "")[:500]
 
 
 async def batch_verify_security_findings(
@@ -142,8 +164,9 @@ async def _verify_security_batch(
         if finding.code:
             prompt_parts.append(f"Code:\n```\n{finding.code[:200]}\n```")
         if code_file:
-            # Add limited context
-            prompt_parts.append(f"File Context (first 500 chars):\n```\n{code_file.content[:500]}\n```")
+            # Add chunked context — only the most relevant chunk reduces token use
+            file_context = _prepare_code_for_batch(code_file)
+            prompt_parts.append(f"File Context:\n```\n{file_context}\n```")
         prompt_parts.append("\n---\n")
 
     prompt_parts.append("""
