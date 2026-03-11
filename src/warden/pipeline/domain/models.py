@@ -4,6 +4,7 @@ Pipeline domain models.
 Core entities for validation pipeline orchestration.
 """
 
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -14,6 +15,8 @@ from warden.pipeline.domain.enums import AnalysisLevel, ExecutionStrategy, Pipel
 from warden.rules.domain.models import CustomRule, FrameRules
 from warden.shared.domain.base_model import BaseDomainModel
 from warden.validation.domain.frame import FrameResult
+
+logger = structlog.get_logger(__name__)
 
 
 class FrameExecution(BaseDomainModel):
@@ -314,9 +317,9 @@ class PipelineResult(BaseDomainModel):
 
             metrics_collector = get_global_metrics_collector()
             data["llmMetrics"] = metrics_collector.get_summary()
-        except Exception:
-            # Gracefully handle if metrics not available
-            pass
+        except Exception as e:
+            logger.warning("llm_metrics_collection_failed", error=str(e))
+            data["llmMetrics"] = {"error": "metrics_collection_failed", "detail": str(e)}
 
         data["qualityScore"] = self.quality_score
         data["artifacts"] = self.artifacts
