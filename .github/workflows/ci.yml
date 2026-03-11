@@ -272,6 +272,8 @@ jobs:
           echo "Ollama ready (fast: 0.5b, smart: 3b)."
 
       - name: Run Warden Scan
+        id: warden_scan
+        continue-on-error: true
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           WARDEN_LLM_PROVIDER: "ollama"
@@ -364,6 +366,16 @@ jobs:
               echo "⚠️ Scan exit $EXIT_CODE — not a code quality violation."
             fi
           fi
+
+      - name: Smoke check scan results
+        if: (steps.warden_scan.outcome == 'success' || steps.warden_scan.outcome == 'failure') && hashFiles('.warden/reports/warden-report.json') != ''
+        run: python scripts/ci_smoke_check.py .warden/reports/warden-report.json
+
+      - name: Fail job on scan policy violation
+        if: steps.warden_scan.outcome == 'failure'
+        run: |
+          echo "::error::Warden scan step failed (policy violation or infrastructure error). See scan output above."
+          exit 1
 
       - name: Archive SARIF Artifact
         uses: actions/upload-artifact@v6
