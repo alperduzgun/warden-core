@@ -235,7 +235,7 @@ jobs:
           # not the scan step — Ollama reads these from its own process via os.Getenv().
           OLLAMA_MAX_LOADED_MODELS: "2"
           OLLAMA_FLASH_ATTENTION: "1"
-          OLLAMA_CONTEXT_LENGTH: "4096"   # prompt ~2K + output 800 → 4K safe; default 32K wastes 8× RAM
+          OLLAMA_CONTEXT_LENGTH: "8192"   # prompt ~2K + output 800 → 8K safe margin; +400MB RAM vs 32K default
         run: |
           # Ensure port is free regardless of how we got the binary.
           lsof -ti :11434 | xargs --no-run-if-empty sudo kill -9 || true
@@ -275,6 +275,9 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           WARDEN_LLM_PROVIDER: "ollama"
+          WARDEN_SMART_TIER_PROVIDER: "groq"
+          WARDEN_SMART_TIER_MODEL: "qwen-qwq-32b"
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
           OLLAMA_HOST: http://localhost:11434
           # Limit Ollama concurrency to 1: CPU-only Ollama serialises requests

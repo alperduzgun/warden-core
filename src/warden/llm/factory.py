@@ -133,8 +133,30 @@ def create_client(provider_or_config: LlmProvider | LlmConfiguration | str | Non
     if not provider_config:
         raise ValueError(f"No configuration found for provider: {provider}")
 
-    # Create primary (smart) client
-    smart_client = create_provider_client(provider, provider_config)
+    # Create primary (smart) client — optionally routed to a different provider
+    smart_provider = provider
+    if config.smart_tier_provider and config.smart_tier_provider != provider:
+        stp_config = config.get_provider_config(config.smart_tier_provider)
+        if stp_config and stp_config.enabled:
+            if config.smart_tier_model:
+                stp_config.default_model = config.smart_tier_model
+            smart_client = create_provider_client(config.smart_tier_provider, stp_config)
+            smart_provider = config.smart_tier_provider
+            _factory_logger.info(
+                "smart_tier_routed",
+                primary=provider.value,
+                smart_provider=config.smart_tier_provider.value,
+                smart_model=config.smart_tier_model or stp_config.default_model,
+            )
+        else:
+            _factory_logger.warning(
+                "smart_tier_provider_unavailable",
+                provider=config.smart_tier_provider.value,
+                fallback=provider.value,
+            )
+            smart_client = create_provider_client(provider, provider_config)
+    else:
+        smart_client = create_provider_client(provider, provider_config)
 
     # Build fast-tier clients.
     # CLI-tool providers (Codex, Claude Code) manage their own model selection,
@@ -213,7 +235,7 @@ def create_client(provider_or_config: LlmProvider | LlmConfiguration | str | Non
     return OrchestratedLlmClient(
         smart_client=smart_client,
         fast_clients=fast_clients,
-        smart_model=config.smart_model,
+        smart_model=config.smart_tier_model or config.smart_model,
         fast_model=config.fast_model,
         metrics_collector=get_global_metrics_collector(),
     )

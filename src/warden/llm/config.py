@@ -102,6 +102,8 @@ class LlmConfiguration:
     smart_model: str | None = None  # High-reasoning model (e.g. gpt-4o)
     fast_model: str | None = None  # Fast/Cheap model (e.g. gpt-4o-mini)
     fast_tier_providers: list[LlmProvider] = field(default_factory=lambda: [LlmProvider.OLLAMA])
+    smart_tier_provider: LlmProvider | None = None  # Route smart tier to a different provider (e.g. Groq)
+    smart_tier_model: str | None = None  # Model for the smart tier provider override
     max_concurrency: int = 4  # Global max concurrent requests
 
     # Centralized token budgets for all LLM consumers (triage-aware).
@@ -394,6 +396,8 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             "WARDEN_LLM_CONCURRENCY",
             "WARDEN_FAST_TIER_PRIORITY",
             "WARDEN_LLM_PROVIDER",
+            "WARDEN_SMART_TIER_PROVIDER",
+            "WARDEN_SMART_TIER_MODEL",
             "WARDEN_BLOCKED_PROVIDERS",
             "OLLAMA_HOST",
         ]
@@ -420,6 +424,15 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     if concurrency_secret and concurrency_secret.found:
         with contextlib.suppress(ValueError, TypeError):
             config.max_concurrency = int(concurrency_secret.value)
+
+    # Smart Tier Provider Override (e.g. route smart calls to Groq while fast stays on Ollama)
+    smart_tier_provider_secret = secrets.get("WARDEN_SMART_TIER_PROVIDER")
+    if smart_tier_provider_secret and smart_tier_provider_secret.found:
+        with contextlib.suppress(ValueError):
+            config.smart_tier_provider = LlmProvider(smart_tier_provider_secret.value.strip().lower())
+    smart_tier_model_secret = secrets.get("WARDEN_SMART_TIER_MODEL")
+    if smart_tier_model_secret and smart_tier_model_secret.found:
+        config.smart_tier_model = smart_tier_model_secret.value
 
     # Configure Azure OpenAI (primary provider for Warden)
     azure_api_key = secrets.get("AZURE_OPENAI_API_KEY")
@@ -618,6 +631,13 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
 
         if "fast_model" in config_override and not env_provider:
             config.fast_model = config_override["fast_model"]
+
+        # Smart tier provider override from config.yaml (env var takes precedence)
+        if "smart_tier_provider" in config_override and not config.smart_tier_provider:
+            with contextlib.suppress(ValueError):
+                config.smart_tier_provider = LlmProvider(config_override["smart_tier_provider"].strip().lower())
+        if "smart_tier_model" in config_override and not config.smart_tier_model:
+            config.smart_tier_model = config_override["smart_tier_model"]
 
         # Centralized token budgets from config.yaml (new format)
         if "token_budgets" in config_override:
