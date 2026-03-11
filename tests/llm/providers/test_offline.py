@@ -22,11 +22,11 @@ class TestOfflineClient:
 
     @pytest.mark.asyncio
     async def test_offline_client_complete_async_returns_response(self):
-        """Verify complete_async returns successful offline response."""
+        """Verify complete_async returns offline response with success=False."""
         client = OfflineClient()
         response = await client.complete_async("test prompt")
 
-        assert response.success is True
+        assert response.success is False
         assert response.provider == LlmProvider.UNKNOWN
         assert response.model == "offline-fallback"
         assert "[Offline Mode]" in response.content
@@ -54,7 +54,7 @@ class TestOfflineClient:
         )
         response = await client.send_async(request)
 
-        assert response.success is True
+        assert response.success is False
         assert response.provider == LlmProvider.UNKNOWN
         assert response.model == "offline-fallback"
 
@@ -80,11 +80,11 @@ class TestOfflineClient:
             pytest.fail(
                 f"complete_async raised TypeError with max_tokens=500: {exc}"
             )
-        assert response.success is True
+        assert response.success is False
 
     @pytest.mark.asyncio
     async def test_complete_async_max_tokens_default_still_works(self):
         """Verify complete_async works without explicitly passing max_tokens."""
         client = OfflineClient()
         response = await client.complete_async("test prompt")
-        assert response.success is True
+        assert response.success is False

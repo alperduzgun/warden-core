@@ -124,11 +124,11 @@ class TestFrameResultCounts:
         assert fr.llm_finding_count == 0
         assert fr.deterministic_finding_count == 0
 
-    def test_all_none_source_are_deterministic(self) -> None:
+    def test_all_none_source_are_unattributed(self) -> None:
         findings = [_make_finding(id=f"F{i}") for i in range(3)]
         fr = _make_frame_result(findings)
         assert fr.llm_finding_count == 0
-        assert fr.deterministic_finding_count == 3
+        assert fr.deterministic_finding_count == 0
 
     def test_all_regex_are_deterministic(self) -> None:
         findings = [_make_finding(id=f"F{i}", detection_source="regex") for i in range(4)]
@@ -159,16 +159,19 @@ class TestFrameResultCounts:
         ]
         fr = _make_frame_result(findings)
         assert fr.llm_finding_count == 2  # llm + llm_verified
-        assert fr.deterministic_finding_count == 4  # regex + taint + None + rust_engine
+        assert fr.deterministic_finding_count == 3  # regex + taint + rust_engine (None excluded)
 
-    def test_counts_sum_to_total_findings(self) -> None:
+    def test_counts_exclude_unattributed(self) -> None:
         findings = [
             _make_finding(id="F1", detection_source="llm"),
             _make_finding(id="F2", detection_source="regex"),
-            _make_finding(id="F3"),
+            _make_finding(id="F3"),  # None — unattributed
         ]
         fr = _make_frame_result(findings)
-        assert fr.llm_finding_count + fr.deterministic_finding_count == len(findings)
+        assert fr.llm_finding_count == 1
+        assert fr.deterministic_finding_count == 1
+        # Unattributed (None) excluded from both counts
+        assert fr.llm_finding_count + fr.deterministic_finding_count == 2
 
     def test_rust_engine_is_deterministic(self) -> None:
         findings = [_make_finding(id="F1", detection_source="rust_engine")]
@@ -307,12 +310,13 @@ class TestPipelineResultCounts:
         frame1 = _make_frame_result([
             _make_finding(id="F1", detection_source="rust_engine"),
             _make_finding(id="F2", detection_source="taint"),
-            _make_finding(id="F3"),
+            _make_finding(id="F3"),  # None — unattributed
         ])
         pr = self._make_pipeline_result([frame1])
         data = pr.to_json()
         assert data["llmFindingCount"] == 0
-        assert data["deterministicFindingCount"] == 3
+        assert data["deterministicFindingCount"] == 2  # None excluded
+        assert data["unattributedFindingCount"] == 1
 
     def test_counts_sum_to_total_across_all_frames(self) -> None:
         frame1 = _make_frame_result([
