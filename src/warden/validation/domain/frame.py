@@ -144,6 +144,10 @@ class Finding:
     remediation: Remediation | None = None  # Suggested fix
     machine_context: MachineContext | None = None  # Structured vulnerability context
     exploit_evidence: ExploitEvidence | None = None  # Witness payload evidence
+    # Attribution: identifies which analysis engine produced this finding.
+    # Valid values: "rust_engine", "regex", "ast", "taint", "llm", "llm_verified"
+    # None means source is unknown or not yet attributed.
+    detection_source: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON."""
@@ -163,6 +167,8 @@ class Finding:
             result["machineContext"] = self.machine_context.to_json()
         if self.exploit_evidence:
             result["exploitEvidence"] = self.exploit_evidence.to_json()
+        if self.detection_source is not None:
+            result["detectionSource"] = self.detection_source
         return result
 
     def to_dict(self) -> dict[str, Any]:
@@ -209,6 +215,24 @@ class FrameResult:
     def passed(self) -> bool:
         """Check if frame passed (no issues)."""
         return self.status == "passed"
+
+    @property
+    def llm_finding_count(self) -> int:
+        """Count findings attributed to LLM-based analysis."""
+        return sum(
+            1
+            for f in self.findings
+            if f.detection_source is not None and f.detection_source.startswith("llm")
+        )
+
+    @property
+    def deterministic_finding_count(self) -> int:
+        """Count findings attributed to deterministic (non-LLM) analysis."""
+        return sum(
+            1
+            for f in self.findings
+            if f.detection_source is None or not f.detection_source.startswith("llm")
+        )
 
     def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON (camelCase)."""

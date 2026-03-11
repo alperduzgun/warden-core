@@ -914,6 +914,16 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
 
         for check_result in check_results:
             for check_finding in check_result.findings:
+                # Determine detection source from check_id
+                check_id = check_finding.check_id
+                if check_id == "llm-security":
+                    detection_source: str | None = "llm"
+                elif check_id == "taint-analysis":
+                    detection_source = "taint"
+                else:
+                    # Built-in pattern/regex checks (sql-injection, xss, secrets, etc.)
+                    detection_source = "regex"
+
                 # Convert CheckFinding to Frame-level Finding
                 finding = Finding(
                     id=f"{self.frame_id}-{check_finding.check_id}-{len(findings)}",
@@ -923,6 +933,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     detail=check_finding.suggestion,
                     code=check_finding.code_snippet,
                     is_blocker=check_finding.is_blocker,
+                    detection_source=detection_source,
                 )
 
                 # Populate explicitly tagged LLM context instances on creation
