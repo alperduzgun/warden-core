@@ -227,6 +227,7 @@ def _serialize_finding(f: Finding) -> dict[str, Any]:
         "line": f.line,
         "column": f.column,
         "is_blocker": f.is_blocker,
+        "detection_source": f.detection_source,
     }
 
 
@@ -246,4 +247,5 @@ def _deserialize_finding(d: dict[str, Any]) -> Finding:
         line=int(d.get("line", 0)),
         column=int(d.get("column", 0)),
         is_blocker=bool(d.get("is_blocker", False)),
+        detection_source=d.get("detection_source"),
     )

@@ -78,6 +78,10 @@ class RustPreFilter:
                 if filtered_findings:
                     logger.info("rust_pre_filtering_found_issues", raw=total_hits, filtered=len(filtered_findings))
 
+                    # Tag all rust-engine findings with their detection source
+                    for finding in filtered_findings:
+                        finding.detection_source = "rust_engine"
+
                     frame_id = "system_security_rules"
                     frame_result = FrameResult(
                         frame_id=frame_id,

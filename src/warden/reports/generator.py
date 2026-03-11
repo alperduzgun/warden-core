@@ -475,6 +475,13 @@ class ReportGenerator:
                         result["properties"] = {}
                     result["properties"]["exploitEvidence"] = exploit_evidence
 
+                # Add detection source attribution if present (#371)
+                detection_source = self._get_val(finding, "detectionSource", None)
+                if detection_source:
+                    if "properties" not in result:
+                        result["properties"] = {}
+                    result["properties"]["detectionSource"] = detection_source
+
                 # Add SARIF fixes array when remediation is populated (#197)
                 remediation = self._get_val(finding, "remediation", None)
                 if remediation:

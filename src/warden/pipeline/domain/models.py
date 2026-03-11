@@ -304,6 +304,19 @@ class PipelineResult(BaseDomainModel):
         # Blocker violations count (custom rules with is_blocker: true)
         data["blocker_violations"] = self.blocker_violations
 
+        # Detection source attribution counts (LLM vs deterministic)
+        all_findings = [f for fr in self.frame_results for f in fr.findings]
+        data["llmFindingCount"] = sum(
+            1
+            for f in all_findings
+            if f.detection_source is not None and f.detection_source.startswith("llm")
+        )
+        data["deterministicFindingCount"] = sum(
+            1
+            for f in all_findings
+            if f.detection_source is None or not f.detection_source.startswith("llm")
+        )
+
         # Add token usage
         data["llmUsage"] = {
             "totalTokens": self.total_tokens,
