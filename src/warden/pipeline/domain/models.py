@@ -314,7 +314,10 @@ class PipelineResult(BaseDomainModel):
         data["deterministicFindingCount"] = sum(
             1
             for f in all_findings
-            if f.detection_source is None or not f.detection_source.startswith("llm")
+            if f.detection_source is not None and not f.detection_source.startswith("llm")
+        )
+        data["unattributedFindingCount"] = sum(
+            1 for f in all_findings if f.detection_source is None
         )
 
         # Add token usage

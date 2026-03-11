@@ -227,11 +227,15 @@ class FrameResult:
 
     @property
     def deterministic_finding_count(self) -> int:
-        """Count findings attributed to deterministic (non-LLM) analysis."""
+        """Count findings with an explicit non-LLM detection source.
+
+        Findings with detection_source=None are unattributed and excluded
+        from both LLM and deterministic counts to avoid inflating either.
+        """
         return sum(
             1
             for f in self.findings
-            if f.detection_source is None or not f.detection_source.startswith("llm")
+            if f.detection_source is not None and not f.detection_source.startswith("llm")
         )
 
     def to_json(self) -> dict[str, Any]:

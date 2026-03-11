@@ -261,7 +261,7 @@ class OrchestratedLlmClient(ILlmClient):
                 for task in done:
                     try:
                         client, response = task.result()
-                        if response.success:
+                        if response.success and response.content:
                             successful_response = response
                             winning_client = client
                             logger.info(

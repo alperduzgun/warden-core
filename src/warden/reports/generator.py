@@ -207,6 +207,35 @@ class ReportGenerator:
         except Exception:
             return "0.0.0"
 
+    @staticmethod
+    def _is_execution_successful(scan_results: dict[str, Any]) -> bool:
+        """Determine if the scan execution was successful based on actual state."""
+        # Check for LLM metrics error (metrics collection failed)
+        llm_metrics = scan_results.get("llmMetrics", {})
+        if isinstance(llm_metrics, dict) and llm_metrics.get("error"):
+            return False
+
+        # Check for offline mode (no LLM was available)
+        llm_usage = scan_results.get("llmUsage", {})
+        if llm_usage.get("totalTokens", 0) == 0:
+            # Only fail if frames were expected to use LLM
+            frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
+            has_non_rust_frames = any(
+                f.get("frameId", f.get("frame_id", "")) != "system_security_rules"
+                for f in frame_results
+                if f.get("status") not in ("skipped",)
+            )
+            if has_non_rust_frames:
+                return False
+
+        # Check for frame errors
+        frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
+        for fr in frame_results:
+            if fr.get("status") == "error":
+                return False
+
+        return True
+
     def _get_val(self, obj: Any, key: str, default: Any = None) -> Any:
         """
         Safely get a value from either a dictionary or an object.
@@ -335,7 +364,7 @@ class ReportGenerator:
                             "rules": [],
                         }
                     },
-                    "invocations": [{"executionSuccessful": True, "toolExecutionNotifications": []}],
+                    "invocations": [{"executionSuccessful": self._is_execution_successful(scan_results), "toolExecutionNotifications": []}],
                     "results": [],
                 }
             ],

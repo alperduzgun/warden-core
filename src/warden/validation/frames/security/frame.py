@@ -549,6 +549,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     from warden.validation.domain.check import CheckFinding, CheckSeverity
 
                     llm_findings = []
+                    file_line_count = code_file.content.count("\n") + 1 if code_file.content else 1
                     for f in response["findings"]:
                         severity_map = {
                             "critical": CheckSeverity.CRITICAL,
@@ -557,12 +558,21 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                             "low": CheckSeverity.LOW,
                         }
                         sev = f.get("severity", "medium").lower()
+                        raw_line = f.get("line_number", 1)
+                        line_number = max(1, min(int(raw_line) if raw_line else 1, file_line_count))
+                        if raw_line and int(raw_line) > file_line_count:
+                            logger.warning(
+                                "llm_line_number_out_of_range",
+                                file=code_file.path,
+                                llm_line=raw_line,
+                                max_line=file_line_count,
+                            )
                         ai_finding = CheckFinding(
                             check_id="llm-security",
                             check_name="AI Security Analysis",
                             severity=severity_map.get(sev, CheckSeverity.MEDIUM),
                             message=f.get("message", "Potential issue detected"),
-                            location=f"{code_file.path}:{f.get('line_number', 1)}",
+                            location=f"{code_file.path}:{line_number}",
                             suggestion=f.get("detail", "AI identified a potential vulnerability."),
                             code_snippet=None,
                             machine_context_raw=f.get("_machine_context"),

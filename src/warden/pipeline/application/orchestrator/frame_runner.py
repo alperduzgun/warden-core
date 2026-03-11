@@ -166,6 +166,44 @@ class FrameRunner:
         Uses centralized error handler to ensure frame failures are logged
         and don't crash the entire pipeline.
         """
+        try:
+            return await self._execute_frame_with_rules_inner(context, frame, code_files, pipeline)
+        except Exception as e:
+            # Safety net: if anything escapes the inner logic, emit an error
+            # FrameResult so the frame is visible in reports instead of vanishing.
+            logger.error(
+                "frame_execution_unhandled",
+                frame_id=frame.frame_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            error_result = FrameResult(
+                frame_id=frame.frame_id,
+                frame_name=getattr(frame, "name", frame.frame_id),
+                status="error",
+                duration=0.0,
+                issues_found=0,
+                is_blocker=False,
+                findings=[],
+                metadata={"error": str(e), "error_type": type(e).__name__},
+            )
+            if hasattr(context, "frame_results") and context.frame_results is not None:
+                context.frame_results[frame.frame_id] = {
+                    "result": error_result,
+                    "pre_violations": [],
+                    "post_violations": [],
+                }
+            pipeline.frames_failed += 1
+            return error_result
+
+    async def _execute_frame_with_rules_inner(
+        self,
+        context: PipelineContext,
+        frame: ValidationFrame,
+        code_files: list[CodeFile],
+        pipeline: ValidationPipeline,
+    ) -> FrameResult | None:
+        """Inner implementation of frame execution with rules."""
         skip_result = DependencyChecker.check_frame_dependencies(context, frame)
         if skip_result:
             logger.info(

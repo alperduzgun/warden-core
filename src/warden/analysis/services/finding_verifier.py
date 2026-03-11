@@ -182,7 +182,9 @@ Return ONLY a JSON object:
                 for idx, result in enumerate(batch_results):
                     finding = batch[idx]
                     cache_key = self._generate_key(finding)
-                    self._save_cache(cache_key, result)
+                    # Don't cache parse-fail fallback results — they should be re-verified
+                    if self._get(result, "verification_source") != "parse_fail_fallback":
+                        self._save_cache(cache_key, result)
 
                     # SAFE ACCESS: result might be a dict or object depending on LLM response/mock
                     is_tp = self._get(result, "is_true_positive", True)
@@ -450,12 +452,14 @@ Return ONLY a JSON array of objects in the EXACT order:
         except Exception as e:
             logger.warning("batch_llm_parsing_failed", error=str(e), content_preview=content[:200])
             # Fallback: Mark for manual review due to parsing error
+            # verification_source signals callers to skip caching this result
             return [
                 {
                     "is_true_positive": True,
-                    "confidence": 0.4,  # Slightly lower confidence for parse errors
+                    "confidence": 0.4,
                     "reason": "LLM responded but output parsing failed. Manual Review recommended.",
                     "review_required": True,
+                    "verification_source": "parse_fail_fallback",
                 }
                 for _ in batch
             ]
