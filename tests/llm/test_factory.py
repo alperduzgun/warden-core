@@ -167,3 +167,102 @@ class TestSingleTierProviders:
 
         assert isinstance(client, OrchestratedLlmClient)
         assert client.fast_clients == [], "Primary provider must not race against itself in fast tier"
+
+
+class TestSmartTierProviderRouting:
+    """Regression tests for issue #365: smart_tier_provider routes smart client to a different provider."""
+
+    def _base_config(self) -> LlmConfiguration:
+        """Base config with DeepSeek as default provider."""
+        cfg = LlmConfiguration(default_provider=LlmProvider.DEEPSEEK)
+        cfg.deepseek = ProviderConfig(
+            api_key="sk-deepseek-key-1234567890",
+            default_model="deepseek-coder",
+            enabled=True,
+        )
+        cfg.fast_tier_providers = []
+        return cfg
+
+    def test_smart_tier_routes_to_different_provider(self):
+        """Regression #365: smart_tier_provider=GROQ causes smart_client to be a Groq client,
+        not the default_provider client.
+
+        This test FAILS if factory always creates smart_client from default_provider
+        and ignores smart_tier_provider.
+        """
+        config = self._base_config()
+        config.groq = ProviderConfig(
+            api_key="gsk-groq-key-1234567890",
+            default_model="llama-3.3-70b-versatile",
+            enabled=True,
+        )
+        config.smart_tier_provider = LlmProvider.GROQ
+
+        client = create_client(config)
+
+        assert isinstance(client, OrchestratedLlmClient)
+        assert client.smart_client.provider == LlmProvider.GROQ, (
+            "smart_client must use the smart_tier_provider (Groq), not the default_provider (DeepSeek)"
+        )
+        assert client.smart_client.provider != LlmProvider.DEEPSEEK, (
+            "smart_client must NOT be DeepSeek when smart_tier_provider=GROQ is configured"
+        )
+
+    def test_smart_tier_fallback_when_unavailable(self):
+        """Regression #365: when smart_tier_provider is set but that provider is disabled,
+        smart_client falls back to the default_provider.
+
+        This test FAILS if factory blindly uses smart_tier_provider without checking availability.
+        """
+        config = self._base_config()
+        # Groq is set as smart_tier_provider but disabled — no api_key
+        config.groq = ProviderConfig(
+            api_key=None,
+            default_model="llama-3.3-70b-versatile",
+            enabled=False,
+        )
+        config.smart_tier_provider = LlmProvider.GROQ
+
+        client = create_client(config)
+
+        assert isinstance(client, OrchestratedLlmClient)
+        assert client.smart_client.provider == LlmProvider.DEEPSEEK, (
+            "smart_client must fall back to default_provider when smart_tier_provider is unavailable"
+        )
+
+    def test_smart_tier_model_override(self):
+        """Regression #365: smart_tier_model is reflected in the orchestrated client's smart_model.
+
+        This test FAILS if factory ignores smart_tier_model when building OrchestratedLlmClient.
+        """
+        config = self._base_config()
+        config.groq = ProviderConfig(
+            api_key="gsk-groq-key-1234567890",
+            default_model="llama-3.3-70b-versatile",
+            enabled=True,
+        )
+        config.smart_tier_provider = LlmProvider.GROQ
+        config.smart_tier_model = "qwen-qwq-32b"
+
+        client = create_client(config)
+
+        assert isinstance(client, OrchestratedLlmClient)
+        assert client.smart_model == "qwen-qwq-32b", (
+            "OrchestratedLlmClient.smart_model must reflect smart_tier_model when set"
+        )
+
+    def test_no_smart_tier_uses_default_provider(self):
+        """Regression #365: when smart_tier_provider is None, smart_client is created from
+        default_provider as before.
+
+        This is the baseline — ensures the happy path is not broken.
+        """
+        config = self._base_config()
+        config.smart_tier_provider = None
+
+        client = create_client(config)
+
+        assert isinstance(client, OrchestratedLlmClient)
+        assert client.smart_client.provider == LlmProvider.DEEPSEEK, (
+            "smart_client must use default_provider when smart_tier_provider is None"
+        )

@@ -65,3 +65,26 @@ class TestOfflineClient:
         result = await client.analyze_security_async("code_content", "python")
 
         assert result == {"findings": []}
+
+    @pytest.mark.asyncio
+    async def test_complete_async_accepts_max_tokens(self):
+        """Regression: complete_async must accept max_tokens kwarg (Issue #356).
+
+        This test MUST FAIL if someone removes the max_tokens parameter from
+        OfflineClient.complete_async.
+        """
+        client = OfflineClient()
+        try:
+            response = await client.complete_async("test", max_tokens=500)
+        except TypeError as exc:
+            pytest.fail(
+                f"complete_async raised TypeError with max_tokens=500: {exc}"
+            )
+        assert response.success is True
+
+    @pytest.mark.asyncio
+    async def test_complete_async_max_tokens_default_still_works(self):
+        """Verify complete_async works without explicitly passing max_tokens."""
+        client = OfflineClient()
+        response = await client.complete_async("test prompt")
+        assert response.success is True
