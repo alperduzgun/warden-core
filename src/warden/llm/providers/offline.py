@@ -21,12 +21,13 @@ class OfflineClient(ILlmClient):
         """
         return LlmResponse(
             content="[Offline Mode] AI capabilities are disabled. Enable API keys for intelligence.",
-            success=True,
+            success=False,
             provider=self.provider,
             model="offline-fallback",
             prompt_tokens=0,
             completion_tokens=0,
             total_tokens=0,
+            error_message="LLM unavailable: running in offline mode",
         )
 
     async def is_available_async(self) -> bool:
