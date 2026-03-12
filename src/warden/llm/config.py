@@ -106,6 +106,10 @@ class LlmConfiguration:
     smart_tier_model: str | None = None  # Model for the smart tier provider override
     max_concurrency: int = 4  # Global max concurrent requests
 
+    # Rate limits (used by LLMPhaseConfig in analysis/classification executors)
+    tpm_limit: int = 1000  # Tokens per minute (free-tier default)
+    rpm_limit: int = 6  # Requests per minute (free-tier default)
+
     # Centralized token budgets for all LLM consumers (triage-aware).
     # Keys: category name → {"deep": int, "fast": int}
     # Overrides built-in defaults in warden.shared.utils.llm_context.DEFAULT_TOKEN_BUDGETS.
@@ -631,6 +635,14 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
 
         if "fast_model" in config_override and not env_provider:
             config.fast_model = config_override["fast_model"]
+
+        # Rate limits from config.yaml
+        if "tpm_limit" in config_override:
+            with contextlib.suppress(ValueError, TypeError):
+                config.tpm_limit = int(config_override["tpm_limit"])
+        if "rpm_limit" in config_override:
+            with contextlib.suppress(ValueError, TypeError):
+                config.rpm_limit = int(config_override["rpm_limit"])
 
         # Smart tier provider override from config.yaml (env var takes precedence)
         if "smart_tier_provider" in config_override and not config.smart_tier_provider:
