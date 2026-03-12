@@ -99,6 +99,20 @@ class PipelineConfig(BaseDomainModel):
     semantic_search_config: dict[str, Any] | None = None  # Configuration for semantic search service
     llm_config: dict[str, Any] | None = None  # LLM configuration (tpm, rpm, etc.)
 
+    def get_tpm_limit(self) -> int:
+        """Resolve tpm_limit: llm_config dict > llm typed config > default 1000."""
+        if self.llm_config:
+            return int(self.llm_config.get("tpm_limit", 1000))
+        llm = getattr(self, "llm", None)
+        return getattr(llm, "tpm_limit", 1000) if llm else 1000
+
+    def get_rpm_limit(self) -> int:
+        """Resolve rpm_limit: llm_config dict > llm typed config > default 6."""
+        if self.llm_config:
+            return int(self.llm_config.get("rpm_limit", 6))
+        llm = getattr(self, "llm", None)
+        return getattr(llm, "rpm_limit", 6) if llm else 6
+
     # LSP Integration (NEW!)
     lsp_config: dict[str, Any] | None = None  # LSP integration configuration (enabled, servers)
 

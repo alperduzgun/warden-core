@@ -75,12 +75,8 @@ class AnalysisExecutor(BasePhaseExecutor):
                         config=LLMPhaseConfig(
                             enabled=True,
                             fallback_to_rules=True,
-                            tpm_limit=self.config.llm_config.get("tpm_limit", 1000)
-                            if getattr(self.config, "llm_config", None)
-                            else (getattr(self.config.llm, "tpm_limit", 1000) if hasattr(self.config, "llm") else 1000),
-                            rpm_limit=self.config.llm_config.get("rpm_limit", 6)
-                            if getattr(self.config, "llm_config", None)
-                            else (getattr(self.config.llm, "rpm_limit", 6) if hasattr(self.config, "llm") else 6),
+                            tpm_limit=self.config.get_tpm_limit(),
+                            rpm_limit=self.config.get_rpm_limit(),
                         ),
                         llm_service=self.llm_service,
                         project_root=self.project_root,
