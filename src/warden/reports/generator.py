@@ -216,8 +216,8 @@ class ReportGenerator:
             return False
 
         # Check for offline mode (no LLM was available)
-        llm_usage = scan_results.get("llmUsage", {})
-        if llm_usage.get("totalTokens", 0) == 0:
+        llm_usage = scan_results.get("llmUsage") or {}
+        if isinstance(llm_usage, dict) and llm_usage.get("totalTokens", 0) == 0:
             # Only fail if frames were expected to use LLM
             frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
             has_non_rust_frames = any(

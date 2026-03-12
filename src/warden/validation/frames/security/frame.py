@@ -559,14 +559,23 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                         }
                         sev = f.get("severity", "medium").lower()
                         raw_line = f.get("line_number", 1)
-                        line_number = max(1, min(int(raw_line) if raw_line else 1, file_line_count))
-                        if raw_line and int(raw_line) > file_line_count:
+                        try:
+                            parsed_line = int(raw_line) if raw_line is not None else 1
+                        except (ValueError, TypeError):
+                            logger.warning(
+                                "llm_line_number_invalid",
+                                file=code_file.path,
+                                raw_value=str(raw_line)[:50],
+                            )
+                            parsed_line = 1
+                        if parsed_line < 1 or parsed_line > file_line_count:
                             logger.warning(
                                 "llm_line_number_out_of_range",
                                 file=code_file.path,
                                 llm_line=raw_line,
                                 max_line=file_line_count,
                             )
+                        line_number = max(1, min(parsed_line, file_line_count))
                         ai_finding = CheckFinding(
                             check_id="llm-security",
                             check_name="AI Security Analysis",
