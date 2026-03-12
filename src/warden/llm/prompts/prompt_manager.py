@@ -146,14 +146,3 @@ class PromptManager:
 
         return self._VARIABLE_PATTERN.sub(replace_var, content)
 
-
-# Module-level singleton
-_prompt_manager: PromptManager | None = None
-
-
-def get_prompt_manager() -> PromptManager:
-    """Get the global PromptManager singleton."""
-    global _prompt_manager
-    if _prompt_manager is None:
-        _prompt_manager = PromptManager()
-    return _prompt_manager

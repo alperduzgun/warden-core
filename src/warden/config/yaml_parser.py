@@ -311,35 +311,5 @@ def parse_yaml(file_path: str) -> PipelineConfig:
     else:
         raise YAMLParseError("Invalid format. Must have either 'frames' (simple) or 'nodes'+'edges' (full)")
 
-
-def parse_yaml_string(yaml_str: str) -> PipelineConfig:
-    """
-    Parse YAML string directly.
-
-    Useful for testing and programmatic usage.
-
-    Args:
-        yaml_str: YAML content as string
-
-    Returns:
-        PipelineConfig model
-
-    Raises:
-        YAMLParseError: If parsing fails
-    """
-    try:
-        data = yaml.safe_load(yaml_str)
-
-        if not isinstance(data, dict):
-            raise YAMLParseError("YAML root must be a dictionary")
-
-        # Detect format
-        if "nodes" in data and "edges" in data:
-            return parse_full_format(data)
-        elif "frames" in data:
-            return parse_simple_format(data)
-        else:
-            raise YAMLParseError("Invalid format. Must have either 'frames' (simple) or 'nodes'+'edges' (full)")
-
     except yaml.YAMLError as e:
         raise YAMLParseError(f"Invalid YAML syntax: {e}")

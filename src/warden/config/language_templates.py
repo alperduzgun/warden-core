@@ -417,8 +417,3 @@ def get_language_template(language: str) -> LanguageTemplate:
         Language template (generic if not found)
     """
     return LANGUAGE_TEMPLATES.get(language.lower(), GENERIC_TEMPLATE)
-
-
-def get_supported_languages() -> list[str]:
-    """Get list of languages with specific templates."""
-    return [lang for lang in LANGUAGE_TEMPLATES if LANGUAGE_TEMPLATES[lang] != GENERIC_TEMPLATE]

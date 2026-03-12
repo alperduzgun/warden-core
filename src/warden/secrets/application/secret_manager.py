@@ -215,12 +215,3 @@ def get_manager() -> SecretManager:
     if _manager is None:
         _manager = SecretManager()
     return _manager
-
-
-def reset_manager() -> None:
-    """Reset the module-level SecretManager.
-
-    Useful for testing or reconfiguration.
-    """
-    global _manager
-    _manager = None
