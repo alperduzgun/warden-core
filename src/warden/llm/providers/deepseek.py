@@ -59,16 +59,10 @@ class DeepSeekClient(ILlmClient):
                 response.raise_for_status()
                 result = response.json()
 
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
 
             if not result.get("choices"):
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message="No response from DeepSeek",
-                    provider=self.provider,
-                    duration_ms=duration_ms,
-                )
+                return LlmResponse.error("No response from DeepSeek", provider=self.provider, duration_ms=duration_ms)
 
             usage = result.get("usage", {})
 
@@ -84,10 +78,8 @@ class DeepSeekClient(ILlmClient):
             )
 
         except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(str(e), provider=self.provider, duration_ms=duration_ms)
 
     async def is_available_async(self) -> bool:
         try:

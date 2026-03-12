@@ -5,6 +5,9 @@ Multi-provider LLM support with fallback chain.
 All types designed for Panel JSON compatibility (camelCase <-> snake_case).
 """
 
+from __future__ import annotations
+
+import time
 from dataclasses import dataclass
 from enum import Enum
 
@@ -94,6 +97,27 @@ class LlmResponse(BaseDomainModel):
     overall_confidence: float | None = None
     prefill_duration_ms: float | None = None  # Ollama: prompt_eval_duration / 1e6
     generation_duration_ms: float | None = None  # Ollama: eval_duration / 1e6
+
+    @classmethod
+    def error(
+        cls,
+        message: str,
+        provider: LlmProvider | None = None,
+        duration_ms: int = 0,
+    ) -> LlmResponse:
+        """Create a failed response."""
+        return cls(
+            content="",
+            success=False,
+            error_message=message,
+            provider=provider,
+            duration_ms=duration_ms,
+        )
+
+    @staticmethod
+    def elapsed_ms(start_time: float) -> int:
+        """Milliseconds elapsed since *start_time* (from ``time.time()``)."""
+        return int((time.time() - start_time) * 1000)
 
 
 class AnalysisIssue(BaseDomainModel):

@@ -205,7 +205,7 @@ class OrchestratedLlmClient(ILlmClient):
 
                     start_time = time.time()
                     response = await client.send_async(provider_request)
-                    duration_ms = int((time.time() - start_time) * 1000)
+                    duration_ms = LlmResponse.elapsed_ms(start_time)
 
                     # Record circuit breaker state based on response
                     if response.success:
@@ -338,7 +338,7 @@ class OrchestratedLlmClient(ILlmClient):
 
         start_time = time.time()
         response = await self.smart_client.send_async(smart_request)
-        duration_ms = int((time.time() - start_time) * 1000)
+        duration_ms = LlmResponse.elapsed_ms(start_time)
 
         # Record circuit breaker state for smart tier
         if response.success:
