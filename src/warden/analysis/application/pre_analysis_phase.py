@@ -1032,60 +1032,6 @@ class PreAnalysisPhase:
             "total_suppressions": total_suppressions,
         }
 
-    async def execute_with_weights_async(
-        self, code_files: list[CodeFile], custom_weights: dict[str, dict[str, float]] | None = None
-    ) -> PreAnalysisResult:
-        """
-        Execute PRE-ANALYSIS with custom weight configurations.
-
-        Args:
-            code_files: List of code files to analyze
-            custom_weights: Optional custom weights per context
-
-        Returns:
-            PreAnalysisResult with custom weights applied
-        """
-        # Run standard analysis
-        result = await self.execute_async(code_files)
-
-        # Apply custom weights if provided
-        if custom_weights:
-            for _file_path, context_info in result.file_contexts.items():
-                context_name = context_info.context.value
-                if context_name in custom_weights:
-                    # Update weights in context info
-                    for metric, weight in custom_weights[context_name].items():
-                        context_info.weights.weights[metric] = weight
-
-            logger.info(
-                "custom_weights_applied",
-                contexts=list(custom_weights.keys()),
-            )
-
-        return result
-
-    def get_suppression_summary(self, result: PreAnalysisResult) -> str:
-        """
-        Get human-readable summary of suppressions.
-
-        Args:
-            result: PreAnalysisResult to summarize
-
-        Returns:
-            Formatted suppression summary
-        """
-        if not result.suppression_by_context:
-            return "No suppressions configured"
-
-        summary_parts = []
-        for context, count in sorted(result.suppression_by_context.items()):
-            summary_parts.append(f"{context}: {count} suppressions")
-
-        total = result.total_suppressions_configured
-        summary = f"Total: {total} suppressions | " + " | ".join(summary_parts)
-
-        return summary
-
     def should_skip_file(self, file_path: str, result: PreAnalysisResult) -> bool:
         """
         Determine if a file should be skipped in analysis.
