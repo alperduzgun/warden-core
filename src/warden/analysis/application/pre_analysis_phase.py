@@ -469,12 +469,7 @@ class PreAnalysisPhase:
                     )
 
                     # Compute project file list for coverage
-                    all_rel_paths = []
-                    for cf in code_files:
-                        try:
-                            all_rel_paths.append(str(Path(cf.path).resolve().relative_to(self.project_root)))
-                        except ValueError:
-                            all_rel_paths.append(cf.path)
+                    all_rel_paths = [self._path_to_relative(cf.path) for cf in code_files]
 
                     # Entry points from project intelligence or heuristic detection
                     entry_points_list: list[str] = []
@@ -838,10 +833,7 @@ class PreAnalysisPhase:
         """Check if file is critical based on project context and intelligence."""
         # CI OPTIMIZATION: Check intelligence risk level first
         if self.intelligence_loader and self.intelligence_loader.is_loaded:
-            try:
-                rel_path = str(Path(file_path).resolve().relative_to(self.project_root))
-            except ValueError:
-                rel_path = file_path
+            rel_path = self._path_to_relative(file_path)
 
             risk_level = self.intelligence_loader.get_risk_for_file(rel_path)
             # P3 files are non-critical (utils, helpers, tests)
@@ -900,11 +892,7 @@ class PreAnalysisPhase:
         code_file.hash = content_hash
 
         # Normalize path to relative for memory portability (CI vs Local)
-        try:
-            rel_path = str(Path(code_file.path).resolve().relative_to(self.project_root))
-        except ValueError:
-            # Fallback if path is not relative (e.g. symlinks outside root)
-            rel_path = code_file.path
+        rel_path = self._path_to_relative(code_file.path)
 
         # Check memory for existing state
         if self.config.get("trust_memory_context", True) and self.memory_manager and self.memory_manager._is_loaded:
@@ -1127,10 +1115,7 @@ class PreAnalysisPhase:
         for path, info in file_contexts.items():
             if info.content_hash:
                 # Normalize path for saving
-                try:
-                    rel_path = str(Path(path).resolve().relative_to(self.project_root))
-                except ValueError:
-                    rel_path = path
+                rel_path = self._path_to_relative(path)
 
                 logger.debug("saving_file_state", file=rel_path, hash=info.content_hash)
 
@@ -1220,7 +1205,7 @@ class PreAnalysisPhase:
         changed_physically = []
         for cf in code_files:
             content_hash = self._calculate_file_hash(cf.content, cf.path)
-            rel_path = str(Path(cf.path).resolve().relative_to(self.project_root))
+            rel_path = self._path_to_relative(cf.path)
 
             # Check memory for existing state
             if self.memory_manager and self.memory_manager._is_loaded:
@@ -1248,10 +1233,10 @@ class PreAnalysisPhase:
 
         return impacted_paths
 
-    def _path_to_relative(self, path: Path) -> str:
-        """Convert a Path to a project-relative string."""
+    def _path_to_relative(self, path: str | Path) -> str:
+        """Convert an absolute or relative path to a project-relative string."""
         try:
-            return str(path.relative_to(self.project_root))
+            return str(Path(path).resolve().relative_to(self.project_root))
         except ValueError:
             return str(path)
 
