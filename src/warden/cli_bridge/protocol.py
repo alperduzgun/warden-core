@@ -196,30 +196,3 @@ class StreamChunk:
     def to_json_lines(self) -> str:
         """Convert to JSON Lines format (NDJSON)"""
         return json.dumps({"event": self.event, "data": self.data, "id": self.id})
-
-
-def parse_message(data: str) -> IPCRequest | IPCResponse:
-    """
-    Parse JSON-RPC message (auto-detect request or response)
-
-    Args:
-        data: JSON string
-
-    Returns:
-        IPCRequest or IPCResponse
-
-    Raises:
-        ValueError: If invalid JSON or unrecognized message type
-    """
-    try:
-        obj = json.loads(data)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON: {e}")
-
-    # Detect message type
-    if "method" in obj:
-        return IPCRequest.from_json(data)
-    elif "result" in obj or "error" in obj:
-        return IPCResponse.from_json(data)
-    else:
-        raise ValueError("Invalid message: must contain 'method' (request) or 'result'/'error' (response)")

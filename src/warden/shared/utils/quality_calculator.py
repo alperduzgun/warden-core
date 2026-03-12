@@ -46,47 +46,6 @@ def calculate_quality_score(findings: list[Any], base_score: float = 10.0) -> fl
     return max(0.1, min(base_score, score))
 
 
-def get_shield_data(findings: list[Any], base_score: float = 10.0) -> dict:
-    """
-    Generate Shields.io endpoint JSON data for the project quality.
-
-    Args:
-        findings: List of finding objects
-        base_score: Initial score (default 10.0)
-
-    Returns:
-        Dict matching Shields.io endpoint schema:
-        {
-            "schemaVersion": 1,
-            "label": "Warden Quality",
-            "message": "9.5 / 10",
-            "color": "brightgreen"
-        }
-    """
-    score = calculate_quality_score(findings, base_score)
-
-    # Determine color based on score thresholds
-    if score >= 9.0:
-        color = "brightgreen"
-    elif score >= 7.5:
-        color = "green"
-    elif score >= 5.0:
-        color = "yellow"
-    elif score >= 2.5:
-        color = "orange"
-    else:
-        color = "red"
-
-    return {
-        "schemaVersion": 1,
-        "label": "Warden Quality",
-        "message": f"{score:.1f} / 10",
-        "color": color,
-        "namedLogo": "shields.io",  # Optional styling
-        "style": "flat",
-    }
-
-
 def calculate_base_score(linter_metrics: dict[str, Any] | None = None) -> float:
     """
     Calculate an objective baseline score (0.1 - 10.0) from structural/linter metrics.

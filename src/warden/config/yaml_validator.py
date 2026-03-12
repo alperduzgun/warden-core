@@ -273,19 +273,3 @@ def validate(config: PipelineConfig) -> ValidationResult:
     validate_settings(config, result)
 
     return result
-
-
-def validate_and_raise(config: PipelineConfig) -> None:
-    """
-    Validate pipeline configuration and raise on error.
-
-    Args:
-        config: Pipeline configuration
-
-    Raises:
-        ValidationError: If validation fails
-    """
-    result = validate(config)
-
-    if not result.is_valid:
-        raise ValidationError(str(result))
