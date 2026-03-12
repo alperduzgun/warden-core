@@ -152,6 +152,11 @@ class FrameRunner:
         self._arch_directives: str | None = None
         self._arch_directives_loaded: bool = False
 
+    def _report_progress(self, event_type: str, data: dict[str, Any]) -> None:
+        """Report progress if callback is registered."""
+        if self.progress_callback:
+            self.progress_callback(event_type, data)
+
     @async_error_handler(fallback_value=None, log_level="error", context_keys=["frame_id"], reraise=False)
     async def execute_frame_with_rules_async(
         self,
@@ -216,18 +221,14 @@ class FrameRunner:
                 "pre_violations": [],
                 "post_violations": [],
             }
-            if self.progress_callback:
-                self.progress_callback(
-                    "frame_completed",
-                    {
-                        "frame_id": frame.frame_id,
-                        "frame_name": frame.name,
-                        "status": "skipped",
-                        "findings": 0,
-                        "duration": 0.0,
-                        "skip_reason": skip_result.metadata.get("skip_reason") if skip_result.metadata else None,
-                    },
-                )
+            self._report_progress("frame_completed", {
+                "frame_id": frame.frame_id,
+                "frame_name": frame.name,
+                "status": "skipped",
+                "findings": 0,
+                "duration": 0.0,
+                "skip_reason": skip_result.metadata.get("skip_reason") if skip_result.metadata else None,
+            })
             return skip_result
 
         frame_start_time = time.perf_counter()
@@ -277,17 +278,13 @@ class FrameRunner:
                 "pre_violations": [],
                 "post_violations": [],
             }
-            if self.progress_callback:
-                self.progress_callback(
-                    "frame_completed",
-                    {
-                        "frame_id": frame.frame_id,
-                        "frame_name": frame.name,
-                        "status": "skipped",
-                        "findings": 0,
-                        "duration": skip_result.duration,
-                    },
-                )
+            self._report_progress("frame_completed", {
+                "frame_id": frame.frame_id,
+                "frame_name": frame.name,
+                "status": "skipped",
+                "findings": 0,
+                "duration": skip_result.duration,
+            })
             logger.info(
                 "frame_skipped_triage_no_files",
                 frame_id=frame.frame_id,
@@ -550,14 +547,10 @@ class FrameRunner:
 
                     return failure_result
 
-        if self.progress_callback:
-            self.progress_callback(
-                "frame_started",
-                {
-                    "frame_id": frame.frame_id,
-                    "frame_name": frame.name,
-                },
-            )
+        self._report_progress("frame_started", {
+            "frame_id": frame.frame_id,
+            "frame_name": frame.name,
+        })
 
         # Inject cached AST parse results into code file metadata
         if context.ast_cache:
@@ -610,11 +603,7 @@ class FrameRunner:
                                 file=c_file.path,
                                 cached_findings=len(cached_findings),
                             )
-                            if self.progress_callback:
-                                self.progress_callback(
-                                    "progress_update",
-                                    {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path, "cached": True},
-                                )
+                            self._report_progress("progress_update", {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path, "cached": True})
                             if not cached_findings:
                                 return None  # clean file — no FrameResult needed
 
@@ -671,10 +660,7 @@ class FrameRunner:
                                 frame.frame_id, str(c_file.path), c_file.content, result.findings or []
                             )
 
-                        if self.progress_callback:
-                            self.progress_callback(
-                                "progress_update", {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path}
-                            )
+                        self._report_progress("progress_update", {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path})
 
                         # Persist partial results incrementally (#101)
                         if self._partial_writer is not None and result is not None:
@@ -700,8 +686,7 @@ class FrameRunner:
                             timeout_s=per_file_timeout,
                             file_size_kb=round(file_size / 1024, 1),
                         )
-                        if self.progress_callback:
-                            self.progress_callback("progress_update", {"increment": 1, "error": True})
+                        self._report_progress("progress_update", {"increment": 1, "error": True})
                         # Record a finding so the timeout is visible in reports (#99).
                         timeout_finding = Finding(
                             id="WARDEN-TIMEOUT",
@@ -740,8 +725,7 @@ class FrameRunner:
                         logger.error(
                             "frame_file_execution_error", frame=frame.frame_id, file=c_file.path, error=str(ex)
                         )
-                        if self.progress_callback:
-                            self.progress_callback("progress_update", {"increment": 1, "error": True})
+                        self._report_progress("progress_update", {"increment": 1, "error": True})
                         return None
 
                 if code_files:
@@ -770,15 +754,11 @@ class FrameRunner:
                             frame=frame.frame_id,
                         )
 
-                        if self.progress_callback:
-                            self.progress_callback(
-                                "progress_update",
-                                {
-                                    "increment": cached_files,
-                                    "frame_id": frame.frame_id,
-                                    "details": f"Skipped {cached_files} cached files",
-                                },
-                            )
+                        self._report_progress("progress_update", {
+                            "increment": cached_files,
+                            "frame_id": frame.frame_id,
+                            "details": f"Skipped {cached_files} cached files",
+                        })
 
                     if not files_to_scan:
                         # Only trust cache if this frame was previously executed in this pipeline run.
@@ -847,15 +827,11 @@ class FrameRunner:
                                         cached=batch_cached_count,
                                         uncached=len(uncached_files),
                                     )
-                                    if self.progress_callback:
-                                        self.progress_callback(
-                                            "progress_update",
-                                            {
-                                                "increment": batch_cached_count,
-                                                "frame_id": frame.frame_id,
-                                                "cached": True,
-                                            },
-                                        )
+                                    self._report_progress("progress_update", {
+                                        "increment": batch_cached_count,
+                                        "frame_id": frame.frame_id,
+                                        "cached": True,
+                                    })
 
                                 for i in range(0, len(uncached_files), CHUNK_SIZE):
                                     chunk = uncached_files[i : i + CHUNK_SIZE]
@@ -881,15 +857,11 @@ class FrameRunner:
                                                         res.findings or [],
                                                     )
                                         f_results.extend(chunk_results)
-                                        if self.progress_callback:
-                                            self.progress_callback(
-                                                "progress_update",
-                                                {
-                                                    "increment": len(chunk_results),
-                                                    "frame_id": frame.frame_id,
-                                                    "phase": f"Validating {frame.name}",
-                                                },
-                                            )
+                                        self._report_progress("progress_update", {
+                                            "increment": len(chunk_results),
+                                            "frame_id": frame.frame_id,
+                                            "phase": f"Validating {frame.name}",
+                                        })
                             else:
                                 _provider = str(
                                     os.environ.get("WARDEN_LLM_PROVIDER", "")
@@ -1126,17 +1098,13 @@ class FrameRunner:
                 total_injection_time_ms=round(_context_metrics.total_injection_time_ms, 2),
             )
 
-        if self.progress_callback:
-            self.progress_callback(
-                "frame_completed",
-                {
-                    "frame_id": frame.frame_id,
-                    "frame_name": frame.name,
-                    "status": frame_result.status,
-                    "findings": len(frame_result.findings) if hasattr(frame_result, "findings") else 0,
-                    "duration": getattr(frame_result, "duration", 0.0),
-                },
-            )
+        self._report_progress("frame_completed", {
+            "frame_id": frame.frame_id,
+            "frame_name": frame.name,
+            "status": frame_result.status,
+            "findings": len(frame_result.findings) if hasattr(frame_result, "findings") else 0,
+            "duration": getattr(frame_result, "duration", 0.0),
+        })
 
         return frame_result
 
