@@ -94,12 +94,9 @@ class OpenAIClient(ILlmClient):
                 await limiter.acquire(provider_name, tokens=request.max_tokens + request.estimated_prompt_tokens)
             except asyncio.TimeoutError:
                 # Rate-limit queue timeout — skip this call, do not trip circuit breaker (#311)
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message=f"{provider_name} rate-limit queue timeout — provider skipped",
+                return LlmResponse.error(
+                    f"{provider_name} rate-limit queue timeout — provider skipped",
                     provider=self.provider,
-                    duration_ms=0,
                 )
 
             headers = {"Content-Type": "application/json"}
@@ -129,16 +126,10 @@ class OpenAIClient(ILlmClient):
                 response.raise_for_status()
                 result = response.json()
 
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
 
             if not result.get("choices"):
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message="No response from OpenAI",
-                    provider=self.provider,
-                    duration_ms=duration_ms,
-                )
+                return LlmResponse.error("No response from OpenAI", provider=self.provider, duration_ms=duration_ms)
 
             usage = result.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
@@ -163,33 +154,15 @@ class OpenAIClient(ILlmClient):
             )
 
         except (httpx.HTTPStatusError, httpx.RequestError) as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"HTTP error: {e!s}",
-                provider=self.provider,
-                duration_ms=duration_ms,
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(f"HTTP error: {e!s}", provider=self.provider, duration_ms=duration_ms)
         except (json.JSONDecodeError, KeyError) as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"JSON/Data error: {e!s}",
-                provider=self.provider,
-                duration_ms=duration_ms,
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(f"JSON/Data error: {e!s}", provider=self.provider, duration_ms=duration_ms)
         except Exception as e:
             # Last resort for truly unexpected errors
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"Unexpected error: {e!s}",
-                provider=self.provider,
-                duration_ms=duration_ms,
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(f"Unexpected error: {e!s}", provider=self.provider, duration_ms=duration_ms)
 
     async def send_structured_async(self, structured: StructuredPrompt, request: LlmRequest) -> LlmResponse:
         """Send a request using a StructuredPrompt with cache-friendly layout.
@@ -237,16 +210,10 @@ class OpenAIClient(ILlmClient):
                 response.raise_for_status()
                 result = response.json()
 
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
 
             if not result.get("choices"):
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message="No response from OpenAI",
-                    provider=self.provider,
-                    duration_ms=duration_ms,
-                )
+                return LlmResponse.error("No response from OpenAI", provider=self.provider, duration_ms=duration_ms)
 
             usage = result.get("usage", {})
             prompt_tokens = usage.get("prompt_tokens", 0)
@@ -270,32 +237,14 @@ class OpenAIClient(ILlmClient):
             )
 
         except (httpx.HTTPStatusError, httpx.RequestError) as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"HTTP error: {e!s}",
-                provider=self.provider,
-                duration_ms=duration_ms,
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(f"HTTP error: {e!s}", provider=self.provider, duration_ms=duration_ms)
         except (json.JSONDecodeError, KeyError) as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"JSON/Data error: {e!s}",
-                provider=self.provider,
-                duration_ms=duration_ms,
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(f"JSON/Data error: {e!s}", provider=self.provider, duration_ms=duration_ms)
         except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"Unexpected error: {e!s}",
-                provider=self.provider,
-                duration_ms=duration_ms,
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(f"Unexpected error: {e!s}", provider=self.provider, duration_ms=duration_ms)
 
     async def is_available_async(self) -> bool:
         """

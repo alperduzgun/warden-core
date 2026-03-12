@@ -86,7 +86,7 @@ class GeminiClient(ILlmClient):
 
                 result = response.json()
 
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
 
             # Extract content
             # Response: { candidates: [ { content: { parts: [ { text: "..." } ] } } ] }
@@ -99,10 +99,8 @@ class GeminiClient(ILlmClient):
 
             if not content:
                 # Check for safety ratings blocking
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message=f"No content generated. Response: {result}",
+                return LlmResponse.error(
+                    f"No content generated. Response: {result}",
                     provider=self.provider,
                     duration_ms=duration_ms,
                 )
@@ -122,20 +120,16 @@ class GeminiClient(ILlmClient):
             )
 
         except httpx.HTTPStatusError as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"HTTP {e.response.status_code}: {(e.response.text[:200] if e.response.text else 'No response body')}",
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(
+                f"HTTP {e.response.status_code}: {(e.response.text[:200] if e.response.text else 'No response body')}",
                 provider=self.provider,
                 duration_ms=duration_ms,
             )
 
         except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(str(e), provider=self.provider, duration_ms=duration_ms)
 
     async def is_available_async(self) -> bool:
         """Check availability."""

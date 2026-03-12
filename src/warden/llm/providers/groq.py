@@ -90,12 +90,9 @@ class GroqClient(ILlmClient):
                     remaining_seconds=round(remaining, 1),
                     reason="exceeds_timeout_budget",
                 )
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message=f"Groq rate limited — {remaining:.0f}s remaining, exceeds timeout budget",
+                return LlmResponse.error(
+                    f"Groq rate limited — {remaining:.0f}s remaining, exceeds timeout budget",
                     provider=self.provider,
-                    duration_ms=0,
                 )
             logger.info("groq_rate_limited_backoff", wait_seconds=round(remaining, 1))
             await asyncio.sleep(remaining)
@@ -108,12 +105,9 @@ class GroqClient(ILlmClient):
                 await limiter.acquire("groq", tokens=request.max_tokens + request.estimated_prompt_tokens)
             except asyncio.TimeoutError:
                 # Rate-limit queue timeout — skip this call, do not trip circuit breaker (#311)
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message="Groq rate-limit queue timeout — provider skipped",
+                return LlmResponse.error(
+                    "Groq rate-limit queue timeout — provider skipped",
                     provider=self.provider,
-                    duration_ms=0,
                 )
 
             headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
@@ -144,16 +138,10 @@ class GroqClient(ILlmClient):
                 response.raise_for_status()
                 result = response.json()
 
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
 
             if not result.get("choices"):
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message="No response from Groq",
-                    provider=self.provider,
-                    duration_ms=duration_ms,
-                )
+                return LlmResponse.error("No response from Groq", provider=self.provider, duration_ms=duration_ms)
 
             usage = result.get("usage", {})
 
@@ -169,7 +157,7 @@ class GroqClient(ILlmClient):
             )
 
         except httpx.HTTPStatusError as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
             body = e.response.text[:500] if e.response else ""
 
             if e.response is not None and e.response.status_code == 429:
@@ -181,26 +169,16 @@ class GroqClient(ILlmClient):
                     rate_limited_until=GroqClient._rate_limited_until,
                 )
                 logger.debug("groq_429_body", body=body)  # Body in debug only — may contain request echo (#312)
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message=f"Groq rate limited (429) — retry after {retry_after}s",
+                return LlmResponse.error(
+                    f"Groq rate limited (429) — retry after {retry_after}s",
                     provider=self.provider,
                     duration_ms=duration_ms,
                 )
 
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"{e} | body={body}",
-                provider=self.provider,
-                duration_ms=duration_ms,
-            )
+            return LlmResponse.error(f"{e} | body={body}", provider=self.provider, duration_ms=duration_ms)
         except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(str(e), provider=self.provider, duration_ms=duration_ms)
 
     async def is_available_async(self) -> bool:
         try:

@@ -117,17 +117,11 @@ class AnthropicClient(ILlmClient):
                 response.raise_for_status()
                 result = response.json()
 
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
 
             # Validate response structure
             if not result.get("content"):
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message="No response from Anthropic",
-                    provider=self.provider,
-                    duration_ms=duration_ms,
-                )
+                return LlmResponse.error("No response from Anthropic", provider=self.provider, duration_ms=duration_ms)
 
             # Extract usage information
             usage = result.get("usage", {})
@@ -144,29 +138,23 @@ class AnthropicClient(ILlmClient):
             )
 
         except httpx.HTTPStatusError as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
             response_text = e.response.text[:200] if e.response.text else "No response body"
             error_msg = f"HTTP {e.response.status_code}: {response_text}"
-            return LlmResponse(
-                content="", success=False, error_message=error_msg, provider=self.provider, duration_ms=duration_ms
-            )
+            return LlmResponse.error(error_msg, provider=self.provider, duration_ms=duration_ms)
 
         except (httpx.ConnectError, httpx.TimeoutException) as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
             # Transient connectivity issue — do not treat as permanent provider failure (#313)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"Connection error (transient): {type(e).__name__}",
+            return LlmResponse.error(
+                f"Connection error (transient): {type(e).__name__}",
                 provider=self.provider,
                 duration_ms=duration_ms,
             )
 
         except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(str(e), provider=self.provider, duration_ms=duration_ms)
 
     async def send_structured_async(self, structured: StructuredPrompt, request: LlmRequest) -> LlmResponse:
         """Send a request using a StructuredPrompt with cache_control hints.
@@ -209,16 +197,10 @@ class AnthropicClient(ILlmClient):
                 response.raise_for_status()
                 result = response.json()
 
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
 
             if not result.get("content"):
-                return LlmResponse(
-                    content="",
-                    success=False,
-                    error_message="No response from Anthropic",
-                    provider=self.provider,
-                    duration_ms=duration_ms,
-                )
+                return LlmResponse.error("No response from Anthropic", provider=self.provider, duration_ms=duration_ms)
 
             usage = result.get("usage", {})
 
@@ -234,29 +216,23 @@ class AnthropicClient(ILlmClient):
             )
 
         except httpx.HTTPStatusError as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
             response_text = e.response.text[:200] if e.response.text else "No response body"
             error_msg = f"HTTP {e.response.status_code}: {response_text}"
-            return LlmResponse(
-                content="", success=False, error_message=error_msg, provider=self.provider, duration_ms=duration_ms
-            )
+            return LlmResponse.error(error_msg, provider=self.provider, duration_ms=duration_ms)
 
         except (httpx.ConnectError, httpx.TimeoutException) as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
             # Transient connectivity issue — do not treat as permanent provider failure (#313)
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"Connection error (transient): {type(e).__name__}",
+            return LlmResponse.error(
+                f"Connection error (transient): {type(e).__name__}",
                 provider=self.provider,
                 duration_ms=duration_ms,
             )
 
         except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
-            return LlmResponse(
-                content="", success=False, error_message=str(e), provider=self.provider, duration_ms=duration_ms
-            )
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(str(e), provider=self.provider, duration_ms=duration_ms)
 
     async def is_available_async(self) -> bool:
         """

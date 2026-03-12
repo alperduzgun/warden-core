@@ -100,12 +100,9 @@ class OllamaClient(ILlmClient):
 
         # Fail-fast: skip rate limiter + HTTP call for known-missing models
         if model in self._missing_models:
-            return LlmResponse(
-                content="",
-                success=False,
-                error_message=f"Model '{model}' not found. Run 'ollama pull {model}'.",
+            return LlmResponse.error(
+                f"Model '{model}' not found. Run 'ollama pull {model}'.",
                 provider=self.provider,
-                duration_ms=0,
             )
 
         try:
@@ -164,7 +161,7 @@ class OllamaClient(ILlmClient):
                                 gen_ns = chunk.get("eval_duration", 0)
                                 break
 
-                duration_ms = int((time.time() - start_time) * 1000)
+                duration_ms = LlmResponse.elapsed_ms(start_time)
                 content = "".join(content_parts)
 
                 return LlmResponse(
@@ -181,7 +178,7 @@ class OllamaClient(ILlmClient):
                 )
 
         except httpx.HTTPStatusError as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
             if e.response.status_code == 404:
                 # Cache the missing model to fail-fast on subsequent calls
                 self._missing_models.add(model)
@@ -198,19 +195,15 @@ class OllamaClient(ILlmClient):
                 model=model,
                 duration_ms=duration_ms,
             )
-            return LlmResponse(
-                content="", success=False, error_message=error_msg, provider=self.provider, duration_ms=duration_ms
-            )
+            return LlmResponse.error(error_msg, provider=self.provider, duration_ms=duration_ms)
         except ModelNotFoundError:
             raise  # Don't wrap in generic handler
         except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = LlmResponse.elapsed_ms(start_time)
             # asyncio.TimeoutError.__str__() returns '' — show type name as fallback
             _err = str(e) or type(e).__name__
             logger.error("ollama_request_failed", error=_err, model=model, duration_ms=duration_ms)
-            return LlmResponse(
-                content="", success=False, error_message=_err, provider=self.provider, duration_ms=duration_ms
-            )
+            return LlmResponse.error(_err, provider=self.provider, duration_ms=duration_ms)
 
     async def is_available_async(self) -> bool:
         """
