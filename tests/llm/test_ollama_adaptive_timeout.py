@@ -152,20 +152,26 @@ class TestOllamaStatExtraction:
 
         mock_response.aiter_lines = fake_aiter_lines
 
-        mock_stream = AsyncMock()
+        mock_stream = MagicMock()
         mock_stream.__aenter__ = AsyncMock(return_value=mock_response)
         mock_stream.__aexit__ = AsyncMock(return_value=False)
 
         mock_client = MagicMock()
         mock_client.stream = MagicMock(return_value=mock_stream)
 
-        mock_async_client = AsyncMock()
+        mock_async_client = MagicMock()
         mock_async_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_async_client.__aexit__ = AsyncMock(return_value=False)
 
+        mock_sem = MagicMock()
+        mock_sem.__aenter__ = AsyncMock(return_value=None)
+        mock_sem.__aexit__ = AsyncMock(return_value=False)
+
+        mock_limiter = AsyncMock()
+        mock_limiter.concurrency_limit = MagicMock(return_value=mock_sem)
+
         with patch("warden.llm.providers.ollama.httpx.AsyncClient", return_value=mock_async_client):
             with patch("warden.llm.global_rate_limiter.GlobalRateLimiter") as mock_rl:
-                mock_limiter = AsyncMock()
                 mock_rl.get_instance = AsyncMock(return_value=mock_limiter)
                 response = await client.send_async(request)
 
@@ -201,20 +207,26 @@ class TestOllamaStatExtraction:
 
         mock_response.aiter_lines = fake_aiter_lines
 
-        mock_stream = AsyncMock()
+        mock_stream = MagicMock()
         mock_stream.__aenter__ = AsyncMock(return_value=mock_response)
         mock_stream.__aexit__ = AsyncMock(return_value=False)
 
         mock_client = MagicMock()
         mock_client.stream = MagicMock(return_value=mock_stream)
 
-        mock_async_client = AsyncMock()
+        mock_async_client = MagicMock()
         mock_async_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_async_client.__aexit__ = AsyncMock(return_value=False)
 
+        mock_sem = MagicMock()
+        mock_sem.__aenter__ = AsyncMock(return_value=None)
+        mock_sem.__aexit__ = AsyncMock(return_value=False)
+
+        mock_limiter = AsyncMock()
+        mock_limiter.concurrency_limit = MagicMock(return_value=mock_sem)
+
         with patch("warden.llm.providers.ollama.httpx.AsyncClient", return_value=mock_async_client):
             with patch("warden.llm.global_rate_limiter.GlobalRateLimiter") as mock_rl:
-                mock_limiter = AsyncMock()
                 mock_rl.get_instance = AsyncMock(return_value=mock_limiter)
                 response = await client.send_async(request)
 

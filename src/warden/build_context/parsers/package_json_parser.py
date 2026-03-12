@@ -8,6 +8,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+import structlog
+
+logger = structlog.get_logger(__name__)
+
 from warden.build_context.models import (
     BuildContext,
     BuildScript,
@@ -131,7 +135,7 @@ class PackageJsonParser:
 
         except (OSError, json.JSONDecodeError) as e:
             # Log error but don't crash - return None
-            print(f"Error parsing package.json: {e}")
+            logger.warning("package_json_parse_error", error=str(e))
             return None
 
     def _parse_dependencies(self, deps_dict: dict[str, str], dep_type: DependencyType) -> list[Dependency]:

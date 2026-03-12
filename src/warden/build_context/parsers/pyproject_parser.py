@@ -8,6 +8,10 @@ import re
 from pathlib import Path
 from typing import Any
 
+import structlog
+
+logger = structlog.get_logger(__name__)
+
 from warden.build_context.models import (
     BuildContext,
     BuildScript,
@@ -93,7 +97,7 @@ class PyprojectParser:
                 return None
 
         except (OSError, ValueError) as e:
-            print(f"Error parsing pyproject.toml: {e}")
+            logger.warning("pyproject_toml_parse_error", error=str(e))
             return None
 
     def _parse_poetry(self, data: dict[str, Any], build_system: BuildSystem) -> BuildContext:

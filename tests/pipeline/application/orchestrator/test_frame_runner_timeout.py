@@ -218,18 +218,18 @@ class TestCalculateBatchTimeout:
         return SimpleNamespace(size_bytes=size_bytes)
 
     def test_sums_per_file_timeouts(self):
-        """Five small files → each gets local floor (120s) → sum=600s, clamped to min 300s."""
+        """Five small files → each gets local floor (45s) → sum=225s, clamped to min 300s."""
         files = [self._make_file(100) for _ in range(5)]
         result = calculate_batch_timeout(files, provider="ollama")
-        # Each file with size 100 and ollama provider → _FILE_TIMEOUT_LOCAL_S = 120s
-        # Total = 5 × 120 = 600s, clamp(300, 1800) = 600s
-        assert result == 5 * _FILE_TIMEOUT_LOCAL_S
+        # Each file with size 100 and ollama provider → _FILE_TIMEOUT_LOCAL_S = 45s
+        # Total = 5 × 45 = 225s, clamp(300, 1800) = 300s
+        assert result == _BATCH_TIMEOUT_MIN_S
 
     def test_ollama_provider_uses_local_floor(self):
         """Ollama provider forces each file to at least _FILE_TIMEOUT_LOCAL_S."""
         files = [self._make_file(0)]
         result = calculate_batch_timeout(files, provider="ollama")
-        # sum = 120s, clamped to min 300s
+        # sum = 45s, clamped to min 300s
         assert result == _BATCH_TIMEOUT_MIN_S
 
     def test_min_clamp_300s(self):

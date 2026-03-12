@@ -308,7 +308,7 @@ def _render_text_report(
                 file_path = parts[0] if parts else location
                 try:
                     line_num = int(parts[1]) if len(parts) > 1 else 0
-                except:
+                except (ValueError, IndexError):
                     line_num = 0
 
             ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else "py"

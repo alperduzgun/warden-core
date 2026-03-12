@@ -7,6 +7,10 @@ Extracts dependencies from requirements.txt and related files.
 import re
 from pathlib import Path
 
+import structlog
+
+logger = structlog.get_logger(__name__)
+
 from warden.build_context.models import (
     BuildContext,
     BuildSystem,
@@ -90,7 +94,7 @@ class RequirementsParser:
             )
 
         except OSError as e:
-            print(f"Error parsing requirements.txt: {e}")
+            logger.warning("requirements_txt_parse_error", error=str(e))
             return None
 
     def _parse_requirements_file(self, file_path: Path, visited: set[Path]) -> list[Dependency]:

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 
 from warden.pipeline.domain.pipeline_context import PipelineContext
@@ -17,8 +17,9 @@ async def test_classification_phase_propagates_context_to_llm():
     """
     # 1. Setup Mock LLM
     mock_llm = AsyncMock()
-    mock_llm.send_async.return_value.success = True
-    mock_llm.send_async.return_value.content = """
+    mock_response = MagicMock()
+    mock_response.success = True
+    mock_response.content = """
     ```json
     {
         "selected_frames": ["security", "resilience"],
@@ -28,6 +29,7 @@ async def test_classification_phase_propagates_context_to_llm():
     }
     ```
     """
+    mock_llm.complete_async.return_value = mock_response
 
     # 2. Setup Pipeline Context with specific architectural data
     project_root = Path("/tmp/test_project")
@@ -47,13 +49,17 @@ async def test_classification_phase_propagates_context_to_llm():
     context.file_contexts = {"main.py": {"context": "PRODUCTION", "summary": "Main entry point"}}
     context.quality_score_before = 8.5
 
-    # 3. Initialize Executor
+    # 3. Initialize Executor with mock frames (empty list prevents LLM call)
+    mock_frame_security = MagicMock(frame_id="security", name="Security Analysis", description="Security checks")
+    mock_frame_resilience = MagicMock(frame_id="resilience", name="Resilience Analysis", description="Resilience checks")
+    mock_frames = [mock_frame_security, mock_frame_resilience]
+
     executor = ClassificationExecutor(
-        config=PipelineConfig(enable_classification=True),
+        config=PipelineConfig(enable_classification=True, force_scan=True),
         project_root=project_root,
         llm_service=mock_llm,
-        frames=[],
-        available_frames=[],
+        frames=mock_frames,
+        available_frames=mock_frames,
     )
 
     # 4. Execute Phase
@@ -64,15 +70,20 @@ async def test_classification_phase_propagates_context_to_llm():
     # But since we modified the Executor to pass context, we can just run it
     # and check the calls to mock_llm.
 
-    await executor.execute_async(context, code_files)
+    with patch(
+        "warden.pipeline.application.executors.classification_cache.ClassificationCache.get",
+        return_value=None,
+    ):
+        await executor.execute_async(context, code_files)
 
     # 5. Verify LLM Interaction
     # The LLM should have been called with a prompt containing our context
-    assert mock_llm.send_async.called
+    assert mock_llm.complete_async.called
 
-    call_args = mock_llm.send_async.call_args
-    llm_request = call_args[0][0]  # First arg is request object
-    prompt_content = llm_request.user_message
+    call_args = mock_llm.complete_async.call_args
+    prompt_content = call_args.kwargs.get("prompt", "") or call_args[1].get("prompt", "") if call_args[1] else ""
+    if not prompt_content and call_args[0]:
+        prompt_content = call_args[0][0]
 
     # Assertions: Check if semantic context is in the prompt
     print(f"Captured Prompt: {prompt_content}")

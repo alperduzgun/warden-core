@@ -674,8 +674,8 @@ class FrameRunner:
                                     frame.frame_id,
                                     findings_dicts,
                                 )
-                            except Exception:
-                                pass  # best-effort persistence
+                            except Exception as exc:
+                                logger.debug("partial_write_failed", file=str(c_file.path), error=str(exc))
 
                         return result
                     except (asyncio.TimeoutError, TimeoutError):
