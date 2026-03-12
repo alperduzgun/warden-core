@@ -61,7 +61,6 @@ class PipelineConfig(BaseDomainModel):
     timeout: int = 300  # Total pipeline timeout in seconds
     frame_timeout: int = 120  # Per-frame timeout in seconds
     parallel_limit: int = 4  # Max concurrent frames in parallel mode
-    skip_non_blockers: bool = False  # Skip non-blocker frames if blocker fails
     use_gitignore: bool = True  # NEW: Respect .gitignore patterns (global)
     analysis_level: AnalysisLevel = AnalysisLevel.STANDARD  # NEW: Scannig depth level
     use_llm: bool = True  # NEW: Global LLM control flag
@@ -88,8 +87,6 @@ class PipelineConfig(BaseDomainModel):
 
     # Phase-specific configurations
     discovery_config: dict[str, Any] | None = None  # Discovery configuration options
-    suppression_config_path: str | None = None  # Path to suppression config file
-    issue_validation_config: dict[str, Any] | None = None  # Issue validator configuration (min_confidence, rules)
 
     # PRE-ANALYSIS configuration (NEW!)
     pre_analysis_config: dict[str, Any] | None = None  # PRE-ANALYSIS phase config (use_llm, llm_threshold, etc.)
