@@ -310,7 +310,7 @@ class FrameRunner:
                 pi = context.project_intelligence
 
                 # Validate structure before injecting
-                if not isinstance(pi, object):
+                if not hasattr(pi, "entry_points") and not hasattr(pi, "auth_patterns") and not hasattr(pi, "critical_sinks"):
                     logger.warning(
                         "project_intelligence_wrong_type",
                         frame_id=frame.frame_id,

@@ -1249,7 +1249,7 @@ def run_post_setup(
         branch = "main"
         try:
             branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
-        except (OSError, PermissionError):  # Cleanup is best-effort
+        except (OSError, PermissionError, subprocess.CalledProcessError):  # Cleanup is best-effort
             pass
 
         # Select CI provider

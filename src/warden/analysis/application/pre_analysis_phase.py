@@ -1063,14 +1063,6 @@ class PreAnalysisPhase:
             )
             return True
 
-        if context_info.has_ignore_marker:
-            logger.debug(
-                "skipping_file",
-                file=file_path,
-                reason="ignore_marker",
-            )
-            return True
-
         return False
 
     def _enrich_context_from_memory(self, context: ProjectContext) -> None:

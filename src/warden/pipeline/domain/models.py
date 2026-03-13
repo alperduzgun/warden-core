@@ -103,18 +103,16 @@ class PipelineConfig(BaseDomainModel):
     lsp_config: dict[str, Any] | None = None  # LSP integration configuration (enabled, servers)
 
     def get_tpm_limit(self) -> int:
-        """Resolve tpm_limit: llm_config dict > llm typed config > default 1000."""
+        """Resolve tpm_limit from llm_config dict, default 1000."""
         if self.llm_config:
             return int(self.llm_config.get("tpm_limit", 1000))
-        llm = getattr(self, "llm", None)
-        return getattr(llm, "tpm_limit", 1000) if llm else 1000
+        return 1000
 
     def get_rpm_limit(self) -> int:
-        """Resolve rpm_limit: llm_config dict > llm typed config > default 6."""
+        """Resolve rpm_limit from llm_config dict, default 6."""
         if self.llm_config:
             return int(self.llm_config.get("rpm_limit", 6))
-        llm = getattr(self, "llm", None)
-        return getattr(llm, "rpm_limit", 6) if llm else 6
+        return 6
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""

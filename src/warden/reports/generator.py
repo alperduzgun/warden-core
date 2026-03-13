@@ -439,6 +439,14 @@ class ReportGenerator:
                 _lc = location_str.rfind(":")
                 file_path = location_str[:_lc] if _lc > 1 else location_str
 
+                # Parse line number from location string (e.g. "file.py:42" → 42)
+                _line_from_location = 1
+                if _lc > 1:
+                    try:
+                        _line_from_location = int(location_str[_lc + 1:])
+                    except (ValueError, IndexError):
+                        pass
+
                 # Skip malformed findings that would produce invalid SARIF entries
                 if not rule_id or not location_str or location_str == "unknown":
                     logger.warning(
@@ -474,7 +482,7 @@ class ReportGenerator:
                             "physicalLocation": {
                                 "artifactLocation": {"uri": self._to_relative_uri(file_path)},
                                 "region": {
-                                    "startLine": max(1, self._get_val(finding, "line", 1)),
+                                    "startLine": max(1, _line_from_location),
                                     "startColumn": max(1, self._get_val(finding, "column", 1)),
                                 },
                             }
@@ -526,7 +534,7 @@ class ReportGenerator:
                                         "replacements": [
                                             {
                                                 "deletedRegion": {
-                                                    "startLine": max(1, self._get_val(finding, "line", 1)),
+                                                    "startLine": max(1, _line_from_location),
                                                 },
                                                 "insertedContent": {"text": rem_code},
                                             }
