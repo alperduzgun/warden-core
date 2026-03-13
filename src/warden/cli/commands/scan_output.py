@@ -456,9 +456,23 @@ def _render_text_report(
         )
 
     duration_str = f"{scan_duration:.1f}s" if scan_duration > 0 else "—"
+
+    # Detect Rust engine availability
+    try:
+        from warden.validation.application.rust_validation_engine import RUST_AVAILABLE
+    except ImportError:
+        RUST_AVAILABLE = False
+    rust_label = "[bold green]active[/]" if RUST_AVAILABLE else "[bold yellow]unavailable[/]"
+
     stat_table.add_row(
         "Scan duration",
         f"[bold white]{duration_str}[/]",
+        "Rust engine",
+        rust_label,
+    )
+    stat_table.add_row(
+        "",
+        "",
         "Frames skipped",
         f"[bold white]{frames_skipped}[/]",
     )
