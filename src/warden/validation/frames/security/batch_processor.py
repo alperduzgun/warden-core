@@ -184,7 +184,7 @@ Return JSON array with verification results:
         request = LlmRequest(
             user_message=full_prompt,
             system_prompt="You are a senior security engineer. Verify if these security findings are true vulnerabilities or false positives.",
-            max_tokens=600,  # JSON array for 10 findings ~200-400 tok; cap prevents Ollama over-allocation
+            max_tokens=1024,  # 600 caused frequent truncation → malformed JSON → silent fallback
         )
         response = await llm_service.send_with_tools_async(request)
 
@@ -205,6 +205,16 @@ Return JSON array with verification results:
                 match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", content)
                 if match:
                     content = match.group(1).strip()
+
+            # Attempt to recover truncated JSON arrays (e.g. "[{...},{..." → "[{...}]")
+            content = content.strip()
+            if content.startswith("[") and not content.endswith("]"):
+                # Find last complete object boundary and close the array
+                last_brace = content.rfind("}")
+                if last_brace > 0:
+                    content = content[: last_brace + 1] + "]"
+                    logger.debug("security_llm_json_recovery", action="truncated_array_closed")
+
             parsed = json.loads(content)
 
             if isinstance(parsed, list):
