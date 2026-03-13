@@ -19,7 +19,7 @@ from warden.cli.commands.context import (
     _has_tool_config,
     read_pyproject,
 )
-from warden.cli.commands.init import (
+from warden.cli.commands.init_steps import (
     _generate_ai_rules_md,
     _generate_ignore_yaml_with_frames,
     _generate_root_rules_yaml,
