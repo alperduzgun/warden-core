@@ -988,7 +988,7 @@ async def _run_scan_async(
                     console.print(f"[dim]Failed to auto-generate root badge: {e}[/dim]")
 
         # 3.5 Auto-save JSON report in CI mode for smoke checks
-        if ci and final_result_data:
+        if ci_mode and final_result_data:
             try:
                 from warden.reports.generator import ReportGenerator
 
