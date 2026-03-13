@@ -1210,7 +1210,7 @@ def run_post_setup(
         console.print(f"[red]Failed to configure agent tools: {e}[/red]")
 
     # --- Step 11: Baseline ---
-    should_create_baseline = force  # default non-interactive behavior unchanged
+    should_create_baseline = force and baseline  # respect --no-baseline flag
     if is_interactive and baseline:
         should_create_baseline = Confirm.ask(
             "\nCreate Baseline from current issues? (Recommended for existing projects)", default=True
@@ -1225,7 +1225,7 @@ def run_post_setup(
             console.print(f"[red]Warning: Failed to create baseline: {e}[/red]")
 
     # --- Step 12: Intelligence Generation (CI Optimization) ---
-    should_gen_intel = force
+    should_gen_intel = force and intel  # respect --no-intel flag
     if is_interactive and intel:
         should_gen_intel = Confirm.ask(
             "\nGenerate Project Intelligence for CI? (Recommended for faster CI scans)", default=True

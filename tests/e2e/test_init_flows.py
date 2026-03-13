@@ -186,7 +186,14 @@ class TestInitFileCreation:
 # ============================================================================
 @pytest.mark.e2e
 class TestInitProjectDetection:
-    """Test that init correctly detects project type and language."""
+    """Test that init correctly detects project type and language.
+
+    These tests only validate detection logic, so post-setup steps
+    (baseline, intel, grammars) are skipped to avoid network I/O and timeouts.
+    """
+
+    # Shared flags: skip network-heavy post-setup steps irrelevant to detection
+    _DETECT_FLAGS = ["init", "--force", "--skip-mcp", "--no-baseline", "--no-intel", "--no-grammars"]
 
     def test_init_detects_python_project_requirements(self, runner, tmp_path, monkeypatch):
         """Init detects Python project from requirements.txt."""
@@ -196,7 +203,7 @@ class TestInitProjectDetection:
         # Add a Python file so language detection works
         (tmp_path / "app.py").write_text("print('hello')\n")
 
-        result = runner.invoke(app, ["init", "--force", "--skip-mcp"])
+        result = runner.invoke(app, self._DETECT_FLAGS)
         assert result.exit_code == 0
 
         config = yaml.safe_load((tmp_path / ".warden" / "config.yaml").read_text())
@@ -215,7 +222,7 @@ version = "1.0.0"
         # Add a Python file so language detection works
         (tmp_path / "main.py").write_text("def main(): pass\n")
 
-        result = runner.invoke(app, ["init", "--force", "--skip-mcp"])
+        result = runner.invoke(app, self._DETECT_FLAGS)
         assert result.exit_code == 0
 
         config = yaml.safe_load((tmp_path / ".warden" / "config.yaml").read_text())
@@ -229,7 +236,7 @@ version = "1.0.0"
         # Add a JS file so language detection works
         (tmp_path / "index.js").write_text("console.log('hello');\n")
 
-        result = runner.invoke(app, ["init", "--force", "--skip-mcp"])
+        result = runner.invoke(app, self._DETECT_FLAGS)
         assert result.exit_code == 0
 
         config = yaml.safe_load((tmp_path / ".warden" / "config.yaml").read_text())
