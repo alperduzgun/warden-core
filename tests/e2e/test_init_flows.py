@@ -447,8 +447,13 @@ class TestInitCIWorkflows:
 # warden init - Integration Tests
 # ============================================================================
 @pytest.mark.e2e
+@pytest.mark.timeout(180)
 class TestInitIntegration:
-    """Integration tests for complete init flows."""
+    """Integration tests for complete init flows.
+
+    These run the full init pipeline including baseline scan, intelligence
+    generation, and grammar install — so they need a longer timeout.
+    """
 
     def test_init_complete_flow_python(self, runner, tmp_path, monkeypatch):
         """Complete init flow for Python project."""
