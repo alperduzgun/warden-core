@@ -224,6 +224,14 @@ def isolated_project(tmp_path):
 
 
 @pytest.fixture
+def isolated_sample(tmp_path):
+    """Alias for isolated_project — mutation-safe copy of sample_project."""
+    dest = tmp_path / "project"
+    shutil.copytree(SAMPLE_PROJECT, dest)
+    return dest
+
+
+@pytest.fixture
 def ollama_available():
     """Returns True if Ollama is running. Use with requires_ollama marker."""
     return _get_ollama_available()

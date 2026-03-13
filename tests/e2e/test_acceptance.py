@@ -148,13 +148,6 @@ def initialized_project(tmp_path):
     return tmp_path
 
 
-@pytest.fixture
-def isolated_sample(tmp_path):
-    """Copy of the sample_project fixture for mutation-safe tests."""
-    dest = tmp_path / "project"
-    shutil.copytree(SAMPLE_PROJECT, dest)
-    return dest
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. Startup & Discovery
@@ -560,18 +553,18 @@ class TestOutputSchemaValidation:
         _assert_no_crash(r, context="JSON schema validation")
         if r.returncode == 1:
             pytest.skip("Pipeline error — cannot validate JSON schema")
-            try:
-                data = _extract_json(r.stdout)
-            except ValueError:
-                # If JSON extraction fails, it means output format is wrong
-                pytest.fail(f"Failed to extract JSON from stdout:\n{r.stdout[:500]}")
 
-            # Required top-level fields
-            assert "status" in data, f"Missing 'status' in JSON. Keys: {list(data.keys())}"
-            assert "total_findings" in data, f"Missing 'total_findings' in JSON. Keys: {list(data.keys())}"
-            assert "pipeline_id" in data or "pipelineId" in data, (
-                f"Missing 'pipeline_id' or 'pipelineId' in JSON. Keys: {list(data.keys())}"
-            )
+        try:
+            data = _extract_json(r.stdout)
+        except ValueError:
+            pytest.fail(f"Failed to extract JSON from stdout:\n{r.stdout[:500]}")
+
+        # Required top-level fields
+        assert "status" in data, f"Missing 'status' in JSON. Keys: {list(data.keys())}"
+        assert "total_findings" in data, f"Missing 'total_findings' in JSON. Keys: {list(data.keys())}"
+        assert "pipeline_id" in data or "pipelineId" in data, (
+            f"Missing 'pipeline_id' or 'pipelineId' in JSON. Keys: {list(data.keys())}"
+        )
 
     def test_json_findings_have_required_fields(self, isolated_sample):
         """Each finding in JSON must have id, severity, and message."""
@@ -588,24 +581,25 @@ class TestOutputSchemaValidation:
         _assert_no_crash(r, context="JSON findings schema")
         if r.returncode == 1:
             pytest.skip("Pipeline error — cannot validate findings schema")
-            try:
-                data = _extract_json(r.stdout)
-            except ValueError:
-                pytest.fail(f"Failed to extract JSON from stdout:\n{r.stdout[:500]}")
 
-            # Check findings array structure if it exists and has items
-            findings = data.get("findings", [])
-            if findings:
-                for finding in findings:
-                    assert "id" in finding, f"Finding missing 'id': {finding}"
-                    assert "severity" in finding, f"Finding missing 'severity': {finding}"
-                    assert "message" in finding, f"Finding missing 'message': {finding}"
+        try:
+            data = _extract_json(r.stdout)
+        except ValueError:
+            pytest.fail(f"Failed to extract JSON from stdout:\n{r.stdout[:500]}")
 
-                    # Severity must be valid
-                    valid_severities = {"critical", "high", "medium", "low"}
-                    assert finding["severity"] in valid_severities, (
-                        f"Invalid severity '{finding['severity']}'. Must be one of {valid_severities}"
-                    )
+        # Check findings array structure if it exists and has items
+        findings = data.get("findings", [])
+        if findings:
+            for finding in findings:
+                assert "id" in finding, f"Finding missing 'id': {finding}"
+                assert "severity" in finding, f"Finding missing 'severity': {finding}"
+                assert "message" in finding, f"Finding missing 'message': {finding}"
+
+                # Severity must be valid
+                valid_severities = {"critical", "high", "medium", "low"}
+                assert finding["severity"] in valid_severities, (
+                    f"Invalid severity '{finding['severity']}'. Must be one of {valid_severities}"
+                )
 
     def test_sarif_structural_validity(self, isolated_sample):
         """SARIF output must conform to SARIF 2.1.0 structure."""
@@ -622,29 +616,30 @@ class TestOutputSchemaValidation:
         _assert_no_crash(r, context="SARIF schema")
         if r.returncode == 1:
             pytest.skip("Pipeline error — cannot validate SARIF schema")
-            try:
-                sarif = _extract_json(r.stdout)
-            except ValueError:
-                pytest.fail(f"Failed to extract SARIF JSON from stdout:\n{r.stdout[:500]}")
 
-            # SARIF 2.1.0 required top-level fields
-            assert sarif.get("version") == "2.1.0", f"Invalid SARIF version: {sarif.get('version')}"
-            assert "$schema" in sarif, "Missing $schema in SARIF output"
+        try:
+            sarif = _extract_json(r.stdout)
+        except ValueError:
+            pytest.fail(f"Failed to extract SARIF JSON from stdout:\n{r.stdout[:500]}")
 
-            # Runs array must exist and be non-empty
-            assert "runs" in sarif, "Missing 'runs' in SARIF output"
-            assert isinstance(sarif["runs"], list), "'runs' must be an array"
-            assert len(sarif["runs"]) > 0, "'runs' array is empty"
+        # SARIF 2.1.0 required top-level fields
+        assert sarif.get("version") == "2.1.0", f"Invalid SARIF version: {sarif.get('version')}"
+        assert "$schema" in sarif, "Missing $schema in SARIF output"
 
-            # First run must have tool.driver.name
-            run = sarif["runs"][0]
-            assert "tool" in run, "Missing 'tool' in SARIF run"
-            assert "driver" in run["tool"], "Missing 'driver' in SARIF tool"
-            assert "name" in run["tool"]["driver"], "Missing 'name' in SARIF tool.driver"
+        # Runs array must exist and be non-empty
+        assert "runs" in sarif, "Missing 'runs' in SARIF output"
+        assert isinstance(sarif["runs"], list), "'runs' must be an array"
+        assert len(sarif["runs"]) > 0, "'runs' array is empty"
 
-            # Results array must exist (can be empty)
-            assert "results" in run, "Missing 'results' in SARIF run"
-            assert isinstance(run["results"], list), "'results' must be an array"
+        # First run must have tool.driver.name
+        run = sarif["runs"][0]
+        assert "tool" in run, "Missing 'tool' in SARIF run"
+        assert "driver" in run["tool"], "Missing 'driver' in SARIF tool"
+        assert "name" in run["tool"]["driver"], "Missing 'name' in SARIF tool.driver"
+
+        # Results array must exist (can be empty)
+        assert "results" in run, "Missing 'results' in SARIF run"
+        assert isinstance(run["results"], list), "'results' must be an array"
 
     def test_json_frame_results_structure(self, isolated_sample):
         """Frame results in JSON must have frame_id, status, and findings."""
@@ -661,26 +656,27 @@ class TestOutputSchemaValidation:
         _assert_no_crash(r, context="JSON frame_results schema")
         if r.returncode == 1:
             pytest.skip("Pipeline error — cannot validate frame_results schema")
-            try:
-                data = _extract_json(r.stdout)
-            except ValueError:
-                pytest.fail(f"Failed to extract JSON from stdout:\n{r.stdout[:500]}")
 
-            # Check for frame_results (snake_case) or frameResults (camelCase)
-            frame_results = data.get("frame_results") or data.get("frameResults", [])
+        try:
+            data = _extract_json(r.stdout)
+        except ValueError:
+            pytest.fail(f"Failed to extract JSON from stdout:\n{r.stdout[:500]}")
 
-            if frame_results:
-                for frame_result in frame_results:
-                    # Check for frame_id or frameId
-                    has_frame_id = "frame_id" in frame_result or "frameId" in frame_result
-                    assert has_frame_id, f"Frame result missing 'frame_id' or 'frameId': {frame_result}"
+        # Check for frame_results (snake_case) or frameResults (camelCase)
+        frame_results = data.get("frame_results") or data.get("frameResults", [])
 
-                    # Check for status
-                    assert "status" in frame_result, f"Frame result missing 'status': {frame_result}"
+        if frame_results:
+            for frame_result in frame_results:
+                # Check for frame_id or frameId
+                has_frame_id = "frame_id" in frame_result or "frameId" in frame_result
+                assert has_frame_id, f"Frame result missing 'frame_id' or 'frameId': {frame_result}"
 
-                    # Check for findings array
-                    assert "findings" in frame_result, f"Frame result missing 'findings': {frame_result}"
-                    assert isinstance(frame_result["findings"], list), f"'findings' must be an array in frame result"
+                # Check for status
+                assert "status" in frame_result, f"Frame result missing 'status': {frame_result}"
+
+                # Check for findings array
+                assert "findings" in frame_result, f"Frame result missing 'findings': {frame_result}"
+                assert isinstance(frame_result["findings"], list), f"'findings' must be an array in frame result"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1774,7 +1770,7 @@ class TestScanAdvancedFlags:
         assert r.returncode in (0, 1, 2)
         combined = r.stdout + r.stderr
         # Should mention ZOMBIE MODE (basic level without AI)
-        assert "zombie" in combined.upper() or r.returncode in (0, 1, 2)
+        assert "zombie" in combined.upper(), "Expected ZOMBIE MODE mention in output"
 
     def test_ci_mode_with_format(self, isolated_sample):
         """--ci combined with --format json should produce valid JSON."""
@@ -3024,8 +3020,9 @@ class TestInstallUpdateCommands:
             cwd=str(initialized_project),
             timeout=30,
         )
-        # update may fail if no network / no sync target — just verify it completes
-        assert r.returncode is not None
+        # update may fail if no network / no sync target — just verify no crash
+        assert r.returncode in (0, 1), f"Unexpected exit code: {r.returncode}"
+        assert "Traceback" not in (r.stdout + r.stderr)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3199,8 +3196,9 @@ class TestCISubcommands:
             cwd=str(initialized_project),
             timeout=30,
         )
-        # ci init may fail if no CI provider detected — just verify it completes
-        assert r.returncode is not None
+        # ci init may fail if no CI provider detected — just verify no crash
+        assert r.returncode in (0, 1), f"Unexpected exit code: {r.returncode}"
+        assert "Traceback" not in (r.stdout + r.stderr)
 
     def test_ci_help(self):
         """``ci --help`` should list subcommands."""
