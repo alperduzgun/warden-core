@@ -310,6 +310,3 @@ def parse_yaml(file_path: str) -> PipelineConfig:
         return parse_simple_format(data)
     else:
         raise YAMLParseError("Invalid format. Must have either 'frames' (simple) or 'nodes'+'edges' (full)")
-
-    except yaml.YAMLError as e:
-        raise YAMLParseError(f"Invalid YAML syntax: {e}")
