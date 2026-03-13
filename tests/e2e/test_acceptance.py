@@ -204,7 +204,7 @@ class TestScanExitCodes:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_scan_nonexistent_path(self, initialized_project):
         r = run_warden(
@@ -428,7 +428,7 @@ class TestOutputFormats:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         # Text format should produce some output when scan completes
 
 
@@ -598,7 +598,7 @@ class TestCIMode:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_ci_basic_succeeds(self, initialized_project):
         (initialized_project / "main.py").write_text("print('ok')\n")
@@ -611,7 +611,7 @@ class TestCIMode:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_ci_no_spinner_artifacts(self, isolated_sample):
         r = run_warden(
@@ -1110,7 +1110,7 @@ class TestOllamaModelManagement:
             ), "Scan with missing model gave no useful feedback"
         else:
             # Model installed → scan should succeed
-            assert r.returncode in (0, 1, 2)
+            _assert_no_crash(r)
 
     def test_scan_uses_fast_model_for_basic(self, tmp_path):
         """Scan at standard level should contact Ollama with the configured model."""
@@ -1301,7 +1301,7 @@ class TestScanWithoutInit:
             timeout=30,
         )
         # Should exit with error (1), not crash with a weird code
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_scan_without_init_suggests_init(self, empty_dir):
         """Scan without init should tell the user to run 'warden init'."""
@@ -1474,7 +1474,7 @@ class TestUTF8Handling:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_utf8_filename(self, initialized_project):
@@ -1489,7 +1489,7 @@ class TestUTF8Handling:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
 
@@ -1512,7 +1512,7 @@ class TestEdgeCaseProjects:
             timeout=30,
         )
         # Should complete (possibly with 0 findings), not crash
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_only_hidden_files(self, initialized_project):
@@ -1525,7 +1525,7 @@ class TestEdgeCaseProjects:
             cwd=str(initialized_project),
             timeout=30,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_scan_binary_file_resilience(self, initialized_project):
         """Scan should skip or handle binary files without crashing."""
@@ -1538,7 +1538,7 @@ class TestEdgeCaseProjects:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_symlink_resilience(self, initialized_project):
@@ -1554,7 +1554,7 @@ class TestEdgeCaseProjects:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_scan_deeply_nested_file(self, initialized_project):
         """Scan should handle deeply nested directory structures."""
@@ -1568,7 +1568,7 @@ class TestEdgeCaseProjects:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1629,7 +1629,7 @@ class TestScanAdvancedFlags:
             timeout=30,
         )
         # Should not crash — either skips or falls back to full scan
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_frame_selection(self, isolated_sample):
@@ -1643,7 +1643,7 @@ class TestScanAdvancedFlags:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_frame_nonexistent_graceful(self, isolated_sample):
@@ -1658,7 +1658,7 @@ class TestScanAdvancedFlags:
             timeout=60,
         )
         # Should still complete (possibly with 0 frames run)
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_disable_ai_flag(self, isolated_sample):
@@ -1669,7 +1669,7 @@ class TestScanAdvancedFlags:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         combined = r.stdout + r.stderr
         # Should mention ZOMBIE MODE (basic level without AI)
         assert "zombie" in combined.upper(), "Expected ZOMBIE MODE mention in output"
@@ -1717,7 +1717,7 @@ class TestGracefulDegradation:
                 timeout=60,
             )
             # Should still complete (may warn about write permissions)
-            assert r.returncode in (0, 1, 2)
+            _assert_no_crash(r)
             assert "Traceback" not in r.stdout + r.stderr
         finally:
             # Restore permissions for cleanup
@@ -1737,7 +1737,7 @@ class TestGracefulDegradation:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_multiple_files(self, initialized_project):
@@ -1753,7 +1753,7 @@ class TestGracefulDegradation:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_network_failure_basic_scan(self, initialized_project):
         """Basic scan should work even with no network (fake Ollama endpoint)."""
@@ -1776,7 +1776,7 @@ class TestGracefulDegradation:
             timeout=60,
         )
         # Basic level shouldn't need network at all
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
 
@@ -2006,7 +2006,7 @@ class TestFrameManagement:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_frame_antipattern_only(self, isolated_sample):
@@ -2020,7 +2020,7 @@ class TestFrameManagement:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_multiple_frames(self, isolated_sample):
@@ -2036,7 +2036,7 @@ class TestFrameManagement:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_nonexistent_frame_graceful(self, isolated_sample):
@@ -2050,7 +2050,7 @@ class TestFrameManagement:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_frame_verbose_shows_frame_names(self, isolated_sample):
@@ -2065,7 +2065,7 @@ class TestFrameManagement:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         combined = (r.stdout + r.stderr).lower()
         # Verbose output should mention the frame being executed
         assert "security" in combined, "Verbose output does not mention 'security' frame"
@@ -2108,7 +2108,7 @@ class TestFrameManagement:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_all_frames_flag(self, isolated_sample):
@@ -2120,7 +2120,7 @@ class TestFrameManagement:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
 
@@ -2143,7 +2143,7 @@ class TestCustomRules:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_custom_rule_pattern_match(self, isolated_sample):
@@ -2158,7 +2158,7 @@ class TestCustomRules:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         # Verbose should show rules being loaded or applied
         combined = (r.stdout + r.stderr).lower()
         assert "rule" in combined or "custom" in combined or "scan" in combined
@@ -2178,7 +2178,7 @@ class TestCustomRules:
             timeout=60,
         )
         # Should not crash — graceful degradation
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_empty_custom_rules_file(self, isolated_sample):
@@ -2194,7 +2194,7 @@ class TestCustomRules:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_custom_rules_with_disabled_rule(self, isolated_sample):
@@ -2224,7 +2224,7 @@ class TestCustomRules:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_custom_rules_config_reference(self, isolated_sample):
@@ -2244,7 +2244,7 @@ class TestCustomRules:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
 
@@ -2272,7 +2272,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_with_suppression_disabled(self, isolated_sample):
@@ -2291,7 +2291,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_suppression_yaml_loaded(self, isolated_sample):
@@ -2314,7 +2314,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_suppression_invalid_yaml_graceful(self, isolated_sample):
@@ -2329,7 +2329,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_suppression_empty_yaml(self, isolated_sample):
@@ -2344,7 +2344,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_suppression_missing_yaml(self, isolated_sample):
@@ -2367,7 +2367,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_inline_suppression_in_source(self, isolated_sample):
@@ -2384,7 +2384,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_suppression_with_global_rules(self, isolated_sample):
@@ -2406,7 +2406,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_suppression_with_ignored_files(self, isolated_sample):
@@ -2428,7 +2428,7 @@ class TestSuppressionIntegration:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
 
@@ -2598,7 +2598,7 @@ class TestBaselineManagement:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
         # Baseline state should be unchanged
         baseline_after = set()
@@ -2626,7 +2626,7 @@ class TestOutputFormatsExtended:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_junit_output_file(self, isolated_sample, tmp_path):
@@ -2659,7 +2659,7 @@ class TestOutputFormatsExtended:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_html_output_file(self, isolated_sample, tmp_path):
@@ -2690,7 +2690,7 @@ class TestOutputFormatsExtended:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_badge_output_file(self, isolated_sample, tmp_path):
@@ -2730,7 +2730,7 @@ class TestScanFlagsExtended:
             cwd=str(isolated_sample),
             timeout=120,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_scan_diff_in_git_repo(self, tmp_path):
         """``scan --diff`` inside a git repo should not crash."""
@@ -2765,7 +2765,7 @@ class TestScanFlagsExtended:
             cwd=str(tmp_path),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_diff_with_base(self, tmp_path):
@@ -2803,7 +2803,7 @@ class TestScanFlagsExtended:
             timeout=60,
         )
         # May fail if no 'main' branch exists, but should not traceback
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_memory_profile(self, isolated_sample):
@@ -2816,7 +2816,7 @@ class TestScanFlagsExtended:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_invalid_format(self, isolated_sample):
@@ -3013,7 +3013,7 @@ class TestCIModeExtended:
             cwd=str(tmp_path),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_ci_no_update_baseline(self, initialized_project):
@@ -3029,7 +3029,7 @@ class TestCIModeExtended:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_ci_json_output_file(self, initialized_project, tmp_path):
@@ -3067,7 +3067,7 @@ class TestCIModeExtended:
             timeout=60,
             env={"CI": "true"},
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
 
@@ -3192,7 +3192,7 @@ class TestSuppressionAccuracy:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_ignored_files_zero_findings(self, isolated_sample):
@@ -3214,7 +3214,7 @@ class TestSuppressionAccuracy:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_inline_warden_ignore(self, isolated_sample):
@@ -3237,7 +3237,7 @@ class TestSuppressionAccuracy:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
 
@@ -3260,7 +3260,7 @@ class TestMultiFileScan:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
         if r.returncode in (0, 2):
@@ -3505,7 +3505,7 @@ class TestBaselineWorkflow:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
         # Baseline should be unchanged: same files, same content
         baseline_after = {f.name: f.read_text() for f in baseline_dir.glob("*.json")}
@@ -3764,7 +3764,7 @@ class TestEdgeCases:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
 
@@ -3784,7 +3784,7 @@ class TestEdgeCases:
             cwd=str(initialized_project),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         combined = r.stdout + r.stderr
         assert "Traceback" not in combined
 
@@ -4212,7 +4212,7 @@ class TestRefreshCommandExtended:
         """``refresh --baseline`` should regenerate baseline (runs scan internally)."""
         r = run_warden("refresh", "--baseline", cwd=str(isolated_sample), timeout=60)
         # Exit code 2 is allowed: scan may surface findings
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
 
     def test_refresh_no_intelligence_flag(self, isolated_sample):
         """``refresh --no-intelligence`` should skip intelligence step and exit cleanly."""
@@ -4450,7 +4450,7 @@ class TestScanOutputFormatValidation:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
         if r.stdout.strip():
             try:
@@ -4478,7 +4478,7 @@ class TestScanOutputFormatValidation:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
         if out_file.exists() and out_file.stat().st_size > 0:
             content = out_file.read_text()
@@ -4503,7 +4503,7 @@ class TestScanOutputFormatValidation:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
         if out_file.exists() and out_file.stat().st_size > 0:
             content = out_file.read_text()
@@ -4527,7 +4527,7 @@ class TestScanOutputFormatValidation:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
 
@@ -4599,7 +4599,7 @@ class TestScanAutoFixAndCost:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_auto_fix_dry_run_no_traceback(self, isolated_sample):
@@ -4615,7 +4615,7 @@ class TestScanAutoFixAndCost:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_cost_report_no_traceback(self, isolated_sample):
@@ -4630,7 +4630,7 @@ class TestScanAutoFixAndCost:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
 
     def test_scan_diff_mode_no_traceback(self, isolated_sample):
@@ -4646,5 +4646,5 @@ class TestScanAutoFixAndCost:
             cwd=str(isolated_sample),
             timeout=60,
         )
-        assert r.returncode in (0, 1, 2)
+        _assert_no_crash(r)
         assert "Traceback" not in r.stdout + r.stderr
