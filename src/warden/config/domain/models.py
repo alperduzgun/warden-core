@@ -11,8 +11,9 @@ Panel JSON format: camelCase
 Python internal format: snake_case
 """
 
-from dataclasses import dataclass, field
 from typing import Any, Literal
+
+from pydantic import Field
 
 from warden.shared.domain.base_model import BaseDomainModel
 
@@ -22,7 +23,7 @@ EdgeHandle = Literal["pre-execution", "post-execution", "output"]
 OnFailAction = Literal["stop", "continue"]
 
 
-@dataclass
+
 class Position(BaseDomainModel):
     """
     Node position in visual builder.
@@ -40,7 +41,7 @@ class Position(BaseDomainModel):
     y: float
 
 
-@dataclass
+
 class ProjectSummary(BaseDomainModel):
     """
     Project reference for pipeline.
@@ -64,7 +65,7 @@ class ProjectSummary(BaseDomainModel):
     commit: str | None = None
 
 
-@dataclass
+
 class PipelineSettings(BaseDomainModel):
     """
     Pipeline execution settings.
@@ -110,7 +111,7 @@ class PipelineSettings(BaseDomainModel):
         )
 
 
-@dataclass
+
 class CustomRule(BaseDomainModel):
     """
     Custom validation rule.
@@ -132,7 +133,7 @@ class CustomRule(BaseDomainModel):
     severity: Literal["critical", "high", "medium", "low"]
 
 
-@dataclass
+
 class FrameNodeData(BaseDomainModel):
     """
     Frame node configuration data.
@@ -152,10 +153,10 @@ class FrameNodeData(BaseDomainModel):
 
     frame_id: str  # Reference to frame (e.g., "security", "resilience")
     type: Literal["frame"] = "frame"
-    pre_rules: list[CustomRule] = field(default_factory=list)  # Execute before frame
-    post_rules: list[CustomRule] = field(default_factory=list)  # Execute after frame
+    pre_rules: list[CustomRule] = Field(default_factory=list)  # Execute before frame
+    post_rules: list[CustomRule] = Field(default_factory=list)  # Execute after frame
     on_fail: OnFailAction = "stop"
-    config: dict[str, Any] = field(default_factory=dict)  # Frame-specific config
+    config: dict[str, Any] = Field(default_factory=dict)  # Frame-specific config
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
@@ -169,7 +170,7 @@ class FrameNodeData(BaseDomainModel):
         }
 
 
-@dataclass
+
 class GlobalRuleNodeData(BaseDomainModel):
     """
     Global rule node data.
@@ -178,24 +179,24 @@ class GlobalRuleNodeData(BaseDomainModel):
     """
 
     type: Literal["globalRule"] = "globalRule"
-    rule: CustomRule = field(default_factory=lambda: CustomRule(id="", content="", severity="medium"))
+    rule: CustomRule = Field(default_factory=lambda: CustomRule(id="", content="", severity="medium"))
 
 
-@dataclass
+
 class StartNodeData(BaseDomainModel):
     """Start node data."""
 
     type: Literal["start"] = "start"
 
 
-@dataclass
+
 class EndNodeData(BaseDomainModel):
     """End node data."""
 
     type: Literal["end"] = "end"
 
 
-@dataclass
+
 class PipelineNode(BaseDomainModel):
     """
     Pipeline visual builder node.
@@ -226,7 +227,7 @@ class PipelineNode(BaseDomainModel):
         }
 
 
-@dataclass
+
 class EdgeStyle(BaseDomainModel):
     """
     Edge visual styling.
@@ -253,7 +254,7 @@ class EdgeStyle(BaseDomainModel):
         return result
 
 
-@dataclass
+
 class PipelineEdge(BaseDomainModel):
     """
     Connection between pipeline nodes.
@@ -306,7 +307,7 @@ class PipelineEdge(BaseDomainModel):
         return result
 
 
-@dataclass
+
 class PipelineConfig(BaseDomainModel):
     """
     Complete pipeline configuration.
@@ -332,10 +333,10 @@ class PipelineConfig(BaseDomainModel):
     name: str
     version: str = "1.0"
     project: ProjectSummary | None = None
-    nodes: list[PipelineNode] = field(default_factory=list)
-    edges: list[PipelineEdge] = field(default_factory=list)
-    global_rules: list[CustomRule] = field(default_factory=list)
-    settings: PipelineSettings = field(default_factory=PipelineSettings)
+    nodes: list[PipelineNode] = Field(default_factory=list)
+    edges: list[PipelineEdge] = Field(default_factory=list)
+    global_rules: list[CustomRule] = Field(default_factory=list)
+    settings: PipelineSettings = Field(default_factory=PipelineSettings)
 
     def to_json(self) -> dict[str, Any]:
         """Convert to Panel-compatible JSON."""
