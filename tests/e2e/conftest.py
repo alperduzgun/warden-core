@@ -4,12 +4,15 @@ Pre-flight checks run once per session to detect environment capabilities.
 Tests that need specific services use markers to auto-skip when unavailable.
 """
 
+import json
+import os
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 from typer.testing import CliRunner as _BaseCliRunner
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
@@ -241,3 +244,99 @@ def ollama_available():
 def git_available():
     """Returns True if git CLI is available."""
     return _get_git_available()
+
+
+# ---------------------------------------------------------------------------
+# Acceptance test helpers (shared across split acceptance test files)
+# ---------------------------------------------------------------------------
+
+def run_warden(
+    *args: str,
+    cwd: str | Path | None = None,
+    timeout: int = 60,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run ``warden`` as a subprocess and return the result."""
+    merged_env = {**os.environ, **(env or {})}
+    merged_env.setdefault("SECRET_KEY", "test-acceptance-key-do-not-use")
+    return subprocess.run(
+        ["warden", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=merged_env,
+    )
+
+
+def _load_config(project_dir: Path) -> dict:
+    """Load and return the .warden/config.yaml as a dict."""
+    config_path = project_dir / ".warden" / "config.yaml"
+    assert config_path.exists(), f"Config not found: {config_path}"
+    return yaml.safe_load(config_path.read_text()) or {}
+
+
+def _extract_json(stdout: str) -> dict:
+    """Best-effort JSON extraction from stdout that may contain log lines."""
+    try:
+        return json.loads(stdout)
+    except json.JSONDecodeError:
+        pass
+    for line in reversed(stdout.strip().splitlines()):
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            continue
+    start = stdout.find("{")
+    end = stdout.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(stdout[start : end + 1])
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f"No valid JSON found in output:\n{stdout[:500]}")
+
+
+def _make_vuln_file(project_dir: Path, name: str = "vuln.py") -> Path:
+    """Create a minimal vulnerable Python file for testing."""
+    vuln = project_dir / name
+    vuln.write_text("x = eval(input())  # code injection\n")
+    return vuln
+
+
+def _assert_no_crash(
+    r: subprocess.CompletedProcess[str],
+    *,
+    allowed: tuple[int, ...] = (0, 1, 2),
+    context: str = "",
+) -> None:
+    """Assert process didn't crash (no traceback, exit code in allowed set)."""
+    assert r.returncode in allowed, (
+        f"{context + ': ' if context else ''}"
+        f"Expected exit code in {allowed}, got {r.returncode}\n"
+        f"stdout: {r.stdout[-500:]}\nstderr: {r.stderr[-500:]}"
+    )
+    combined = r.stdout + r.stderr
+    assert "Traceback" not in combined, (
+        f"{context + ': ' if context else ''}Traceback found in output:\n{combined[-1000:]}"
+    )
+
+
+@pytest.fixture
+def empty_dir(tmp_path):
+    """An empty temporary directory."""
+    return tmp_path
+
+
+@pytest.fixture
+def initialized_project(tmp_path):
+    """A temp directory with ``warden init --force --skip-mcp`` already run."""
+    result = run_warden(
+        "init",
+        "--force",
+        "--skip-mcp",
+        cwd=str(tmp_path),
+        timeout=30,
+    )
+    assert result.returncode == 0, f"init failed: {result.stderr}"
+    return tmp_path
