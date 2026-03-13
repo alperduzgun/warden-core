@@ -211,13 +211,11 @@ class FindingsCache:
 def _serialize_finding(f: Finding) -> dict[str, Any]:
     """Serialize a Finding to a plain dict using snake_case field names.
 
-    Only primitive/scalar fields are persisted. Complex nested objects
-    (Remediation, MachineContext, ExploitEvidence) are intentionally dropped:
-    they are regenerated on the next LLM call and are not needed for
-    cache-hit replay (findings are used for dedup/reporting, not for
-    deep remediation replay).
+    Persists all fields including nested objects (remediation, machine_context,
+    exploit_evidence) via their to_json() methods. These are needed for SARIF
+    report enrichment and fortification replay on cache hits.
     """
-    return {
+    data: dict[str, Any] = {
         "id": f.id,
         "severity": f.severity,
         "message": f.message,
@@ -229,6 +227,13 @@ def _serialize_finding(f: Finding) -> dict[str, Any]:
         "is_blocker": f.is_blocker,
         "detection_source": f.detection_source,
     }
+    if f.remediation is not None:
+        data["remediation"] = f.remediation.to_json()
+    if f.machine_context is not None:
+        data["machine_context"] = f.machine_context.to_json()
+    if f.exploit_evidence is not None:
+        data["exploit_evidence"] = f.exploit_evidence.to_json()
+    return data
 
 
 def _deserialize_finding(d: dict[str, Any]) -> Finding:
@@ -237,6 +242,43 @@ def _deserialize_finding(d: dict[str, Any]) -> Finding:
     Raises ``KeyError`` or ``TypeError`` on missing/wrong-typed required fields
     so callers can catch and skip corrupt entries.
     """
+    from warden.validation.domain.frame import ExploitEvidence, MachineContext, Remediation
+
+    remediation = None
+    if d.get("remediation"):
+        r = d["remediation"]
+        remediation = Remediation(
+            description=r.get("description", ""),
+            code=r.get("code", ""),
+            unified_diff=r.get("unified_diff"),
+        )
+
+    machine_context = None
+    if d.get("machine_context"):
+        mc = d["machine_context"]
+        machine_context = MachineContext(
+            vulnerability_class=mc.get("vulnerability_class", "unknown"),
+            source=mc.get("source"),
+            sink=mc.get("sink"),
+            sink_type=mc.get("sink_type"),
+            data_flow_path=mc.get("data_flow_path", []),
+            sanitizers_applied=mc.get("sanitizers_applied", []),
+            suggested_fix_type=mc.get("suggested_fix_type"),
+            related_files=mc.get("related_files", []),
+        )
+
+    exploit_evidence = None
+    if d.get("exploit_evidence"):
+        ee = d["exploit_evidence"]
+        exploit_evidence = ExploitEvidence(
+            witness_payload=ee.get("witness_payload", ""),
+            attack_vector=ee.get("attack_vector", ""),
+            data_flow_path=ee.get("data_flow_path", []),
+            sink_type=ee.get("sink_type"),
+            why_exploitable=ee.get("why_exploitable", ""),
+            confidence=float(ee.get("confidence", 0.0)),
+        )
+
     return Finding(
         id=str(d["id"]),
         severity=str(d["severity"]),
@@ -248,4 +290,7 @@ def _deserialize_finding(d: dict[str, Any]) -> Finding:
         column=int(d.get("column", 0)),
         is_blocker=bool(d.get("is_blocker", False)),
         detection_source=d.get("detection_source"),
+        remediation=remediation,
+        machine_context=machine_context,
+        exploit_evidence=exploit_evidence,
     )
