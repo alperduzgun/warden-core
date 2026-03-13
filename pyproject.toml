@@ -64,6 +64,8 @@ grpc = [
 dev = [
     "pytest==8.2.2",
     "pytest-asyncio==0.23.7",
+    "pytest-cov>=5.0.0,<6.0.0",
+    "pytest-timeout>=2.3.0,<3.0.0",
     "black==24.4.2",
     "isort==5.13.2",
     "mypy==1.10.0",
@@ -187,3 +189,25 @@ filterwarnings = [
     "ignore::DeprecationWarning:pkg_resources.*",
     "ignore::PendingDeprecationWarning:chromadb.*",
 ]
+
+# ============================================================
+# Coverage configuration
+# ============================================================
+[tool.coverage.run]
+source = ["src/warden"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/templates/*",
+    "*/tui/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+show_missing = true
+skip_empty = true
