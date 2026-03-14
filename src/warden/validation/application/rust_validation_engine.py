@@ -22,7 +22,7 @@ except ImportError:
     RUST_AVAILABLE = False
 
 from warden.rules.domain.models import CustomRule
-from warden.validation.domain.frame import Finding
+from warden.validation.domain.frame import Finding, Remediation
 
 logger = structlog.get_logger(__name__)
 
@@ -112,6 +112,15 @@ class RustValidationEngine:
 
         rel_path = str(Path(hit_item.file_path).relative_to(self.project_root))
 
+        # Build remediation from YAML rule data if available
+        remediation = None
+        remediation_text = rule.get("remediation")
+        if remediation_text:
+            remediation = Remediation(
+                description=remediation_text,
+                code="",
+            )
+
         return Finding(
             id=hit_item.rule_id,
             severity=rule.get("severity", "high"),
@@ -121,4 +130,5 @@ class RustValidationEngine:
             line=hit_item.line_number,
             column=hit_item.column,
             is_blocker=rule.get("severity") == "critical",
+            remediation=remediation,
         )

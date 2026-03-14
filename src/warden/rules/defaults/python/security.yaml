@@ -10,6 +10,7 @@ rules:
     pattern: |
       \beval\s*\(
     message: "Using eval() is dangerous. Consider using ast.literal_eval() for safe evaluation"
+    remediation: "Replace eval() with ast.literal_eval() for safe literal evaluation, or refactor to avoid dynamic code execution entirely."
 
   - id: py-no-exec
     name: "Avoid using exec()"
@@ -19,6 +20,7 @@ rules:
     pattern: |
       \bexec\s*\(
     message: "exec() poses security risks. Refactor to avoid dynamic code execution"
+    remediation: "Refactor to use explicit function calls, importlib.import_module(), or a safe DSL instead of exec()."
 
   - id: py-sql-injection
     name: "SQL Injection Prevention"
@@ -28,6 +30,7 @@ rules:
     pattern: |
       (execute|executemany)\s*\(\s*[f"'].*%s.*["']
     message: "Use parameterized queries to prevent SQL injection"
+    remediation: "Use parameterized queries: cursor.execute('SELECT * FROM users WHERE id = %s', (user_id,)) instead of string formatting."
 
   - id: py-hardcoded-password
     name: "No Hardcoded Passwords"
@@ -37,6 +40,7 @@ rules:
     pattern: |
       (password|passwd|pwd|secret|api_key|apikey|token)\s*=\s*["'][^"']+["']
     message: "Use environment variables or secure vaults for sensitive data"
+    remediation: "Move secrets to environment variables (os.environ['SECRET']) or a secrets manager like HashiCorp Vault or AWS Secrets Manager."
 
   - id: py-pickle-insecure
     name: "Insecure Pickle Usage"
@@ -46,6 +50,7 @@ rules:
     pattern: |
       pickle\.loads?\s*\(
     message: "Pickle is insecure for untrusted data. Use JSON or other safe formats"
+    remediation: "Use json.loads() for data interchange, or msgpack/protobuf for binary serialization. If pickle is required, only deserialize trusted data."
 
   - id: py-yaml-unsafe
     name: "Unsafe YAML Loading"
@@ -55,6 +60,7 @@ rules:
     pattern: |
       yaml\.load\s*\([^,)]*\)(?!.*Loader=)
     message: "Use yaml.safe_load() instead of yaml.load()"
+    remediation: "Replace yaml.load(data) with yaml.safe_load(data), or explicitly pass Loader=yaml.SafeLoader."
 
   - id: py-subprocess-shell
     name: "Subprocess with Shell=True"
@@ -64,6 +70,7 @@ rules:
     pattern: |
       subprocess\.[^(]+\([^)]*shell\s*=\s*True
     message: "Avoid shell=True in subprocess calls. Use list arguments instead"
+    remediation: "Use subprocess.run(['cmd', 'arg1', 'arg2']) with a list instead of shell=True. Use shlex.split() if you need to parse a command string."
 
   - id: py-requests-no-verify
     name: "SSL Verification Disabled"
@@ -73,6 +80,7 @@ rules:
     pattern: |
       verify\s*=\s*False
     message: "SSL verification should not be disabled in production"
+    remediation: "Remove verify=False and configure proper CA certificates. For self-signed certs, use verify='/path/to/ca-bundle.crt'."
 
   - id: py-ssrf-user-controlled-url
     name: "SSRF: User-Controlled URL in HTTP Request"
@@ -82,3 +90,4 @@ rules:
     pattern: |
       (requests\.(get|post|put|delete|patch|head|request)|httpx\.(get|post|put|delete|patch|request)|urllib\.request\.(urlopen|Request)|aiohttp\.ClientSession\.(get|post|request))\s*\(\s*(request\.|req\.|args\.|form\.|data\.|params\.|query\.)
     message: "Validate and allowlist URLs before making outbound HTTP requests to prevent SSRF (CWE-918)"
+    remediation: "Validate URLs against an allowlist of permitted hosts/schemes. Block internal IP ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x). Use a URL parser to check the resolved host."

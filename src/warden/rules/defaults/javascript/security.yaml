@@ -10,6 +10,7 @@ rules:
     pattern: |
       eval\s*\(
     message: "eval() is dangerous. Use JSON.parse() or other safe alternatives"
+    remediation: "Replace eval() with JSON.parse() for data, Function() constructor for dynamic functions, or refactor to avoid dynamic code execution."
 
   - id: js-innerhtml
     name: "Avoid innerHTML"
@@ -19,6 +20,7 @@ rules:
     pattern: |
       \.innerHTML\s*=
     message: "Use textContent or createElement instead of innerHTML"
+    remediation: "Use element.textContent for text, or DOM APIs (createElement, appendChild) for HTML. If HTML is required, use DOMPurify.sanitize()."
 
   - id: js-sql-injection
     name: "SQL Injection Risk"
@@ -28,6 +30,7 @@ rules:
     pattern: |
       (query|execute)\s*\([`"'].*\$\{.*\}.*[`"']
     message: "Use parameterized queries to prevent SQL injection"
+    remediation: "Use parameterized queries: db.query('SELECT * FROM users WHERE id = $1', [userId]) instead of template literals."
 
   - id: js-hardcoded-secret
     name: "Hardcoded Secrets"
@@ -37,6 +40,7 @@ rules:
     pattern: |
       (apiKey|api_key|secret|password|token)\s*[:=]\s*["'][^"']+["']
     message: "Use environment variables for sensitive data"
+    remediation: "Move secrets to environment variables (process.env.SECRET) or a secrets manager. Use dotenv for local development."
 
   - id: js-unsafe-regex
     name: "ReDoS Vulnerability"
@@ -46,6 +50,7 @@ rules:
     pattern: |
       new\s+RegExp\s*\([^)]*(\+|\*){2}
     message: "This regex pattern might be vulnerable to ReDoS attacks"
+    remediation: "Simplify the regex to avoid catastrophic backtracking. Use re2 or safe-regex libraries, or set a timeout on regex execution."
 
   - id: js-no-tls-reject
     name: "TLS Verification"
@@ -55,6 +60,7 @@ rules:
     pattern: |
       rejectUnauthorized\s*:\s*false
     message: "TLS certificate verification should not be disabled"
+    remediation: "Remove rejectUnauthorized: false and configure proper CA certificates via NODE_EXTRA_CA_CERTS or the ca option."
 
   - id: js-open-redirect
     name: "Open Redirect"
@@ -64,6 +70,7 @@ rules:
     pattern: |
       (redirect|location\.href)\s*=\s*req\.(query|params|body)
     message: "Validate and whitelist redirect URLs"
+    remediation: "Validate redirect URLs against an allowlist of permitted paths/domains. Use relative paths instead of absolute URLs from user input."
 
   - id: js-command-injection
     name: "Command Injection"
@@ -73,3 +80,4 @@ rules:
     pattern: |
       (exec|execSync|spawn)\s*\([^)]*\$\{
     message: "Avoid string interpolation in shell commands"
+    remediation: "Use execFile/execFileSync with array arguments instead of exec with string interpolation. Never pass user input to shell commands."
