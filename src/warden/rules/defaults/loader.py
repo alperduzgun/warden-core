@@ -210,7 +210,7 @@ class DefaultRulesLoader:
             # Count by severity
             severity_counts = {}
             for rule in rules:
-                severity = rule.severity.lower()
+                severity = (rule.severity.value if hasattr(rule.severity, "value") else str(rule.severity)).lower()
                 severity_counts[severity] = severity_counts.get(severity, 0) + 1
 
             summary[language] = {"total": len(rules), **severity_counts}

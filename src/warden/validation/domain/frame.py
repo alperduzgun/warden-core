@@ -450,3 +450,42 @@ class CodeFile:
             self.size_bytes = len(self.content.encode("utf-8"))
         if self.line_count == 0 and self.content:
             self.line_count = self.content.count("\n") + 1
+
+
+# ---------------------------------------------------------------------------
+# Convenience functions — delegate to FrameRegistry singleton.
+# These exist for backward compatibility with config/yaml_parser and
+# config/yaml_validator which import them as top-level functions.
+# ---------------------------------------------------------------------------
+
+def get_frame_by_id(frame_id: str) -> type[ValidationFrame] | None:
+    """Look up a frame class by its frame_id."""
+    from warden.validation.infrastructure.frame_registry import FrameRegistry
+
+    registry = FrameRegistry()
+    return registry.get_frame_by_id(frame_id)
+
+
+def get_frames_by_priority() -> list[type[ValidationFrame]]:
+    """Return all registered frames sorted by priority (highest first)."""
+    from warden.validation.infrastructure.frame_registry import FrameRegistry
+
+    registry = FrameRegistry()
+    items = registry.get_all_frames_with_metadata()
+    frame_classes = []
+    for item in sorted(items, key=lambda x: x.priority.value if hasattr(x.priority, "value") else 999):
+        frame_cls = registry.get_frame_by_id(item.frame_id)
+        if frame_cls:
+            frame_classes.append(frame_cls)
+    return frame_classes
+
+
+def get_execution_groups(frames: list[Any]) -> list[list[Any]]:
+    """Group frames by priority level for parallel execution."""
+    from collections import defaultdict
+
+    groups: dict[int, list[Any]] = defaultdict(list)
+    for frame in frames:
+        priority_val = frame.priority.value if hasattr(frame, "priority") and hasattr(frame.priority, "value") else 999
+        groups[priority_val].append(frame)
+    return [groups[k] for k in sorted(groups)]
