@@ -1,9 +1,9 @@
 name: Warden PR Security Scan
 
 on:
-  workflow_dispatch:  # Manual only until billing fixed
-  # pull_request:
-  #   branches: [main]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   warden:

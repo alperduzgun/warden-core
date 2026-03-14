@@ -1,9 +1,9 @@
 name: Warden Release Security Scan
 
 on:
-  workflow_dispatch:  # Manual only until billing fixed
-  # release:
-  #   types: [created]
+  release:
+    types: [created]
+  workflow_dispatch:
     inputs:
       strict_mode:
         description: 'Run in strict mode (fail on any issue)'
