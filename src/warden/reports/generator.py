@@ -903,3 +903,74 @@ class ReportGenerator:
             )
             # Re-raise with more context
             raise RuntimeError(f"PDF generation failed: {e!s}") from e
+
+    def generate_markdown_report(
+        self, scan_results: dict[str, Any], output_path: Path, base_path: Path | None = None
+    ) -> None:
+        """Generate Markdown report from scan results.
+
+        Args:
+            scan_results: Dictionary containing scan results
+            output_path: Path to save the Markdown report
+            base_path: Optional base path for relativizing paths
+        """
+        sanitized = self._sanitize_paths(scan_results, base_path, inplace=False)
+        lines: list[str] = []
+
+        score = sanitized.get("quality_score", sanitized.get("qualityScore", "N/A"))
+        total = sanitized.get("total_findings", sanitized.get("totalFindings", 0))
+        passed = sanitized.get("passed", total == 0)
+
+        lines.append("# Warden Scan Report\n")
+        lines.append(f"**Status:** {'PASS' if passed else 'FAIL'}  ")
+        lines.append(f"**Quality Score:** {score}/10  ")
+        lines.append(f"**Total Findings:** {total}\n")
+
+        # Findings by frame
+        frame_results = sanitized.get("frame_results", sanitized.get("frameResults", []))
+        if frame_results:
+            lines.append("## Frame Results\n")
+            lines.append("| Frame | Status | Findings |")
+            lines.append("|-------|--------|----------|")
+            for fr in frame_results:
+                name = self._get_val(fr, "frame_id", self._get_val(fr, "frameId", "unknown"))
+                status = self._get_val(fr, "status", "unknown")
+                findings = self._get_val(fr, "findings", [])
+                count = len(findings) if isinstance(findings, list) else 0
+                lines.append(f"| {name} | {status} | {count} |")
+
+        # Individual findings
+        all_findings: list[dict[str, Any]] = []
+        for fr in frame_results:
+            findings = self._get_val(fr, "findings", [])
+            if isinstance(findings, list):
+                all_findings.extend(findings)
+
+        if all_findings:
+            lines.append("\n## Findings\n")
+            for f in all_findings:
+                sev = self._get_val(f, "severity", "medium")
+                msg = self._get_val(f, "message", "")
+                loc = self._get_val(f, "location", "")
+                rule_id = self._get_val(f, "id", self._get_val(f, "ruleId", ""))
+                lines.append(f"### [{sev.upper()}] {rule_id}\n")
+                lines.append(f"**Location:** `{loc}`  ")
+                lines.append(f"**Message:** {msg}\n")
+
+                remediation = self._get_val(f, "remediation", None)
+                if remediation:
+                    desc = self._get_val(remediation, "description", "")
+                    if desc:
+                        lines.append(f"> **Remediation:** {desc}\n")
+
+        content = "\n".join(lines) + "\n"
+
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".md", dir=output_path.parent, prefix=".tmp_")
+        try:
+            with os.fdopen(temp_fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            os.replace(temp_path, output_path)
+        except Exception:
+            with suppress(OSError):
+                os.unlink(temp_path)
+            raise

@@ -571,7 +571,8 @@ def _generate_configured_reports(final_result_data: dict, verbose: bool) -> None
                     generator.generate_json_report(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]JSON[/cyan]: {path_str}")
                 elif fmt == "markdown" or fmt == "md":
-                    pass
+                    generator.generate_markdown_report(final_result_data, out_path)
+                    console.print(f"  ✅ [cyan]Markdown[/cyan]: {path_str}")
                 elif fmt == "sarif":
                     generator.generate_sarif_report(final_result_data, out_path)
                     console.print(f"  ✅ [cyan]SARIF[/cyan]: {path_str}")
