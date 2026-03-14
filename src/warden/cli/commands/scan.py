@@ -20,6 +20,7 @@ from rich.text import Text
 from warden.cli_bridge.bridge import WardenBridge
 
 console = Console()
+_logger = _structlog.get_logger(__name__)
 
 # Re-exports for backwards compatibility
 from warden.cli.commands.scan_preflight import _needs_ollama, _preflight_ollama_check, _ensure_scan_dependencies
@@ -186,6 +187,9 @@ def scan_command(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
     level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
     no_ai: bool = typer.Option(False, "--disable-ai", help="Shorthand for --level basic"),
+    quick_start: bool = typer.Option(
+        False, "--quick-start", help="Fast deterministic scan: no LLM, no setup required"
+    ),
     memory_profile: bool = typer.Option(False, "--memory-profile", help="Enable memory profiling and leak detection"),
     ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
     diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
@@ -251,15 +255,29 @@ def scan_command(
     baseline_fingerprints = None
     intelligence_context = None
     try:
-        # Handle --no-ai shorthand
-        if no_ai:
+        # Handle --quick-start and --no-ai shorthands
+        if quick_start or no_ai:
+            if level != "basic" and level != "standard":
+                # Explicit --level conflicts with --quick-start
+                console.print(
+                    "[yellow]⚠ --quick-start overrides --level. Running deterministic-only.[/yellow]"
+                )
             level = "basic"
 
-        # Enforce AI-First Philosophy
+        # Mode-appropriate messaging for basic level
         if level == "basic":
-            console.print("\n[bold red blink]💀 CRITICAL WARNING: ZOMBIE MODE ACTIVE[/bold red blink]")
-            console.print("[bold red]Warden is running without AI. Capability is reduced by 99%.[/bold red]")
-            console.print("[red]Heuristic scanning is a fallback, not a feature. Expect poor results.[/red]\n")
+            if quick_start:
+                _logger.info("quick_start_mode", msg="Running deterministic-only analysis (no LLM)")
+                console.print(
+                    "\n[bold cyan]⚡ Quick-Start Mode[/bold cyan]"
+                    " — deterministic analysis (regex + AST + taint), no LLM required."
+                )
+                console.print(
+                    "[dim]For deeper AI-powered analysis: warden config llm[/dim]\n"
+                )
+            else:
+                console.print("\n[bold yellow]⚠ Basic Mode[/bold yellow] — AI verification disabled.")
+                console.print("[dim]Deterministic checks only (regex, AST, taint analysis).[/dim]\n")
 
         # Auto-install scan dependencies based on analysis level
         if level != "basic":
