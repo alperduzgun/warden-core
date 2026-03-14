@@ -405,8 +405,13 @@ class TestScanFlags:
         )
         assert result.exit_code in (0, 1, 2)
 
-        # Should show zombie mode warning
-        assert "ZOMBIE MODE" in result.stdout or "without AI" in result.stdout.lower()
+        # Should show basic/deterministic mode indicator
+        output_lower = result.stdout.lower()
+        assert (
+            "basic mode" in output_lower
+            or "quick-start" in output_lower
+            or "deterministic" in output_lower
+        )
 
 
 @pytest.mark.e2e
