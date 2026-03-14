@@ -8,6 +8,7 @@ import asyncio
 import fnmatch
 import os
 import re
+import signal
 import time
 from pathlib import Path
 from typing import Any
@@ -677,11 +678,14 @@ class CustomRuleValidator:
 
         try:
             # Execute script with timeout (use list args for security)
+            # start_new_session creates a new process group so kill
+            # terminates the script AND its children (e.g. sleep).
             process = await asyncio.create_subprocess_exec(  # warden-ignore
                 str(script_path),
                 str(file_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                start_new_session=True,
             )
 
             # Wait for process with timeout
@@ -691,9 +695,15 @@ class CustomRuleValidator:
                     timeout=timeout,
                 )
             except (asyncio.TimeoutError, TimeoutError):
-                # Kill process on timeout
+                # Kill entire process group on timeout
                 try:
-                    process.kill()
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                try:
                     await process.wait()
                 except ProcessLookupError:
                     pass
