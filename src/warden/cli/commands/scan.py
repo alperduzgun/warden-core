@@ -1025,6 +1025,10 @@ async def _run_scan_async(
                     generator.generate_pdf_report(final_result_data, out_path)
                 elif format == "shield" or format == "badge":
                     generator.generate_svg_badge(final_result_data, out_path)
+                elif format in ("markdown", "md"):
+                    generator.generate_markdown_report(final_result_data, out_path)
+                else:
+                    console.print(f"[yellow]⚠ Unknown format: {format}[/yellow]")
 
                 console.print("[bold green]Report saved![/bold green]")
             except Exception as e:
