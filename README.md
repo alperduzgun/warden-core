@@ -34,17 +34,17 @@ Warden provides the **"Verify-Loop"** mechanism to ensure every AI-generated cha
 
 ---
 
-## 🌍 Universal Language Support
-Warden's **Engine** runs on Python/Rust, but it validates code in **any language**.
+## 🌍 Language Support
+Warden's **Engine** runs on Python/Rust, but it validates code across multiple languages at varying depths.
 
-| Category | Supported Languages (Native) | Taint Analysis |
-| :--- | :--- | :--- |
-| **Mobile** | **Flutter (Dart)**, Swift, Kotlin, React Native | - |
-| **Backend** | Python, **Go**, **Rust**, Node.js (TS/JS), **Java** | Python, Go, Java, JS/TS |
-| **Frontend** | React, Vue, Angular, HTML/CSS | JS/TS (DOM XSS) |
-| **Scripting** | Shell (Bash), Lua, Perl | - |
+| Tier | Languages | AST | Taint Analysis | Security Rules | Frameworks |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **Tier 1 — Full** | Python, JavaScript/TypeScript | ✅ | ✅ Interprocedural (Python) / Regex (JS) | 17 rules | Flask, Django, FastAPI, Express, Koa |
+| **Tier 2 — Standard** | Go, Java | ✅ | ✅ Regex-based | Via LLM | stdlib, Spring |
+| **Tier 3 — Basic** | Kotlin, Dart | ✅ | ❌ | Via LLM | — |
+| **Tier 4 — Regex Only** | Swift, C/C++, Ruby, PHP | ❌ | ❌ | Regex patterns | — |
 
-> **Pro Tip:** Warden can orchestrate *existing* tools. Already using `very_good_analysis` for Flutter? Warden wraps it, giving it a unified interface and fixing capabilities.
+> **How it works:** All tiers run language-agnostic regex security checks (secrets, SQL injection, XSS). Higher tiers add AST analysis and source-to-sink taint tracking. LLM verification enhances all tiers when available.
 
 ## 🚀 Core Features
 
