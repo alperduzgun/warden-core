@@ -225,10 +225,10 @@ class MyCustomFrame(ValidationFrame, TaintAware):
 ```
 
 ### 5. 🧩 Warden Hub (Marketplace)
-Need more power? Install specialized frames from the community:
-*   **Fuzz Testing:** `warden install fuzz`
-*   **Property Testing:** `warden install property`
-*   **Load Testing:** `warden install stress`
+Need more power? Install specialized frames from the community or enable built-in extras:
+*   **Fuzz Testing:** Built-in. Enable via config or `warden install fuzz`.
+*   **Property Testing:** Built-in. Enable via config or `warden install property`.
+*   **Community Frames:** Custom frames can be loaded from PyPI packages or `~/.warden/frames/`.
 
 ### 6. 💅 Integrated Linter & Style
 Warden acts as a central hub for code quality, integrating tools like `ruff` directly into its pipeline.
@@ -436,7 +436,7 @@ AI Agents working in a Warden project follow this strict protocol:
 | :--- | :--- |
 | `warden scan` | Runs the full validation pipeline on the project. |
 | `warden scan --diff` | **(New!)** Incremental scan. Checks only files changed relative to main branch. |
-| `warden scan --diff --baseline` | **(New!)** Smart Autopilot. Uses baseline to hide legacy issues. |
+| `warden scan --diff` (with baseline) | **(New!)** Smart Autopilot. Baseline is auto-loaded from `.warden/baseline.json` when present — no extra flag needed. |
 | `warden config llm` | **(New!)** Manage LLM provider (status/use/test). |
 | `warden config llm status` | Shows current LLM configuration and available providers. |
 | `warden config llm test` | Tests the active LLM provider connection. |
@@ -478,9 +478,14 @@ baseline:
 
 #### CLI Usage:
 ```bash
-# Automatically applies baseline filtering
+# Baseline is auto-loaded when .warden/baseline.json exists — no flag needed.
 warden scan --diff
+
+# Manage baselines explicitly
+warden baseline          # View baseline status
 ```
+
+> **Note:** There is no `--baseline` flag. Baseline filtering is automatic when a baseline file is present.
 
 ---
 
@@ -614,13 +619,13 @@ llm:
     smart_tier: claude_code  # For complex analysis (security, architecture)
 ```
 
-**Priority Order (Auto-Detection):**
-1. Claude Code (if CLI installed)
-2. Codex CLI (if installed)
-3. Ollama (if running with Qwen model)
-4. Anthropic (if API key set)
-5. OpenAI (if API key set)
-6. Gemini (if API key set)
+**Fast-Tier Auto-Detection Priority (when no explicit provider is configured):**
+1. Groq (cloud speed, if API key set)
+2. Ollama (local/free, if service is running)
+3. Claude Code (local subscription, if CLI installed)
+4. Codex CLI (local, if installed)
+
+**Smart-Tier Default Provider** is set from the first available in: configured providers → Azure OpenAI → environment-detected providers.
 
 > **Note:** Claude Code and Codex are **single-provider** tools — they manage their own model selection internally. When either is selected as the primary provider, all Warden requests (triage, analysis, classification) route through that one tool. There is no fast/smart tier split.
 
