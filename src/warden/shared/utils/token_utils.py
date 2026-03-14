@@ -113,9 +113,14 @@ def truncate_content_for_llm(
     if not content:
         return content
 
-    estimated = estimate_tokens(content)
-    if estimated <= max_tokens:
-        return content
+    # Fast path: skip expensive tokenization for obviously oversized content.
+    # Most English/code text averages ~4 chars per token; if content is 8x
+    # the char budget it will never fit, so jump straight to truncation.
+    char_budget_fast = max_tokens * 8
+    if len(content) <= char_budget_fast:
+        estimated = estimate_tokens(content)
+        if estimated <= max_tokens:
+            return content
 
     # Calculate character budget from token limit (conservative: 4 chars/token for backward compatibility)
     char_budget = int(max_tokens * 4)
