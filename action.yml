@@ -1,0 +1,110 @@
+name: "Warden Security Scan"
+description: "AI-native security and quality gate for LLM-generated code"
+author: "Warden Team"
+
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  scan-path:
+    description: "Path to scan (default: current directory)"
+    required: false
+    default: "."
+  level:
+    description: "Analysis level: basic, standard, deep"
+    required: false
+    default: "standard"
+  format:
+    description: "Output format: sarif, json, text, markdown"
+    required: false
+    default: "sarif"
+  output-file:
+    description: "Output file path"
+    required: false
+    default: "warden.sarif"
+  quick-start:
+    description: "Run deterministic-only scan (no LLM required)"
+    required: false
+    default: "false"
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.11"
+  extra-args:
+    description: "Additional arguments passed to warden scan"
+    required: false
+    default: ""
+  upload-sarif:
+    description: "Upload SARIF to GitHub Security tab"
+    required: false
+    default: "true"
+
+outputs:
+  sarif-file:
+    description: "Path to generated SARIF report"
+    value: ${{ steps.scan.outputs.sarif-file }}
+  exit-code:
+    description: "Scan exit code (0=pass, 1=infra error, 2=policy violation)"
+    value: ${{ steps.scan.outputs.exit-code }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: "pip"
+
+    - name: Install Warden
+      shell: bash
+      run: |
+        pip install --upgrade pip
+        pip install warden-core
+
+    - name: Run Warden Scan
+      id: scan
+      shell: bash
+      env:
+        INPUT_SCAN_PATH: ${{ inputs.scan-path }}
+        INPUT_LEVEL: ${{ inputs.level }}
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_OUTPUT_FILE: ${{ inputs.output-file }}
+        INPUT_QUICK_START: ${{ inputs.quick-start }}
+        INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
+      run: |
+        ARGS="${INPUT_SCAN_PATH} --format ${INPUT_FORMAT} --output ${INPUT_OUTPUT_FILE}"
+
+        if [ "${INPUT_QUICK_START}" = "true" ]; then
+          ARGS="${ARGS} --quick-start"
+        else
+          ARGS="${ARGS} --level ${INPUT_LEVEL}"
+        fi
+
+        if [ -n "${INPUT_EXTRA_ARGS}" ]; then
+          ARGS="${ARGS} ${INPUT_EXTRA_ARGS}"
+        fi
+
+        set +e
+        timeout 600 warden scan ${ARGS}
+        EXIT_CODE=$?
+        set -e
+
+        echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+        echo "sarif-file=${INPUT_OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
+
+        if [ ${EXIT_CODE} -eq 2 ]; then
+          echo "::error::Warden found policy violations. Review the SARIF report."
+          exit 1
+        elif [ ${EXIT_CODE} -ne 0 ] && [ ${EXIT_CODE} -ne 130 ]; then
+          echo "::warning::Warden scan exited with code ${EXIT_CODE} (infrastructure issue)."
+        fi
+
+    - name: Upload SARIF to GitHub Security
+      if: always() && inputs.upload-sarif == 'true' && hashFiles(inputs.output-file) != ''
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ inputs.output-file }}
+        category: warden-security
+      continue-on-error: true
