@@ -25,7 +25,7 @@ class TestFortificationModel:
         assert fortification.detail == "Wrap payment calls with try-catch"
 
     def test_fortification_to_json(self):
-        """Should serialize to Panel-compatible JSON."""
+        """Should serialize to Panel-compatible JSON with camelCase keys."""
         fortification = Fortification(
             id="fort-1",
             title="Add error handling",
@@ -34,11 +34,14 @@ class TestFortificationModel:
 
         json_data = fortification.to_json()
 
-        assert json_data == {
-            "id": "fort-1",
-            "title": "Add error handling",
-            "detail": "Wrap <code>ProcessPaymentAsync()</code> with try-catch"
-        }
+        # Required fields
+        assert json_data["id"] == "fort-1"
+        assert json_data["title"] == "Add error handling"
+        assert json_data["detail"] == "Wrap <code>ProcessPaymentAsync()</code> with try-catch"
+        # Default fields should be present with camelCase keys
+        assert json_data["autoFixable"] is False
+        assert json_data["confidence"] == 0.0
+        assert json_data["severity"] == "medium"
 
     def test_fortification_detail_supports_html(self):
         """Detail field should support HTML tags for Panel rendering."""
