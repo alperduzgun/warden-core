@@ -1,12 +1,12 @@
 name: Warden CI
 
 on:
-  push:
-    branches: [ main, dev ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main, dev ]
-  workflow_dispatch:
+  workflow_dispatch:  # Manual only until billing fixed
+  # push:
+  #   branches: [ main, dev ]
+  #   tags: [ 'v*' ]
+  # pull_request:
+  #   branches: [ main, dev ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

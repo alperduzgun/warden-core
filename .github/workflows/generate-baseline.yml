@@ -1,9 +1,9 @@
 name: Generate Warden Baseline
 
 on:
-  schedule:
-    - cron: '0 0 * * *'  # Run nightly at midnight UTC to prevent drift
-  workflow_dispatch:
+  workflow_dispatch:  # Manual only until billing fixed
+  # schedule:
+  #   - cron: '0 0 * * *'
     inputs:
       level:
         description: 'Scan Level'

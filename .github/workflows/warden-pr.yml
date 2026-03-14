@@ -1,8 +1,9 @@
 name: Warden PR Security Scan
 
 on:
-  pull_request:
-    branches: [main]  # dev PRs are already covered by ci.yml warden-scan job
+  workflow_dispatch:  # Manual only until billing fixed
+  # pull_request:
+  #   branches: [main]
 
 jobs:
   warden:

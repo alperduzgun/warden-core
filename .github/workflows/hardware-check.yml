@@ -1,9 +1,9 @@
 name: Check Runner Hardware + Ollama Benchmark
 
 on:
-  push:
-    branches: [ feature/ci-hardware-check ]
-  workflow_dispatch:
+  workflow_dispatch:  # Manual only until billing fixed
+  # push:
+  #   branches: [ feature/ci-hardware-check ]
     inputs:
       model:
         description: 'Ollama model to benchmark'

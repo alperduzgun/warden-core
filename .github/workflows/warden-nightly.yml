@@ -1,10 +1,9 @@
 name: Warden Nightly Scan
 
 on:
-  schedule:
-    # Run at 2 AM UTC every day
-    - cron: '0 2 * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Manual only until billing fixed
+  # schedule:
+  #   - cron: '0 2 * * *'
 
 jobs:
   warden:

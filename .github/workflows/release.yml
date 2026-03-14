@@ -1,10 +1,11 @@
 name: Release Warden Core
 
 on:
-  workflow_run:
-    workflows: ["Warden CI"]
-    types:
-      - completed
+  workflow_dispatch:  # Manual only until billing fixed
+  # workflow_run:
+  #   workflows: ["Warden CI"]
+  #   types:
+  #     - completed
 
 jobs:
   build-n-publish:
