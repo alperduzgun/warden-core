@@ -105,6 +105,16 @@ fi
 The official Warden GitHub Action handles installation, scanning, and SARIF upload
 in a single step. Add it to any workflow:
 
+**Minimal (3 lines):**
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: alperduzgun/warden-core@v1
+```
+
+**Standard (scan + SARIF + PR comment):**
+
 ```yaml
 name: Warden Security Scan
 
@@ -112,25 +122,64 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
 jobs:
   warden:
     name: Security Scan
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write  # Required for SARIF upload
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Warden Security Scan
-        uses: warden-dev/warden-core@main
+        uses: alperduzgun/warden-core@v1
         with:
-          scan-path: "."
-          level: "standard"           # basic | standard | deep
-          format: "sarif"
-          output-file: "warden.sarif"
-          upload-sarif: "true"        # Uploads to GitHub Security tab
+          level: "standard"
+          post-comment: "true"
+          upload-sarif: "true"
+```
+
+**Full (quality gate + all features):**
+
+```yaml
+name: Warden Full Analysis
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  warden:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: alperduzgun/warden-core@v1
+        id: scan
+        with:
+          level: "deep"
+          fail-on-severity: "high"
+          post-comment: "true"
+          upload-sarif: "true"
+
+      - name: Quality Gate
+        if: always()
+        run: |
+          echo "Score: ${{ steps.scan.outputs.quality-score }}"
+          echo "Findings: ${{ steps.scan.outputs.findings-count }}"
 ```
 
 **Available inputs:**
@@ -143,6 +192,9 @@ jobs:
 | `output-file` | `warden.sarif` | Output file path |
 | `quick-start` | `false` | LLM-free deterministic scan (no API keys needed) |
 | `upload-sarif` | `true` | Upload SARIF to GitHub Security tab |
+| `post-comment` | `true` | Post results as PR comment (idempotent) |
+| `fail-on-severity` | `critical` | Fail on findings at this severity or above |
+| `github-token` | `${{ github.token }}` | Token for PR comments and SARIF upload |
 | `extra-args` | `` | Additional `warden scan` arguments |
 | `python-version` | `3.11` | Python version for the action runner |
 
@@ -152,6 +204,8 @@ jobs:
 |--------|-------------|
 | `sarif-file` | Path to the generated SARIF file |
 | `exit-code` | Scan exit code (see [Exit Codes](#exit-codes)) |
+| `findings-count` | Total number of active findings |
+| `quality-score` | Quality score (0.0-10.0) |
 
 ---
 
