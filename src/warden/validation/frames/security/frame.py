@@ -116,6 +116,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             from _internal.secrets_check import SecretsCheck
             from _internal.phantom_package_check import PhantomPackageCheck
             from _internal.sql_injection_check import SQLInjectionCheck
+            from _internal.stale_api_check import StaleAPICheck
             from _internal.xss_check import XSSCheck
         except ImportError:
             logger.error("Failed to import internal checks")
@@ -131,6 +132,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         self.checks.register(WeakCryptoCheck(self.config.get("weak_crypto", {})))
         self.checks.register(JWTMisconfigCheck(self.config.get("jwt_misconfiguration", {})))
         self.checks.register(PhantomPackageCheck(self.config.get("phantom_package", {})))
+        self.checks.register(StaleAPICheck(self.config.get("stale_api", {})))
 
         logger.info(
             "builtin_checks_registered",
