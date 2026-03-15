@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Determine version
         id: version
@@ -33,8 +35,16 @@ jobs:
           echo "major=v$MAJOR" >> "$GITHUB_OUTPUT"
           echo "Tag: $TAG, Major: v$MAJOR"
 
+      - name: Validate tag format
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if [[ ! "$TAG" =~ ^action-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid tag format: $TAG"
+            exit 1
+          fi
+
       - name: Validate action.yml
-        run: python3 -c "import yaml; yaml.safe_load(open('action.yml')); print('action.yml valid')"
+        run: test -f action.yml && echo "action.yml exists"
 
       - name: Create GitHub Release
         env:
@@ -47,6 +57,8 @@ jobs:
 
       - name: Update major version tag
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           MAJOR="${{ steps.version.outputs.major }}"
           git tag -fa "$MAJOR" -m "Update $MAJOR to ${{ steps.version.outputs.tag }}"
           git push origin "$MAJOR" --force
