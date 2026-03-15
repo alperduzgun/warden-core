@@ -1,0 +1,99 @@
+# Warden Verify Suite — Expected Results
+# Each corpus file defines phase-by-phase expectations.
+# min_findings: minimum number of findings expected (0 = clean file)
+# contains: substring that MUST appear in at least one finding message/id
+# taint_sinks: expected sink types from taint analysis
+
+python_sqli.py:
+  classify:
+    must_include_frames: [security]
+  taint:
+    min_paths: 1
+    taint_sinks: [SQL-value]
+  security_frame:
+    min_findings: 1
+    contains: [sql]
+
+python_xss.py:
+  classify:
+    must_include_frames: [security]
+  taint:
+    min_paths: 1
+    taint_sinks: [HTML-content]
+  security_frame:
+    min_findings: 1
+    contains: [xss, render_template, markup, html, template]
+
+python_secrets.py:
+  classify:
+    must_include_frames: [security]
+  taint:
+    min_paths: 0
+  security_frame:
+    min_findings: 2
+    contains: [secret, password, credential, hardcoded]
+
+python_command_injection.py:
+  classify:
+    must_include_frames: [security]
+  taint:
+    min_paths: 1
+    taint_sinks: [CMD-argument]
+  security_frame:
+    min_findings: 1
+    contains: [command, injection, os.system, subprocess]
+
+js_xss.js:
+  classify:
+    must_include_frames: [security]
+  taint:
+    # JS taint: Express req.query source detection is regex-limited
+    min_paths: 0
+  security_frame:
+    min_findings: 1
+    contains: [xss, innerhtml, html]
+
+js_prototype_pollution.js:
+  classify:
+    must_include_frames: [security]
+  taint:
+    min_paths: 0
+  security_frame:
+    min_findings: 0
+
+python_weak_crypto.py:
+  classify:
+    must_include_frames: [security]
+  taint:
+    min_paths: 0
+  security_frame:
+    min_findings: 1
+    contains: [md5, sha1, weak, crypto]
+
+python_deserialization.py:
+  classify:
+    must_include_frames: [security]
+  taint:
+    # pickle.loads not in default taint catalog as CODE-execution sink
+    min_paths: 0
+  security_frame:
+    min_findings: 1
+    contains: [secret, password, credential, hardcoded, http, csrf, security]
+
+clean_python.py:
+  classify:
+    must_include_frames: [security]
+  taint:
+    min_paths: 0
+  security_frame:
+    min_findings: 0
+    max_findings: 0
+
+clean_js.js:
+  classify:
+    must_include_frames: [security]
+  taint:
+    min_paths: 0
+  security_frame:
+    # Express app triggers HTTP security + CSRF checks (valid findings, not FP)
+    min_findings: 0
