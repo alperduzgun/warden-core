@@ -124,6 +124,76 @@ def _normalize_color_env() -> None:
         os.environ.pop("FORCE_COLOR", None)
 
 
+def _format_user_error(exc: Exception) -> tuple[str, str]:
+    """Map common exceptions to user-friendly (error, hint) messages."""
+    import os
+
+    exc_type = type(exc).__name__
+    msg = str(exc)
+
+    # --- Network / connectivity ---
+    if isinstance(exc, ConnectionError) or "ConnectionRefusedError" in exc_type:
+        return (
+            "Cannot connect to required service.",
+            "Check that Ollama is running (ollama serve) or your API provider is reachable.",
+        )
+    if isinstance(exc, TimeoutError) or "TimeoutError" in exc_type:
+        return (
+            "Operation timed out.",
+            "Network may be slow. Retry, or use --level basic for offline analysis.",
+        )
+
+    # --- Missing dependencies ---
+    if isinstance(exc, ImportError | ModuleNotFoundError):
+        module = getattr(exc, "name", None) or msg
+        return (
+            f"Missing dependency: {module}",
+            "Run: pip install warden-core[semantic]  or  pip install warden-core[dev]",
+        )
+
+    # --- File / permission errors ---
+    if isinstance(exc, FileNotFoundError):
+        return (
+            f"File not found: {msg}",
+            "Check the path exists. Run 'warden init' if the project is not yet initialized.",
+        )
+    if isinstance(exc, PermissionError):
+        return (
+            f"Permission denied: {msg}",
+            "Check file permissions, or run with appropriate access rights.",
+        )
+
+    # --- Configuration errors (both domain and infra) ---
+    if "ConfigurationError" in exc_type:
+        return (
+            f"Configuration error: {msg}",
+            "Run 'warden init --force' to reconfigure, or check warden.yaml manually.",
+        )
+
+    # --- YAML parse errors ---
+    if "YAMLError" in exc_type or "ScannerError" in exc_type:
+        return (
+            f"Invalid YAML configuration: {msg}",
+            "Check warden.yaml for syntax errors (indentation, colons, quotes).",
+        )
+
+    # --- API key / auth ---
+    if "api_key" in msg.lower() or "authentication" in msg.lower() or "unauthorized" in msg.lower():
+        return (
+            f"Authentication error: {msg}",
+            "Set your API key: warden config llm  or  export OPENAI_API_KEY=sk-...",
+        )
+
+    # --- Warden domain errors (catch-all for WardenError/WardenException) ---
+    if "WardenError" in type(exc).__mro__.__class__.__name__ or any(
+        base.__name__ in ("WardenError", "WardenException") for base in type(exc).__mro__
+    ):
+        return (msg, "Run 'warden doctor' to diagnose the issue.")
+
+    # --- Generic fallback ---
+    return (msg, "Run 'warden doctor' to check your setup, or 'warden init --force' to reconfigure.")
+
+
 def main():
     """Entry point for setuptools."""
     _normalize_color_env()
@@ -132,8 +202,33 @@ def main():
     # We do NOT want a global signal handler because it conflicts
     # with asyncio.run() which manages its own loop lifecycle.
 
-    app()
+    try:
+        app()
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:
+        from rich.console import Console
+
+        Console(stderr=True).print("\n[yellow]Interrupted.[/yellow]")
+        raise SystemExit(130)
+    except Exception as exc:
+        from rich.console import Console
+
+        console = Console(stderr=True)
+        error_msg, hint = _format_user_error(exc)
+        console.print(f"\n[bold red]Error:[/bold red] {error_msg}")
+        console.print(f"[dim]Hint: {hint}[/dim]")
+
+        # Show traceback only in verbose/debug mode
+        import os
+
+        if os.environ.get("WARDEN_DEBUG") or os.environ.get("WARDEN_VERBOSE"):
+            import traceback
+
+            console.print(f"\n[dim]{traceback.format_exc()}[/dim]")
+
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
-    app()
+    main()
