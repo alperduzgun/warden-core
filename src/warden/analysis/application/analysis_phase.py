@@ -322,10 +322,11 @@ class AnalysisPhase:
             logger.debug("incompatible_ast_cache_discarding", file=code_file.path, type=type(ast_tree).__name__)
             ast_tree = None
 
-        # Subsetting analyzers for BASIC level to hit performance targets
+        # Subsetting analyzers based on analysis level
         from warden.pipeline.domain.enums import AnalysisLevel
 
         is_basic = self.analysis_level == AnalysisLevel.BASIC
+        is_deep = self.analysis_level == AnalysisLevel.DEEP
 
         # Core analyzers for scoring (Python-specific for now)
         if is_python:
@@ -354,6 +355,10 @@ class AnalysisPhase:
             tasks["magic_numbers"] = asyncio.create_task(
                 self.analyzers["magic_numbers"].analyze_async(code_file, ast_tree=ast_tree)
             )
+
+        # DEEP level: extended analysis timeout for thorough inspection
+        if is_deep:
+            self.config["timeout"] = max(self.config.get("timeout", 15.0), 30.0)
 
         # Skip LSP in BASIC level (slow/external dependency)
         if not is_basic:
