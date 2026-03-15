@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 
 # Confidence threshold above which the LLM call is skipped.
 # Keep below 1.0 so that an unknown/complex file always gets LLM review.
-SKIP_LLM_THRESHOLD = 0.88
+SKIP_LLM_THRESHOLD = 0.82
 
 
 @dataclass
