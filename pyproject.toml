@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 authors = [{name = "Warden Team", email = "warden-core@proton.me"}]
 license = {text = "Apache-2.0"}
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Testing",
@@ -90,7 +90,7 @@ warden = "warden.main:main"
 
 [tool.setuptools_scm]
 write_to = "src/warden/_version.py"
-fallback_version = "2.3.0"
+fallback_version = "2.4.0"
 
 # ============================================================
 # Ruff - Fast Python linter and formatter
