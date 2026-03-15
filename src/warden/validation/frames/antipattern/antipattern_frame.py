@@ -52,6 +52,7 @@ from warden.validation.domain.frame import (
 from warden.validation.frames.antipattern.detectors import (
     ClassSizeDetector,
     DebugDetector,
+    DuplicationDetector,
     ExceptionDetector,
     TodoDetector,
 )
@@ -123,6 +124,7 @@ class AntiPatternFrame(ValidationFrame):
         self.check_debug_output = config_dict.get("check_debug_output", True)
         self.check_todo_fixme = config_dict.get("check_todo_fixme", True)
         self.check_generic_exception = config_dict.get("check_generic_exception", True)
+        self.check_duplication = config_dict.get("check_duplication", True)
 
         # Filtering
         self.ignore_test_files = config_dict.get("ignore_test_files", True)
@@ -138,6 +140,7 @@ class AntiPatternFrame(ValidationFrame):
         )
         self._debug_detector = DebugDetector()
         self._todo_detector = TodoDetector()
+        self._duplication_detector = DuplicationDetector()
 
     @classmethod
     def _get_registry(cls) -> ASTProviderRegistry:
@@ -205,6 +208,10 @@ class AntiPatternFrame(ValidationFrame):
         if self.check_todo_fixme:
             checks_executed.append("todo_fixme")
             violations.extend(self._todo_detector.detect(code_file, language, lines, ast_root))
+
+        if self.check_duplication:
+            checks_executed.append("duplication")
+            violations.extend(self._duplication_detector.detect(code_file, language, lines, ast_root))
 
         # Convert to findings
         findings = self._violations_to_findings(violations)
