@@ -2,14 +2,18 @@
 """Warden Scan Verification Suite.
 
 Runs corpus files through each pipeline phase and validates results
-against expected.yaml. No LLM required for deterministic checks.
+against expected.yaml.
+
+Default mode includes mock LLM pipeline test (no real API calls).
+Use --no-llm to skip LLM integration test for faster CI runs.
 
 Usage:
-    python verify/verify.py                    # full suite
+    python verify/verify.py                    # full suite (deterministic + mock LLM)
+    python verify/verify.py --no-llm           # deterministic only (fast, CI default)
     python verify/verify.py --phase classify   # classification only
     python verify/verify.py --phase taint      # taint analysis only
     python verify/verify.py --frame security   # security frame only
-    python verify/verify.py --no-llm           # skip LLM-dependent checks
+    python verify/verify.py --phase pipeline_llm  # mock LLM pipeline only
 """
 
 from __future__ import annotations
@@ -196,6 +200,109 @@ async def run_security_frame(corpus: dict, expected: dict, suite: SuiteResult) -
             )
 
 
+async def run_pipeline_with_llm(corpus: dict, expected: dict, suite: SuiteResult) -> None:
+    """Test full pipeline with mock LLM — validates LLM-dependent phases work end-to-end.
+
+    Phases tested:
+    - Classification (heuristic + LLM fallback)
+    - Validation (SecurityFrame with LLM batch verification)
+    - Verification (FP filtering)
+    All with a mock LLM that returns valid JSON responses.
+    """
+    from pathlib import Path
+    from unittest.mock import AsyncMock, MagicMock
+
+    from warden.pipeline import PipelineConfig
+    from warden.pipeline.application.orchestrator.orchestrator import PhaseOrchestrator
+    from warden.pipeline.domain.enums import AnalysisLevel, PipelineStatus
+    from warden.validation.domain.frame import CodeFile
+    from warden.validation.frames import SecurityFrame
+
+    # Mock LLM that returns plausible JSON for any prompt
+    mock_llm = AsyncMock()
+    mock_llm.complete_async = AsyncMock(return_value=MagicMock(
+        content='{"score": 6.5, "confidence": 0.8, "summary": "Mock analysis", "issues": []}',
+        success=True,
+    ))
+    mock_llm.provider = MagicMock(value="mock")
+    mock_llm.config = None
+    mock_llm.get_usage = MagicMock(return_value={
+        "total_tokens": 100, "prompt_tokens": 50,
+        "completion_tokens": 50, "request_count": 1,
+    })
+
+    # Pick 2 corpus files: 1 vulnerable (sqli), 1 clean
+    test_files = {
+        "python_sqli.py": ("python", True),
+        "clean_python.py": ("python", False),
+    }
+
+    for fname, (lang, is_vulnerable) in test_files.items():
+        if fname not in corpus:
+            continue
+
+        content, _ = corpus[fname]
+        code_file = CodeFile(path=fname, content=content, language=lang)
+
+        config = PipelineConfig(
+            analysis_level=AnalysisLevel.STANDARD,
+            use_llm=True,
+            enable_fortification=False,
+            enable_cleaning=False,
+            enable_issue_validation=True,
+            timeout=60,
+        )
+
+        orchestrator = PhaseOrchestrator(
+            frames=[SecurityFrame()],
+            config=config,
+            project_root=Path.cwd(),
+            llm_service=mock_llm,
+        )
+
+        try:
+            result, context = await orchestrator.execute_async(
+                [code_file], analysis_level="standard",
+            )
+        except Exception as e:
+            suite.add("pipeline_llm", fname, "execute", False, f"ERROR: {e}")
+            continue
+
+        # Check 1: Pipeline completed (didn't crash with mock LLM)
+        terminal = {PipelineStatus.COMPLETED, PipelineStatus.FAILED, PipelineStatus.COMPLETED_WITH_FAILURES}
+        ok = result.status in terminal
+        suite.add("pipeline_llm", fname, "completed", ok, f"status={result.status}")
+
+        # Check 2: Classification ran (selected_frames populated)
+        frames = getattr(context, "selected_frames", None)
+        ok = frames is not None and len(frames) > 0
+        suite.add("pipeline_llm", fname, "classification_ran", ok,
+                   f"selected_frames={frames}" if not ok else f"{len(frames)} frames")
+
+        # Check 3: Validation ran (frame_results populated)
+        ok = isinstance(context.frame_results, dict) and len(context.frame_results) > 0
+        suite.add("pipeline_llm", fname, "validation_ran", ok)
+
+        # Check 4: Vulnerable file should have findings
+        if is_vulnerable:
+            ok = result.total_findings >= 1
+            suite.add("pipeline_llm", fname, "has_findings", ok,
+                       f"total_findings={result.total_findings}")
+
+        # Check 5: Mock LLM called for vulnerable files (clean may skip via heuristic)
+        if is_vulnerable:
+            ok = mock_llm.complete_async.call_count > 0
+            suite.add("pipeline_llm", fname, "llm_called", ok,
+                       f"call_count={mock_llm.complete_async.call_count}")
+        else:
+            # Clean files may or may not trigger LLM — just report, don't fail
+            suite.add("pipeline_llm", fname, "llm_call_count",
+                       True, f"calls={mock_llm.complete_async.call_count} (informational)")
+
+        # Reset mock call count for next file
+        mock_llm.complete_async.reset_mock()
+
+
 async def run_report(corpus: dict, suite: SuiteResult) -> None:
     """Test that SARIF report generation produces valid output."""
     from warden.reports.generator import ReportGenerator
@@ -289,12 +396,14 @@ def print_results(suite: SuiteResult) -> None:
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description="Warden Verify Suite")
-    parser.add_argument("--phase", choices=["classify", "taint", "security_frame", "report"],
+    parser.add_argument("--phase", choices=["classify", "taint", "security_frame", "report", "pipeline_llm"],
                         help="Run only this phase")
     parser.add_argument("--frame", choices=["security"],
                         help="Run only this frame")
     parser.add_argument("--no-llm", action="store_true",
-                        help="Skip LLM-dependent checks")
+                        help="Skip LLM-dependent checks (default: include mock LLM pipeline test)")
+    parser.add_argument("--with-llm", action="store_true",
+                        help="(Alias) Explicitly include mock LLM pipeline test")
     args = parser.parse_args()
 
     corpus = _load_corpus()
@@ -305,12 +414,17 @@ async def main() -> int:
     if args.frame == "security":
         target_phase = "security_frame"
 
-    phases = {
+    # Deterministic phases (always run)
+    phases: dict[str, Any] = {
         "classify": lambda: run_classify(corpus, expected, suite),
         "taint": lambda: run_taint(corpus, expected, suite),
         "security_frame": lambda: run_security_frame(corpus, expected, suite),
         "report": lambda: run_report(corpus, suite),
     }
+
+    # LLM phase (mock-based, run by default unless --no-llm)
+    if not args.no_llm:
+        phases["pipeline_llm"] = lambda: run_pipeline_with_llm(corpus, expected, suite)
 
     start = time.monotonic()
 
