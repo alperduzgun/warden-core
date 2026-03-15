@@ -114,6 +114,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             from _internal.http_security_check import HTTPSecurityCheck
             from _internal.jwt_check import JWTMisconfigCheck
             from _internal.secrets_check import SecretsCheck
+            from _internal.phantom_package_check import PhantomPackageCheck
             from _internal.sql_injection_check import SQLInjectionCheck
             from _internal.xss_check import XSSCheck
         except ImportError:
@@ -129,6 +130,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         self.checks.register(CSRFCheck(self.config.get("csrf", {})))
         self.checks.register(WeakCryptoCheck(self.config.get("weak_crypto", {})))
         self.checks.register(JWTMisconfigCheck(self.config.get("jwt_misconfiguration", {})))
+        self.checks.register(PhantomPackageCheck(self.config.get("phantom_package", {})))
 
         logger.info(
             "builtin_checks_registered",
