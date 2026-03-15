@@ -873,11 +873,18 @@ class ReportGenerator:
         html_content = self.html_generator._create_html_content(sanitized_results)
 
         try:
-            # Try to use WeasyPrint if available
             from weasyprint import CSS, HTML
         except ImportError:
-            logger.error("pdf_generation_failed", reason="weasyprint_not_installed")
-            raise RuntimeError("PDF generation requires WeasyPrint. Install with: pip install weasyprint")
+            # Graceful fallback: save as HTML instead of crashing
+            html_path = output_path.with_suffix(".html")
+            html_path.write_text(html_content, encoding="utf-8")
+            logger.warning(
+                "pdf_fallback_to_html",
+                reason="weasyprint_not_installed",
+                html_path=str(html_path),
+                hint="Install PDF support: pip install warden-core[pdf]",
+            )
+            return
 
         # Convert HTML to PDF using atomic write
         temp_fd, temp_path = tempfile.mkstemp(suffix=".pdf", dir=output_path.parent, prefix=".tmp_")

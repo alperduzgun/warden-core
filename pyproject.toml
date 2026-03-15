@@ -57,6 +57,9 @@ semantic = [
     "chromadb>=1.5.0,<2.0.0",
     "tiktoken>=0.7.0,<0.13.0",
 ]
+pdf = [
+    "weasyprint>=60.0",
+]
 grpc = [
     "grpcio>=1.64.0,<1.79.0",
     "grpcio-tools>=1.64.0,<1.79.0",
