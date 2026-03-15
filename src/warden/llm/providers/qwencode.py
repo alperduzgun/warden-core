@@ -37,6 +37,11 @@ class QwenCodeClient(ILlmClient):
         start_time = time.time()
 
         try:
+            from warden.llm.global_rate_limiter import GlobalRateLimiter
+
+            limiter = await GlobalRateLimiter.get_instance()
+            await limiter.acquire("qwen", tokens=request.max_tokens + request.estimated_prompt_tokens)
+
             headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
             payload = {
