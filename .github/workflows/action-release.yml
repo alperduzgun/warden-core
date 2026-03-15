@@ -1,0 +1,52 @@
+name: Release GitHub Action
+
+on:
+  push:
+    tags:
+      - 'action-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Action version tag (e.g. action-v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release-action:
+    name: Release Action & Update Major Tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          MAJOR=$(echo "$TAG" | sed 's/action-v\([0-9]*\).*/\1/')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "major=v$MAJOR" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG, Major: v$MAJOR"
+
+      - name: Validate action.yml
+        run: python3 -c "import yaml; yaml.safe_load(open('action.yml')); print('action.yml valid')"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "Warden Action ${{ steps.version.outputs.tag }}" \
+            --generate-notes \
+            --latest=false
+
+      - name: Update major version tag
+        run: |
+          MAJOR="${{ steps.version.outputs.major }}"
+          git tag -fa "$MAJOR" -m "Update $MAJOR to ${{ steps.version.outputs.tag }}"
+          git push origin "$MAJOR" --force
