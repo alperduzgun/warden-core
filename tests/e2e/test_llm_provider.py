@@ -107,15 +107,6 @@ class TestLLMProviderSwitch:
         config = yaml.safe_load((isolated_project / ".warden/config.yaml").read_text())
         assert config["llm"]["provider"] == "azure_openai"
 
-    def test_config_set_llm_provider_openrouter(self, runner, isolated_project, monkeypatch):
-        """Switch provider to openrouter."""
-        monkeypatch.chdir(isolated_project)
-        result = runner.invoke(app, ["config", "set", "llm.provider", "openrouter"], catch_exceptions=False)
-        assert result.exit_code == 0
-
-        config = yaml.safe_load((isolated_project / ".warden/config.yaml").read_text())
-        assert config["llm"]["provider"] == "openrouter"
-
     def test_config_set_llm_provider_gemini(self, runner, isolated_project, monkeypatch):
         """Switch provider to gemini."""
         monkeypatch.chdir(isolated_project)

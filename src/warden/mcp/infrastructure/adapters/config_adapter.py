@@ -104,7 +104,7 @@ class ConfigAdapter(BaseWardenAdapter):
                 properties={
                     "provider": {
                         "type": "string",
-                        "description": "LLM Provider (ollama, openai, anthropic, gemini, azure_openai, deepseek, groq, openrouter)",
+                        "description": "LLM Provider (ollama, openai, anthropic, gemini, azure_openai, deepseek, groq)",
                     },
                     "api_key": {
                         "type": "string",
@@ -275,7 +275,7 @@ class ConfigAdapter(BaseWardenAdapter):
         model = arguments.get("model")
         vector_db = arguments.get("vector_db", "local")
 
-        valid_providers = {"ollama", "openai", "anthropic", "gemini", "azure_openai", "deepseek", "groq", "openrouter"}
+        valid_providers = {"ollama", "openai", "anthropic", "gemini", "azure_openai", "deepseek", "groq"}
 
         if provider not in valid_providers:
             return MCPToolResult.error(f"Invalid provider: {provider}. Must be one of: {', '.join(valid_providers)}")
@@ -292,7 +292,6 @@ class ConfigAdapter(BaseWardenAdapter):
                 "azure_openai": "AZURE_OPENAI_API_KEY",
                 "deepseek": "DEEPSEEK_API_KEY",
                 "groq": "GROQ_API_KEY",
-                "openrouter": "OPENROUTER_API_KEY",
             }
             if provider in key_map:
                 env_updates[key_map[provider]] = api_key

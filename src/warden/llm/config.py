@@ -2,7 +2,7 @@
 LLM Configuration
 
 Supports multi-provider configuration with fallback chain.
-Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq, OpenRouter
+Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq
 """
 
 import contextlib
@@ -93,7 +93,6 @@ class LlmConfiguration:
     openai: ProviderConfig = field(default_factory=ProviderConfig)
     azure_openai: ProviderConfig = field(default_factory=ProviderConfig)
     groq: ProviderConfig = field(default_factory=ProviderConfig)
-    openrouter: ProviderConfig = field(default_factory=ProviderConfig)
     ollama: ProviderConfig = field(default_factory=ProviderConfig)
     claude_code: ProviderConfig = field(default_factory=ProviderConfig)  # Local Claude Code CLI/SDK
     codex: ProviderConfig = field(default_factory=ProviderConfig)  # Local Codex CLI
@@ -139,7 +138,6 @@ class LlmConfiguration:
             LlmProvider.OPENAI: self.openai,
             LlmProvider.AZURE_OPENAI: self.azure_openai,
             LlmProvider.GROQ: self.groq,
-            LlmProvider.OPENROUTER: self.openrouter,
             LlmProvider.OLLAMA: self.ollama,
             LlmProvider.CLAUDE_CODE: self.claude_code,
             LlmProvider.CODEX: self.codex,
@@ -186,7 +184,6 @@ DEFAULT_MODELS = {
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.3-70b-versatile",
-    LlmProvider.OPENROUTER: "anthropic/claude-3.5-sonnet",
     LlmProvider.OLLAMA: "qwen2.5-coder:3b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
     LlmProvider.CODEX: "codex-local",  # Placeholder - actual model controlled by ~/.codex/config.toml
@@ -394,7 +391,6 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             "DEEPSEEK_API_KEY",
             "QWENCODE_API_KEY",
             "GROQ_API_KEY",
-            "OPENROUTER_API_KEY",
             "WARDEN_SMART_MODEL",
             "WARDEN_FAST_MODEL",
             "WARDEN_LLM_CONCURRENCY",
@@ -493,13 +489,6 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.groq.api_key = groq_secret.value
         config.groq.enabled = True
         configured_providers.append(LlmProvider.GROQ)
-
-    # Configure OpenRouter
-    openrouter_secret = secrets.get("OPENROUTER_API_KEY")
-    if openrouter_secret and openrouter_secret.found:
-        config.openrouter.api_key = openrouter_secret.value
-        config.openrouter.enabled = True
-        configured_providers.append(LlmProvider.OPENROUTER)
 
     # Configure Ollama (Local)
     try:
@@ -617,7 +606,6 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             config.deepseek,
             config.qwencode,
             config.groq,
-            config.openrouter,
         ]:
             provider_config.enabled = False
 

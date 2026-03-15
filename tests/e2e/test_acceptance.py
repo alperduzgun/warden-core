@@ -3929,7 +3929,7 @@ class TestBlockedProviders:
             str(vuln),
             cwd=str(isolated_sample),
             timeout=60,
-            env={"WARDEN_BLOCKED_PROVIDERS": "claude_code,openrouter"},
+            env={"WARDEN_BLOCKED_PROVIDERS": "claude_code,groq"},
         )
         assert r.returncode in (0, 1, 2), f"Multi-block scan crashed: rc={r.returncode}\n{r.stderr}"
         assert "Traceback" not in r.stdout + r.stderr

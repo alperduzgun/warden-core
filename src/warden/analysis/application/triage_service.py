@@ -34,7 +34,6 @@ _BATCH_SIZES: dict[str, int] = {
     "openai": 15,  # Cloud API, 128K context
     "azure_openai": 15,
     "anthropic": 15,
-    "openrouter": 15,
     "deepseek": 15,
     "qwencode": 15,
     "gemini": 15,

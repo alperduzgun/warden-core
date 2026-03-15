@@ -402,7 +402,6 @@ class HealthAdapter(BaseWardenAdapter):
             "azure_openai": "AZURE_OPENAI_API_KEY",
             "deepseek": "DEEPSEEK_API_KEY",
             "groq": "GROQ_API_KEY",
-            "openrouter": "OPENROUTER_API_KEY",
             "google": "GOOGLE_API_KEY",
             "gemini": "GOOGLE_API_KEY",
             "cohere": "COHERE_API_KEY",
