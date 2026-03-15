@@ -390,6 +390,9 @@ class PipelinePhaseRunner:
         # Post-Process: Apply Baseline (Smart Filter)
         self.post_processor.apply_baseline(context)
 
+        # Post-Process: Filter to changed lines only (diff-mode)
+        self.post_processor.filter_by_diff_lines(context)
+
         # Finalize pipeline status and capture metrics
         self._finalize_pipeline_status(context, pipeline)
 

@@ -300,9 +300,14 @@ def scan_command(
         # Incremental Scanning Logic (--diff mode)
         baseline_fingerprints = None
 
+        # diff_changed_lines: maps relative file path → set of changed line numbers.
+        # Populated below when --diff is used; stays empty for full-scan mode.
+        diff_changed_lines: dict[str, set[int]] = {}
+
         if diff:
             try:
                 from warden.cli.commands.helpers.git_helper import GitHelper
+                from warden.validation.frames.gitchanges.git_diff_parser import GitDiffParser
 
                 console.print(f"[dim]🔍 Detecting changed files relative to '{base}'...[/dim]")
                 git_helper = GitHelper(Path.cwd())
@@ -314,6 +319,23 @@ def scan_command(
 
                 console.print(f"[green]✓ Found {len(changed_files)} changed files[/green]")
                 paths = changed_files
+
+                # Parse diff to get per-file changed line numbers for post-filter
+                try:
+                    diff_output = git_helper.get_diff_output(base_branch=base)
+                    if diff_output:
+                        parser = GitDiffParser()
+                        for file_diff in parser.parse(diff_output):
+                            added = file_diff.get_all_added_lines()
+                            if added:
+                                diff_changed_lines[file_diff.file_path] = added
+                        if diff_changed_lines:
+                            _logger.info(
+                                "diff_line_map_built",
+                                files=len(diff_changed_lines),
+                            )
+                except Exception as _e:
+                    _logger.warning("diff_line_parse_failed", error=str(_e))
             except ImportError:
                 console.print("[yellow]⚠️  Git helper not available. Running full scan.[/yellow]")
             except Exception as e:
@@ -400,6 +422,7 @@ def scan_command(
                 benchmark=benchmark,
                 contract_mode=contract_mode,
                 resume=resume,
+                diff_changed_lines=diff_changed_lines,
             )
         )
 
@@ -443,6 +466,7 @@ def scan_command(
                         benchmark=benchmark,
                         contract_mode=contract_mode,
                         resume=resume,
+                        diff_changed_lines=diff_changed_lines,
                     )
                 )
                 if exit_code != 0:
@@ -889,6 +913,7 @@ async def _run_scan_async(
     benchmark: bool = False,
     contract_mode: bool = False,
     resume: bool = False,
+    diff_changed_lines: dict | None = None,
 ) -> int:
     """Async implementation of scan command."""
 
@@ -928,6 +953,10 @@ async def _run_scan_async(
     console.print()
 
     bridge = WardenBridge(project_root=Path.cwd())
+
+    # Inject diff-mode changed_lines into orchestrator so context gets them
+    if diff_changed_lines and hasattr(bridge, "orchestrator"):
+        bridge.orchestrator.changed_lines = diff_changed_lines
 
     # Initialise benchmark collector if requested (lazy import keeps startup fast).
     bench_collector = None

@@ -454,6 +454,89 @@ class FindingsPostProcessor:
 
         return False
 
+    def filter_by_diff_lines(self, context: PipelineContext) -> None:
+        """
+        Filter findings to only those on changed lines (diff-mode post-filter).
+
+        If context.changed_lines is empty, skip — this is full-scan mode.
+        Findings whose file appears in changed_lines but whose line is NOT in the
+        changed set are removed. Findings in files NOT listed in changed_lines
+        pass through unchanged (those files were scanned in full-scan context).
+        """
+        if not context.changed_lines:
+            return
+
+        total_filtered = 0
+
+        for _fid, f_res in context.frame_results.items():
+            result_obj = f_res.get("result")
+            if not result_obj:
+                continue
+
+            current_findings = result_obj.findings
+            if not current_findings:
+                continue
+
+            filtered_findings = []
+            for finding in current_findings:
+                # Extract file path from the finding
+                fpath = getattr(finding, "file_path", None) or getattr(finding, "path", None)
+                if fpath is None:
+                    # Try parsing location string: "some/file.py:45"
+                    location = getattr(finding, "location", "") or ""
+                    if ":" in location:
+                        fpath = location.rsplit(":", 1)[0]
+
+                if fpath is None:
+                    # Cannot determine file — pass through
+                    filtered_findings.append(finding)
+                    continue
+
+                rel_path = self._normalize_path(str(fpath))
+
+                if rel_path not in context.changed_lines:
+                    # File not in diff map — pass through (full-scan file)
+                    filtered_findings.append(finding)
+                    continue
+
+                # File is in diff map — only keep if line is changed
+                line_num = getattr(finding, "line", 0)
+                if line_num == 0:
+                    # Try parsing line from location string
+                    location = getattr(finding, "location", "") or ""
+                    if ":" in location:
+                        try:
+                            line_num = int(location.rsplit(":", 1)[1])
+                        except (ValueError, IndexError):
+                            line_num = 0
+
+                if line_num == 0 or line_num in context.changed_lines[rel_path]:
+                    filtered_findings.append(finding)
+                else:
+                    total_filtered += 1
+
+            if len(filtered_findings) < len(current_findings):
+                result_obj.findings = filtered_findings
+                result_obj.issues_found = len(filtered_findings)
+
+                if (
+                    not filtered_findings
+                    and getattr(result_obj, "status", None) == "failed"
+                    and not self._has_blocker_violations(result_obj)
+                ):
+                    result_obj.status = "passed"
+
+        if total_filtered > 0:
+            logger.info("diff_line_filter_applied", filtered_count=total_filtered)
+
+            # Sync context.findings after line-level filtering
+            all_findings: list[Any] = []
+            for f_res in context.frame_results.values():
+                res = f_res.get("result")
+                if res and res.findings:
+                    all_findings.extend(res.findings)
+            context.findings = all_findings
+
     def _normalize_path(self, fpath: str) -> str:
         """Normalize a file path relative to project root."""
         try:
