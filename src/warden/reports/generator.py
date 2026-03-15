@@ -366,6 +366,7 @@ class ReportGenerator:
                     },
                     "invocations": [{"executionSuccessful": self._is_execution_successful(scan_results), "toolExecutionNotifications": []}],
                     "results": [],
+                    "originalUriBaseIds": {"%SRCROOT%": {"uri": ""}},
                 }
             ],
         }
@@ -480,7 +481,7 @@ class ReportGenerator:
                     "locations": [
                         {
                             "physicalLocation": {
-                                "artifactLocation": {"uri": self._to_relative_uri(file_path)},
+                                "artifactLocation": {"uri": self._to_relative_uri(file_path), "uriBaseId": "%SRCROOT%"},
                                 "region": {
                                     "startLine": max(1, _line_from_location),
                                     "startColumn": max(1, self._get_val(finding, "column", 1)),
@@ -530,7 +531,7 @@ class ReportGenerator:
                                 "description": {"text": rem_description},
                                 "artifactChanges": [
                                     {
-                                        "artifactLocation": {"uri": self._to_relative_uri(file_path)},
+                                        "artifactLocation": {"uri": self._to_relative_uri(file_path), "uriBaseId": "%SRCROOT%"},
                                         "replacements": [
                                             {
                                                 "deletedRegion": {
@@ -633,7 +634,7 @@ class ReportGenerator:
                 # Last resort: just the filename to avoid "uri must be relative" error
                 return path_obj.name
             except Exception:
-                raise
+                return path_obj.name
 
     def generate_svg_badge(
         self, scan_results: dict[str, Any], output_path: Path, base_path: Path | None = None
