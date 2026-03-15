@@ -39,7 +39,7 @@ Warden's **Engine** runs on Python/Rust, but it validates code across multiple l
 
 | Tier | Languages | AST | Taint Analysis | Security Rules | Frameworks |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **Tier 1 — Full** | Python, JavaScript/TypeScript | ✅ | ✅ Interprocedural (Python) / Regex (JS) | 17 rules | Flask, Django, FastAPI, Express, Koa |
+| **Tier 1 — Full** | Python, JavaScript/TypeScript | ✅ | ✅ Interprocedural (Python) / Regex (JS) | 8 security checks | Flask, Django, FastAPI, Express, Koa |
 | **Tier 2 — Standard** | Go, Java | ✅ | ✅ Regex-based | Via LLM | stdlib, Spring |
 | **Tier 3 — Basic** | Kotlin, Dart | ✅ | ❌ | Via LLM | — |
 | **Tier 4 — Regex Only** | Swift, C/C++, Ruby, PHP | ❌ | ❌ | Regex patterns | — |
@@ -131,7 +131,7 @@ llm:
 - **Parallel execution** automatically races all fast providers
 
 ### 4. 🛡️ Core Validation Frames (Built-in)
-Warden ships with 6 powerful core frames:
+Warden ships with **13+ validation frames**, including these core frames:
 1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS) with **multi-language taint analysis**.
 2.  **ResilienceFrame:** Validates error handling, retry, and circuit-breaker patterns.
 3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
@@ -686,7 +686,7 @@ We are transforming Warden from a local tool into a global **Standard of Trust**
 *   Phase 3: Warden Cloud Registry ☁️
 *   Phase 4: Enterprise Compliance 🏢
 
-[See full usage plan in ROADMAP.md](./ROADMAP.md)
+
 
 2.  **Architectural Frames:**
     We don't just look for bugs. We look for **Architectural Crimes**.
