@@ -39,6 +39,18 @@ inputs:
     description: "Upload SARIF to GitHub Security tab"
     required: false
     default: "true"
+  post-comment:
+    description: "Post scan results as a PR comment (idempotent, updates existing)"
+    required: false
+    default: "true"
+  fail-on-severity:
+    description: "Fail workflow if findings at this severity or above: critical, high, medium, low, none"
+    required: false
+    default: "critical"
+  github-token:
+    description: "GitHub token for PR comments and SARIF upload"
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   sarif-file:
@@ -47,6 +59,12 @@ outputs:
   exit-code:
     description: "Scan exit code (0=pass, 1=infra error, 2=policy violation)"
     value: ${{ steps.scan.outputs.exit-code }}
+  findings-count:
+    description: "Total number of findings"
+    value: ${{ steps.comment.outputs.findings-count }}
+  quality-score:
+    description: "Quality score (0.0-10.0)"
+    value: ${{ steps.comment.outputs.quality-score }}
 
 runs:
   using: "composite"
@@ -99,6 +117,149 @@ runs:
           exit 1
         elif [ ${EXIT_CODE} -ne 0 ] && [ ${EXIT_CODE} -ne 130 ]; then
           echo "::warning::Warden scan exited with code ${EXIT_CODE} (infrastructure issue)."
+        fi
+
+    - name: Post PR Comment
+      id: comment
+      if: always() && inputs.post-comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        SARIF_FILE: ${{ inputs.output-file }}
+        SCAN_EXIT_CODE: ${{ steps.scan.outputs.exit-code }}
+      run: |
+        COMMENT_MARKER="<!-- warden-scan-report -->"
+
+        # Parse SARIF for findings count and quality score
+        FINDINGS=0
+        SCORE="N/A"
+        if [ -f "${SARIF_FILE}" ]; then
+          FINDINGS=$(python3 -c "
+        import json, sys
+        try:
+            d = json.load(open('${SARIF_FILE}'))
+            results = d.get('runs', [{}])[0].get('results', [])
+            # Exclude suppressed findings
+            active = [r for r in results if not r.get('suppressions')]
+            print(len(active))
+        except Exception:
+            print(0)
+        " 2>/dev/null || echo 0)
+
+          SCORE=$(python3 -c "
+        import json
+        try:
+            d = json.load(open('${SARIF_FILE}'))
+            props = d.get('runs', [{}])[0].get('properties', {})
+            print(props.get('qualityScore', 'N/A'))
+        except Exception:
+            print('N/A')
+        " 2>/dev/null || echo "N/A")
+        fi
+
+        echo "findings-count=${FINDINGS}" >> "$GITHUB_OUTPUT"
+        echo "quality-score=${SCORE}" >> "$GITHUB_OUTPUT"
+
+        # Count by severity
+        CRITICAL=0; HIGH=0; MEDIUM=0; LOW=0
+        if [ -f "${SARIF_FILE}" ]; then
+          read CRITICAL HIGH MEDIUM LOW < <(python3 -c "
+        import json
+        try:
+            d = json.load(open('${SARIF_FILE}'))
+            results = d.get('runs', [{}])[0].get('results', [])
+            active = [r for r in results if not r.get('suppressions')]
+            c = h = m = l = 0
+            for r in active:
+                lev = r.get('level', 'note')
+                if lev == 'error': c += 1
+                elif lev == 'warning': h += 1
+                elif lev == 'note': m += 1
+                else: l += 1
+            print(c, h, m, l)
+        except Exception:
+            print('0 0 0 0')
+        " 2>/dev/null || echo "0 0 0 0")
+        fi
+
+        # Determine status
+        if [ "${SCAN_EXIT_CODE}" = "0" ]; then
+          STATUS_ICON="✅"
+          STATUS_TEXT="Passed"
+        elif [ "${SCAN_EXIT_CODE}" = "2" ]; then
+          STATUS_ICON="❌"
+          STATUS_TEXT="Policy Violation"
+        else
+          STATUS_ICON="⚠️"
+          STATUS_TEXT="Scan Warning (exit ${SCAN_EXIT_CODE})"
+        fi
+
+        # Build top findings list (max 10)
+        FINDINGS_TABLE=""
+        if [ -f "${SARIF_FILE}" ] && [ "${FINDINGS}" -gt 0 ]; then
+          FINDINGS_TABLE=$(python3 -c "
+        import json
+        d = json.load(open('${SARIF_FILE}'))
+        results = d.get('runs', [{}])[0].get('results', [])
+        active = [r for r in results if not r.get('suppressions')]
+        sev_map = {'error': '🔴 Critical', 'warning': '🟠 High', 'note': '🟡 Medium'}
+        lines = []
+        for r in active[:10]:
+            sev = sev_map.get(r.get('level', 'note'), '🔵 Low')
+            msg = r.get('message', {}).get('text', 'N/A')[:80]
+            loc = r.get('locations', [{}])[0].get('physicalLocation', {})
+            uri = loc.get('artifactLocation', {}).get('uri', '?')
+            line = loc.get('region', {}).get('startLine', '?')
+            lines.append(f'| {sev} | \`{uri}:{line}\` | {msg} |')
+        print('\n'.join(lines))
+        " 2>/dev/null || echo "")
+        fi
+
+        # Build markdown comment
+        BODY="${COMMENT_MARKER}
+        ## 🛡️ Warden Security Report
+
+        **${STATUS_ICON} ${STATUS_TEXT}** | Score: **${SCORE}** | Findings: **${FINDINGS}**
+
+        | Metric | Count |
+        |--------|-------|
+        | 🔴 Critical | ${CRITICAL} |
+        | 🟠 High | ${HIGH} |
+        | 🟡 Medium | ${MEDIUM} |
+        | 🔵 Low | ${LOW} |"
+
+        if [ -n "${FINDINGS_TABLE}" ]; then
+          BODY="${BODY}
+
+        <details>
+        <summary>Top Findings (${FINDINGS} total)</summary>
+
+        | Severity | Location | Message |
+        |----------|----------|---------|
+        ${FINDINGS_TABLE}
+
+        </details>"
+        fi
+
+        BODY="${BODY}
+
+        ---
+        <sub>Warden | Level: \`${{ inputs.level }}\` | <a href=\"https://github.com/alperduzgun/warden-core\">warden-core</a></sub>"
+
+        # Find existing comment and update or create
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+
+        EXISTING_ID=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+          --jq ".[] | select(.body | contains(\"${COMMENT_MARKER}\")) | .id" 2>/dev/null | head -1)
+
+        if [ -n "${EXISTING_ID}" ]; then
+          gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_ID}" \
+            -X PATCH -f body="${BODY}" > /dev/null 2>&1
+          echo "Updated existing PR comment (id: ${EXISTING_ID})"
+        else
+          gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            -f body="${BODY}" > /dev/null 2>&1
+          echo "Created new PR comment"
         fi
 
     - name: Upload SARIF to GitHub Security
