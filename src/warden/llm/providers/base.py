@@ -7,6 +7,7 @@ Based on C# ILlmClient.cs:
 All provider implementations must inherit from this interface
 """
 
+import asyncio
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -172,7 +173,16 @@ class ILlmClient(ABC):
             use_fast_tier=use_fast_tier,
         )
 
-        response = await self.send_with_tools_async(request)
+        try:
+            response = await asyncio.wait_for(
+                self.send_with_tools_async(request),
+                timeout=request.timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            return LlmResponse.error(
+                f"LLM call timed out after {request.timeout_seconds}s",
+                provider=self.provider,
+            )
 
         if not response.success:
             raise ExternalServiceError(f"LLM request failed: {response.error_message}")
