@@ -716,4 +716,15 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.fast_tier_providers = []
         logger.debug("fast_tier_cleared_single_provider_mode", provider=config.default_provider.value)
 
+    # FINAL: Propagate project-level rate limits (tpm_limit/rpm_limit) to the
+    # global rate limiter so that free-tier config.yaml settings take effect for
+    # all providers that fall through to the "default" bucket. (#429)
+    try:
+        from warden.llm.global_rate_limiter import GlobalRateLimiter
+
+        grl = await GlobalRateLimiter.get_instance()
+        grl.configure_from_llm_config(config)
+    except Exception as _rl_err:  # pragma: no cover — never crash config loading
+        logger.debug("global_rate_limiter_configure_failed", error=str(_rl_err))
+
     return config

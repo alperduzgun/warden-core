@@ -5,13 +5,20 @@ Provides a thread-safe global rate limiter for all LLM providers.
 Prevents rate limit violations across the entire application.
 
 Issue #17 Fix: Global rate limiting implementation
+Issue #429 Fix: Wire LlmConfiguration tpm_limit/rpm_limit into GlobalRateLimiter
 """
 
 import asyncio
+import logging
 import threading
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from warden.llm.rate_limiter import RateLimitConfig, RateLimiter
+
+if TYPE_CHECKING:
+    from warden.llm.config import LlmConfiguration
+
+_logger = logging.getLogger(__name__)
 
 # Module-level threading lock for safe singleton initialization.
 # Threading lock is safe across event loops unlike asyncio.Lock.
@@ -138,6 +145,30 @@ class GlobalRateLimiter:
             RateLimiter instance for the provider
         """
         return self._limiters.get(provider.lower(), self._limiters["default"])
+
+    def configure_from_llm_config(self, config: "LlmConfiguration") -> None:
+        """Update the default rate limiter limits from LlmConfiguration.
+
+        Applies ``config.tpm_limit`` and ``config.rpm_limit`` to the
+        ``"default"`` bucket so that project-level config.yaml settings
+        (e.g. free-tier 6 rpm / 1000 tpm) take effect globally.
+
+        Provider-specific limiters (openai, anthropic, …) are intentionally
+        left unchanged — they reflect the provider's own published limits.
+        Projects that need stricter per-provider control can extend this
+        method in the future.
+
+        Args:
+            config: Loaded LlmConfiguration instance.
+        """
+        tpm = max(1, config.tpm_limit)
+        rpm = max(1, config.rpm_limit)
+        self._limiters["default"] = RateLimiter(RateLimitConfig(tpm=tpm, rpm=rpm))
+        _logger.debug(
+            "global_rate_limiter_configured",
+            tpm_limit=tpm,
+            rpm_limit=rpm,
+        )
 
     def get_stats(self, provider: str = "default") -> dict:
         """
