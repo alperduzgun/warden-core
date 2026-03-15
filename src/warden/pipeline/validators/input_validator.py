@@ -22,7 +22,7 @@ class FrameExecutionInput(BaseModel):
     """Validated frame execution request."""
 
     frame_ids: list[str] = Field(..., min_length=1, max_length=100)
-    analysis_level: str | None = Field(default="standard", pattern="^(basic|standard|advanced)$")
+    analysis_level: str | None = Field(default="standard", pattern="^(basic|standard|deep)$")
 
 
 class PipelineInput(BaseModel):

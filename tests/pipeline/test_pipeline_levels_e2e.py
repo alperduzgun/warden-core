@@ -577,6 +577,100 @@ class TestDeepLevel:
         assert orchestrator.config.analysis_level == AnalysisLevel.DEEP
 
     @pytest.mark.asyncio
+    async def test_deep_level_enables_cleaning(
+        self,
+        python_code_file: CodeFile,
+        project_root: Path,
+        mock_llm_service: AsyncMock,
+    ) -> None:
+        """DEEP level must enable cleaning phase (STANDARD does not)."""
+        frames = [SecurityFrame()]
+        config = PipelineConfig(
+            analysis_level=AnalysisLevel.STANDARD,
+            use_llm=True,
+            enable_fortification=False,
+            enable_cleaning=False,
+            timeout=120,
+        )
+
+        orchestrator = PhaseOrchestrator(
+            frames=frames,
+            config=config,
+            project_root=project_root,
+            llm_service=mock_llm_service,
+        )
+
+        result, context = await orchestrator.execute_async(
+            [python_code_file],
+            analysis_level="deep",
+        )
+
+        assert orchestrator.config.enable_cleaning is True
+
+    @pytest.mark.asyncio
+    async def test_deep_level_extends_timeouts(
+        self,
+        python_code_file: CodeFile,
+        project_root: Path,
+        mock_llm_service: AsyncMock,
+    ) -> None:
+        """DEEP level must set extended timeouts compared to defaults."""
+        frames = [SecurityFrame()]
+        config = PipelineConfig(
+            analysis_level=AnalysisLevel.STANDARD,
+            use_llm=True,
+            enable_fortification=False,
+            enable_cleaning=False,
+            timeout=300,
+            frame_timeout=120,
+        )
+
+        orchestrator = PhaseOrchestrator(
+            frames=frames,
+            config=config,
+            project_root=project_root,
+            llm_service=mock_llm_service,
+        )
+
+        result, context = await orchestrator.execute_async(
+            [python_code_file],
+            analysis_level="deep",
+        )
+
+        assert orchestrator.config.frame_timeout == 180
+        assert orchestrator.config.timeout == 600
+
+    @pytest.mark.asyncio
+    async def test_deep_differs_from_standard(
+        self,
+        python_code_file: CodeFile,
+        project_root: Path,
+        mock_llm_service: AsyncMock,
+    ) -> None:
+        """DEEP and STANDARD must produce different config states."""
+        frames = [SecurityFrame()]
+
+        # Run STANDARD
+        std_config = PipelineConfig(timeout=120)
+        std_orch = PhaseOrchestrator(
+            frames=frames, config=std_config, project_root=project_root, llm_service=mock_llm_service,
+        )
+        await std_orch.execute_async([python_code_file], analysis_level="standard")
+
+        # Run DEEP
+        deep_config = PipelineConfig(timeout=120)
+        deep_orch = PhaseOrchestrator(
+            frames=frames, config=deep_config, project_root=project_root, llm_service=mock_llm_service,
+        )
+        await deep_orch.execute_async([python_code_file], analysis_level="deep")
+
+        # DEEP must have cleaning enabled, STANDARD must not
+        assert std_orch.config.enable_cleaning is False
+        assert deep_orch.config.enable_cleaning is True
+        # DEEP must have extended timeouts
+        assert deep_orch.config.frame_timeout > std_orch.config.frame_timeout
+
+    @pytest.mark.asyncio
     async def test_deep_level_status_is_terminal(
         self,
         python_code_file: CodeFile,
