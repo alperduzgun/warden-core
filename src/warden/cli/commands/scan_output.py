@@ -637,6 +637,149 @@ Updated: {scan_time}
         pass  # Silent fail for aux file
 
 
+def print_findings_detail(result_data: dict, console: Console) -> None:
+    """
+    Print a rich, grouped findings summary with severity icons and per-file listing.
+
+    Shows a header panel with score/grade, a severity breakdown, and up to 20
+    findings grouped by file with severity icon, level, line number, and message.
+    Displays "No issues found" when the findings list is empty.
+
+    Args:
+        result_data: Pipeline result dict containing findings and quality_score.
+        console: Rich Console instance to write output to.
+    """
+    from warden.shared.utils.finding_utils import get_finding_attribute, get_finding_severity
+    from warden.shared.utils.quality_calculator import score_to_grade
+
+    # Collect findings — mirrors the same resolution used in _render_text_report
+    all_findings: list = (
+        result_data.get("validated_issues")
+        or result_data.get("findings")
+        or result_data.get("true_positives")
+        or result_data.get("verified_findings")
+        or []
+    )
+
+    # Score / grade header
+    quality_score = result_data.get("quality_score", result_data.get("qualityScore"))
+    if quality_score is not None:
+        grade = score_to_grade(float(quality_score))
+        score_display = f"Score: {quality_score:.1f} ({grade})"
+    else:
+        score_display = "Score: N/A"
+
+    header_text = f"Warden Security Report — {score_display}"
+    console.print()
+    console.print(
+        Panel(
+            f"[bold white]{header_text}[/bold white]",
+            border_style="bright_blue",
+            padding=(0, 2),
+        )
+    )
+
+    if not all_findings:
+        console.print("\n  [bold green]No issues found[/bold green]\n")
+        return
+
+    # Severity counts
+    severity_counts: dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for finding in all_findings:
+        sev = get_finding_severity(finding)
+        if sev in severity_counts:
+            severity_counts[sev] += 1
+
+    _SEVERITY_ICONS = {
+        "critical": ("red", "CRITICAL"),
+        "high": ("dark_orange", "HIGH"),
+        "medium": ("yellow3", "MEDIUM"),
+        "low": ("steel_blue1", "LOW"),
+    }
+    _DISPLAY_ICONS = {
+        "critical": "🔴",
+        "high": "🟠",
+        "medium": "🟡",
+        "low": "🔵",
+    }
+
+    console.print("\n  [bold]Findings by Severity:[/bold]")
+    for sev, (color, label) in _SEVERITY_ICONS.items():
+        count = severity_counts.get(sev, 0)
+        count_style = f"bold {color}" if count > 0 else "dim"
+        console.print(
+            f"    {_DISPLAY_ICONS[sev]} [{count_style}]{label:<10}[/]  {count}"
+        )
+
+    # Group findings by file path
+    files_map: dict[str, list] = {}
+    for finding in all_findings:
+        file_path = get_finding_attribute(finding, "file_path", "") or get_finding_attribute(finding, "path", "")
+        location = get_finding_attribute(finding, "location", "")
+        if not file_path and location:
+            parts = location.rsplit(":", 1)
+            file_path = parts[0] if parts else location
+        file_key = file_path or "(unknown)"
+        files_map.setdefault(file_key, []).append(finding)
+
+    # Sort files: files with more findings first
+    sorted_files = sorted(files_map.items(), key=lambda kv: -len(kv[1]))
+
+    # Sort findings within each file by severity
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+    _MAX_FINDINGS = 20
+    shown = 0
+
+    console.print()
+    for file_key, file_findings in sorted_files:
+        if shown >= _MAX_FINDINGS:
+            break
+
+        file_findings.sort(key=lambda f: severity_order.get(get_finding_severity(f), 4))
+        issue_word = "issue" if len(file_findings) == 1 else "issues"
+        console.print(f"  [bold cyan]── {file_key} ({len(file_findings)} {issue_word}) ──[/bold cyan]")
+
+        for finding in file_findings:
+            if shown >= _MAX_FINDINGS:
+                break
+
+            sev = get_finding_severity(finding)
+            color, label = _SEVERITY_ICONS.get(sev, ("grey62", sev.upper()))
+            icon = _DISPLAY_ICONS.get(sev, "  ")
+
+            location = get_finding_attribute(finding, "location", "")
+            line_num = get_finding_attribute(finding, "line_number", None) or get_finding_attribute(finding, "line_start", None)
+            if line_num is None and location:
+                parts = location.rsplit(":", 1)
+                try:
+                    line_num = int(parts[1]) if len(parts) > 1 else None
+                except (ValueError, IndexError):
+                    line_num = None
+
+            line_display = f"L{line_num}" if line_num else "    "
+            message = get_finding_attribute(finding, "message", "") or ""
+            # Truncate message to 80 chars
+            if len(message) > 80:
+                message = message[:77] + "..."
+
+            sev_abbr = label[:3] if label != "CRITICAL" else "CRIT"
+            console.print(
+                f"    {icon} [{color}]{sev_abbr:<4}[/]  [dim]{line_display:<6}[/]  {message}"
+            )
+            shown += 1
+
+        console.print()
+
+    total = len(all_findings)
+    if shown < total:
+        remaining = total - shown
+        console.print(
+            f"  [dim]... and {remaining} more finding{'s' if remaining > 1 else ''}  "
+            f"·  warden scan --format sarif -o report.sarif[/dim]\n"
+        )
+
+
 def _update_tech_debt_file(final_result_data: dict, verbose: bool) -> None:
     """Update .warden/TECH_DEBT.md with god class and large file findings."""
     try:
