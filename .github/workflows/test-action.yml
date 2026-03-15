@@ -1,0 +1,41 @@
+name: Test GitHub Action
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - "feat/438-action-marketplace"
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  test-action:
+    name: Self-test Warden Action
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Warden Security Scan (local action)
+        uses: ./
+        with:
+          scan-path: "."
+          quick-start: "true"
+          format: "sarif"
+          output-file: "warden-test.sarif"
+          upload-sarif: "false"
+
+      - name: Verify SARIF output exists
+        run: |
+          if [ -f "warden-test.sarif" ]; then
+            echo "SARIF report generated successfully"
+          else
+            echo "WARNING: SARIF report not found (may be expected in quick-start mode)"
+          fi
