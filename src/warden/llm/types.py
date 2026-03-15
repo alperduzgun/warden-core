@@ -25,7 +25,6 @@ class LlmProvider(str, Enum):
     OPENAI = "openai"
     AZURE_OPENAI = "azure_openai"
     GROQ = "groq"
-    OPENROUTER = "openrouter"
     OLLAMA = "ollama"
     GEMINI = "gemini"
     CLAUDE_CODE = "claude_code"  # Local Claude Code CLI/SDK integration
