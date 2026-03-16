@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from warden.cli_bridge.handlers.base import BaseHandler
 from warden.shared.infrastructure.logging import get_logger
@@ -45,7 +46,7 @@ class ConfigHandler(BaseHandler):
 
         try:
             config_data = config_mgr.read_config()
-        except Exception as e:
+        except (ValidationError, ValueError, TypeError) as e:
             logger.warning("config_read_failed_falling_back", error=str(e))
             try:
                 with open(config_file) as f:
@@ -66,7 +67,7 @@ class ConfigHandler(BaseHandler):
         rules_data = {}
         try:
             rules_data = config_mgr.read_rules()
-        except Exception as e:
+        except (ValidationError, ValueError, TypeError) as e:
             logger.warning("rules_read_failed", error=str(e))
 
         # Merge rules and config
@@ -115,26 +116,33 @@ class ConfigHandler(BaseHandler):
             post_rules = [rule_map[rid] for rid in fr_data.post_rules if rid in rule_map]
             pipeline_frame_rules[fid] = FrameRules(pre_rules=pre_rules, post_rules=post_rules, on_fail=fr_data.on_fail)
 
-        pipeline_config = PipelineConfig(
-            fail_fast=settings.get("fail_fast", True),
-            timeout=settings.get("timeout", 300),
-            frame_timeout=settings.get("frame_timeout", 120),
-            parallel_limit=4,
-            enable_pre_analysis=settings.get("enable_pre_analysis", True),
-            enable_analysis=settings.get("enable_analysis", True),
-            enable_classification=True,
-            enable_validation=settings.get("enable_validation", True),
-            enable_fortification=settings.get("enable_fortification", True),
-            enable_cleaning=settings.get("enable_cleaning", True),
-            pre_analysis_config=settings.get("pre_analysis_config", None),
-            semantic_search_config=config_data.get("semantic_search"),
-            llm_config=config_data.get("llm"),
-            enable_issue_validation=settings.get("enable_issue_validation", True),
-            use_gitignore=settings.get("use_gitignore", True),
-            discovery_config=settings.get("discovery_config", None),
-            global_rules=global_rules_objects,
-            frame_rules=pipeline_frame_rules,
-        )
+        try:
+            pipeline_config = PipelineConfig(
+                fail_fast=settings.get("fail_fast", True),
+                timeout=settings.get("timeout", 300),
+                frame_timeout=settings.get("frame_timeout", 120),
+                parallel_limit=settings.get("parallel_limit", 4),
+                enable_pre_analysis=settings.get("enable_pre_analysis", True),
+                enable_analysis=settings.get("enable_analysis", True),
+                enable_classification=settings.get("enable_classification", True),
+                enable_validation=settings.get("enable_validation", True),
+                enable_fortification=settings.get("enable_fortification", True),
+                enable_cleaning=settings.get("enable_cleaning", True),
+                enable_suppression=settings.get("enable_suppression", True),
+                pre_analysis_config=settings.get("pre_analysis_config", None),
+                semantic_search_config=config_data.get("semantic_search"),
+                llm_config=config_data.get("llm"),
+                enable_issue_validation=settings.get("enable_issue_validation", True),
+                use_gitignore=settings.get("use_gitignore", True),
+                discovery_config=settings.get("discovery_config", None),
+                global_rules=global_rules_objects,
+                frame_rules=pipeline_frame_rules,
+            )
+        except (ValidationError, ValueError, TypeError) as e:
+            logger.warning("config_validation_error", error=str(e), fallback="using defaults")
+            pipeline_config = self._get_default_pipeline_config()
+            pipeline_config.global_rules = global_rules_objects
+            pipeline_config.frame_rules = pipeline_frame_rules
 
         return {
             "config": pipeline_config,
