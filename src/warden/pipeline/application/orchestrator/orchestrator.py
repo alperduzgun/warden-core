@@ -272,9 +272,9 @@ class PhaseOrchestrator:
                     logger.info("basic_level_overrides_applied", use_llm=False, fortification=False, cleaning=False)
                 elif self.config.analysis_level == AnalysisLevel.STANDARD:
                     self.config.use_llm = True
-                    self.config.enable_fortification = True
                     self.config.enable_issue_validation = True
-                    logger.info("standard_level_overrides_applied", use_llm=True, fortification=True, verification=True)
+                    # Fortification stays at config default (False) — only DEEP enables it
+                    logger.info("standard_level_overrides_applied", use_llm=True, verification=True)
                 elif self.config.analysis_level == AnalysisLevel.DEEP:
                     self.config.use_llm = True
                     self.config.enable_fortification = True
