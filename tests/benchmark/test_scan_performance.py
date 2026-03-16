@@ -1,3 +1,4 @@
+import pytest
 """Scan performance benchmarks with SLA targets.
 
 Validates that scan performance doesn't regress beyond defined thresholds.
@@ -5,7 +6,7 @@ Run with: pytest tests/benchmark/ -x --timeout=120 -v
 
 SLA Targets:
 - basic level: <30s for 20 files (no LLM)
-- Pipeline overhead: <5s for setup + teardown
+
 - Memory: <200MB peak for 20 files
 """
 
@@ -171,9 +172,12 @@ class TestBasicLevelPerformance:
         )
 
         tracemalloc.start()
+        try:
         await orchestrator.execute_async(files, analysis_level="basic")
         _, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
+        finally:
+            _, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
 
         peak_mb = peak / (1024 * 1024)
         assert peak_mb < 200, f"Peak memory: {peak_mb:.1f}MB (SLA: <200MB)"
