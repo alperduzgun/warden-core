@@ -3,7 +3,6 @@ import contextlib
 import json
 import os
 import shutil
-import tempfile
 from pathlib import Path
 
 import typer
@@ -258,96 +257,6 @@ def _register_mcp_for_tool(
         logger.error("mcp_register_failed", tool=tool_name, error=result.message)
         console.print(f"  [red]✗ {tool_name}[/red]: {result.message}")
         return "error"
-
-
-def _read_mcp_config_safe(config_path: Path, tool_name: str, console) -> dict:
-    """
-    Safely read MCP config file with backup on corruption.
-
-    Args:
-        config_path: Path to config file
-        tool_name: Tool name for logging
-        console: Rich console for output
-
-    Returns:
-        Parsed config dict (empty dict if file doesn't exist or is corrupt)
-    """
-    if not config_path.exists():
-        return {}
-
-    try:
-        with open(config_path, encoding="utf-8") as f:
-            content = f.read().strip()
-            if not content:
-                return {}
-            parsed = json.loads(content)
-            # Type safety: ensure we got a dict
-            return parsed if isinstance(parsed, dict) else {}
-
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        # Backup corrupted file (self-healing)
-        backup_path = config_path.parent / f"{config_path.stem}.backup{config_path.suffix}"
-        try:
-            shutil.copy2(config_path, backup_path)
-            logger.warning(
-                "mcp_register_corrupted_config_backed_up",
-                tool=tool_name,
-                backup=str(backup_path),
-                error=str(e),
-            )
-            console.print(f"  [yellow]! {tool_name}: Backed up corrupted config to {backup_path.name}[/yellow]")
-        except OSError:
-            logger.warning("mcp_register_backup_failed", tool=tool_name)
-        return {}
-
-
-def _write_mcp_config_atomic(config_path: Path, data: dict) -> None:
-    """
-    Atomically write MCP config file.
-
-    Uses temp file + rename pattern for crash safety.
-
-    Args:
-        config_path: Target config file path
-        data: Config data to write
-
-    Raises:
-        OSError: If write fails
-    """
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    fd, temp_path = tempfile.mkstemp(dir=config_path.parent, prefix=".mcp_", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-        # Atomic rename (POSIX compliant)
-        os.replace(temp_path, config_path)
-        logger.debug("mcp_config_written", path=str(config_path))
-    except Exception:
-        # Clean up temp file on failure (dispose properly)
-        with contextlib.suppress(OSError):
-            os.unlink(temp_path)
-        raise
-
-
-def _verify_mcp_registration(config_path: Path, expected_command: str) -> bool:
-    """
-    Verify MCP registration was successful.
-
-    Args:
-        config_path: Config file to verify
-        expected_command: Expected warden command path
-
-    Returns:
-        True if verification passes, False otherwise
-    """
-    try:
-        with open(config_path, encoding="utf-8") as f:
-            data = json.load(f)
-        warden_config = data.get("mcpServers", {}).get("warden", {})
-        return warden_config.get("command") == expected_command
-    except Exception:
-        return False
 
 
 @mcp_app.command("status")
