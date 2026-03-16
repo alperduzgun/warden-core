@@ -874,7 +874,7 @@ class ReportGenerator:
 
         try:
             from weasyprint import CSS, HTML
-        except ImportError:
+        except (ImportError, OSError):
             # Graceful fallback: save as HTML instead of crashing
             html_path = output_path.with_suffix(".html")
             html_path.write_text(html_content, encoding="utf-8")
