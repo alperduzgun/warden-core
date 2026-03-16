@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from warden.cli_bridge.handlers.base import BaseHandler
 from warden.shared.infrastructure.logging import get_logger
@@ -45,7 +46,7 @@ class ConfigHandler(BaseHandler):
 
         try:
             config_data = config_mgr.read_config()
-        except Exception as e:
+        except (ValidationError, ValueError, TypeError) as e:
             logger.warning("config_read_failed_falling_back", error=str(e))
             try:
                 with open(config_file) as f:
@@ -66,7 +67,7 @@ class ConfigHandler(BaseHandler):
         rules_data = {}
         try:
             rules_data = config_mgr.read_rules()
-        except Exception as e:
+        except (ValidationError, ValueError, TypeError) as e:
             logger.warning("rules_read_failed", error=str(e))
 
         # Merge rules and config
