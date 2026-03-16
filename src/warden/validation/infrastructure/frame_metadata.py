@@ -189,12 +189,18 @@ class FrameMetadata:
         return FrameCategory(self.category)
 
     def get_priority_enum(self) -> FramePriority:
-        """Get priority as enum."""
-        return FramePriority(self.priority)
+        """Get priority as enum. Accepts string name from YAML (e.g. 'high')."""
+        try:
+            return FramePriority[self.priority.upper()]
+        except (KeyError, AttributeError):
+            return FramePriority.MEDIUM
 
     def get_scope_enum(self) -> FrameScope:
-        """Get scope as enum."""
-        return FrameScope(self.scope)
+        """Get scope as enum. Accepts string name from YAML (e.g. 'file_level')."""
+        try:
+            return FrameScope[self.scope.upper()]
+        except (KeyError, AttributeError):
+            return FrameScope.FILE_LEVEL
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary (for JSON serialization)."""
