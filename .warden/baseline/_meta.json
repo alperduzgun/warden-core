@@ -1,11 +1,11 @@
 {
   "version": "2.0",
   "created_at": null,
-  "updated_at": "2026-02-27T08:09:18.296200+00:00",
+  "updated_at": "2026-03-16T11:50:38.673369+00:00",
   "modules": [
     "unknown"
   ],
-  "total_findings": 19,
-  "total_debt": 19,
+  "total_findings": 10,
+  "total_debt": 10,
   "migrated_from_legacy": false
 }

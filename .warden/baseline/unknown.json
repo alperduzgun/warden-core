@@ -2,409 +2,242 @@
   "module": "unknown",
   "findings": [
     {
-      "id": "property-division_no_zero_check-86",
+      "id": "architecturalconsistency-init_py_presence-5627-0",
       "severity": "medium",
-      "message": "Division operation without zero check",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:86",
-      "detail": "Check divisor is not zero before division",
-      "code": "\"src/auth/login.py\": {\"score\": 8.5, \"confidence\": 0.95, \"category\": \"Auth\", \"reasoning\": \"Handles password verification and session creation.\"},",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "4797d84ebdbc3f09987065a9e75394dd54e0a614880b314d4f9e609fd58f32d2"
-    },
-    {
-      "id": "property-division_no_zero_check-86",
-      "severity": "medium",
-      "message": "Division operation without zero check",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:86",
-      "detail": "Check divisor is not zero before division",
-      "code": "\"src/auth/login.py\": {\"score\": 8.5, \"confidence\": 0.95, \"category\": \"Auth\", \"reasoning\": \"Handles password verification and session creation.\"},",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "4797d84ebdbc3f09987065a9e75394dd54e0a614880b314d4f9e609fd58f32d2"
-    },
-    {
-      "id": "property-division_no_zero_check-87",
-      "severity": "medium",
-      "message": "Division operation without zero check",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:87",
-      "detail": "Check divisor is not zero before division",
-      "code": "\"src/models/dto.py\": {\"score\": 1.0, \"confidence\": 1.0, \"category\": \"DTO\", \"reasoning\": \"Simple data container with no logic.\"}",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "a2226f756122e6439fd6029fc37a9fc9c06cf7585db8e57db5c96320fed41bcb"
-    },
-    {
-      "id": "property-division_no_zero_check-87",
-      "severity": "medium",
-      "message": "Division operation without zero check",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:87",
-      "detail": "Check divisor is not zero before division",
-      "code": "\"src/models/dto.py\": {\"score\": 1.0, \"confidence\": 1.0, \"category\": \"DTO\", \"reasoning\": \"Simple data container with no logic.\"}",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "a2226f756122e6439fd6029fc37a9fc9c06cf7585db8e57db5c96320fed41bcb"
-    },
-    {
-      "id": "property-division_no_zero_check-169",
-      "severity": "medium",
-      "message": "Division operation without zero check",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:169",
-      "detail": "Check divisor is not zero before division",
-      "code": "cf, TriageLane.FAST, 0, \"Heuristic: Safe file type/content\", start_time",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "874ea5647f5d988a19b825f39b5a72cf087bb03a374da68f0d8369f802fff77a"
-    },
-    {
-      "id": "property-division_no_zero_check-396",
-      "severity": "medium",
-      "message": "Division operation without zero check",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:396",
-      "detail": "Check divisor is not zero before division",
-      "code": "\"\"\"Adaptive batch size based on RAM/CPU.\"\"\"",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "e6bfcb664a612c4cc835c55e3f4bd443937ab0c640de43a0456720d6429a46c1"
-    },
-    {
-      "id": "property-no-assertions",
-      "severity": "low",
-      "message": "File has 13 functions but no assertions",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:1",
-      "detail": "Consider adding assertions or Pydantic validation to validate invariants and preconditions",
+      "message": "Package directory missing __init__.py",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus",
+      "detail": "**Rule:** init_py_presence\n\n**Expected:** __init__.py present\n\n**Actual:** __init__.py missing\n\n",
       "code": null,
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "a3d46298d4b441cfbde795d6f57173778ffda9e832eeaba9daa9507c6f494a8c"
+      "fingerprint": "8fcf16788e7f3ba7d20ba8a716f852adecc4848cd782c7e10d3f4b4e9e0017de"
     },
     {
-      "id": "property-llm-batch-0-385",
+      "id": "stress-no_pagination-19",
       "severity": "medium",
-      "message": "Risk Score Thresholds Misalignment",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:385",
-      "detail": "The risk score thresholds for determining the triage lane are not clearly defined. The current implementation uses a range of 0 to 10, but it does not specify how these scores should be interpreted or what actions should be taken based on them.",
-      "code": "if risk.score <= 7.5:\n            return TriageLane.MIDDLE\n        else:",
+      "message": "Query fetching all records - missing pagination",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:19",
+      "detail": "Add limit/offset or cursor-based pagination for large datasets",
+      "code": "cursor.execute(f\"SELECT * FROM users WHERE name = '{name}'\")",
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "b5031fbe0ee3f4a7761992d5dd518d6f1eb58ae7f21b44704a20d151a0a29e95"
+      "fingerprint": "ed4a3bdea1285df545e0828cc77270212a92fb40840764ca093511bfa9551aef"
     },
     {
-      "id": "architecturalconsistency-test_mirror_structure-7881-0",
-      "severity": "low",
-      "message": "No corresponding test file found",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py",
-      "detail": "**Rule:** test_mirror_structure\n\n**Expected:** /Users/alper/Documents/Development/Personal/warden-core/tests/analysis/application/test_triage_service.py\n\n**Actual:** Test file missing\n\n",
+      "id": "stress-no_pagination-28",
+      "severity": "medium",
+      "message": "Query fetching all records - missing pagination",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:28",
+      "detail": "Add limit/offset or cursor-based pagination for large datasets",
+      "code": "cursor.execute(\"SELECT * FROM items WHERE title LIKE '%\" + query + \"%'\")",
+      "line": 0,
+      "column": 0,
+      "isBlocker": false,
+      "remediation": null,
+      "fingerprint": "3f01c571529c5efd08380429cbffb1edaf6d264ed8bd2b4019ab2ae9ba7abeae"
+    },
+    {
+      "id": "WARDEN-TIMEOUT",
+      "severity": "medium",
+      "message": "File processing timed out after 15s (size: 0.6 KB). Consider splitting this file or increasing the timeout.",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:1",
+      "detail": null,
       "code": null,
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "6e3daabdd4c1e90395354fb6cc5a4ec06921d33a3e811b036161fe8810c327a7"
+      "fingerprint": "ac13b7b13b0e86cd4f7373161de1abe998c2a78c76aec17078c73693088dff67"
     },
     {
-      "id": "fuzz-no_empty_string_check-262",
-      "severity": "low",
-      "message": "String operation without empty string check",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:262",
-      "detail": "Check if string is empty before operations",
-      "code": "content_snippet = prepare_code_for_llm(cf.content, token_budget=budget).replace(\"```\", \"'''\")",
+      "id": "security-taint-analysis-0",
+      "severity": "high",
+      "message": "[Taint Analysis] Unsanitized data flow: request.args.get (line 16) -> cursor.execute [SQL-value] (line 19)",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:19",
+      "detail": "Sanitize the tainted value before passing to cursor.execute.",
+      "code": null,
       "line": 0,
       "column": 0,
-      "isBlocker": false,
+      "isBlocker": true,
       "remediation": null,
-      "fingerprint": "c7ca92e8583944f1a5a0523560fee3f8e987c7759c29ef30121049f1e4d242a0"
+      "machineContext": {
+        "vulnerability_class": "taint-analysis",
+        "source": "request.args.get (line 16)",
+        "sink": "cursor.execute (line 19)",
+        "sink_type": "SQL-value",
+        "data_flow_path": [
+          "request.args.get",
+          "cursor.execute"
+        ]
+      },
+      "detectionSource": "taint",
+      "fingerprint": "fe760b60ad9e6af15dd82c056a4a22a53934328aea8259aad81d1fc74db92747"
     },
     {
-      "id": "fuzz-array_access_no_bounds-137",
+      "id": "security-taint-analysis-1",
+      "severity": "high",
+      "message": "[Taint Analysis] Unsanitized data flow: request.args.get (line 25) -> cursor.execute [SQL-value] (line 28)",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:28",
+      "detail": "Sanitize the tainted value before passing to cursor.execute.",
+      "code": null,
+      "line": 0,
+      "column": 0,
+      "isBlocker": true,
+      "remediation": null,
+      "machineContext": {
+        "vulnerability_class": "taint-analysis",
+        "source": "request.args.get (line 25)",
+        "sink": "cursor.execute (line 28)",
+        "sink_type": "SQL-value",
+        "data_flow_path": [
+          "request.args.get",
+          "cursor.execute"
+        ]
+      },
+      "detectionSource": "taint",
+      "fingerprint": "8fc5a359a2480281136192b5ffd3815e1b1d851a31a4740534be2c84a1fcb175"
+    },
+    {
+      "id": "property-division_no_zero_check-14",
       "severity": "medium",
-      "message": "Array/list access without bounds checking",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:137",
-      "detail": "Validate index is within bounds before access",
-      "code": "first_fast = fast_clients[0]",
+      "message": "Division operation without zero check",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:14",
+      "detail": "Check divisor is not zero before division",
+      "code": "@app.route(\"/users\")",
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "43952129d5b213502729751ef85b13e25e8687ff6bcedcc4d325e43c332a855d"
+      "fingerprint": "3e73f87223ace8e94ab29a332b1a008cb3a8ebf03dfe58cdc8a954c9477eaf63"
     },
     {
-      "id": "fuzz-array_access_no_bounds-140",
+      "id": "property-division_no_zero_check-23",
       "severity": "medium",
-      "message": "Array/list access without bounds checking",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:140",
-      "detail": "Validate index is within bounds before access",
-      "code": "return _BATCH_SIZES[fast_provider]",
+      "message": "Division operation without zero check",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:23",
+      "detail": "Check divisor is not zero before division",
+      "code": "@app.route(\"/items\")",
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "c25f0bccfb79f96149cb2ed724816c1095a86cd04e377f016bd69943e6486956"
+      "fingerprint": "e1b7a933add53568123bc5c3f75fb0accdeb2d9f65469fc215276f8395dc4e92"
     },
     {
-      "id": "fuzz-array_access_no_bounds-145",
-      "severity": "medium",
-      "message": "Array/list access without bounds checking",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:145",
-      "detail": "Validate index is within bounds before access",
-      "code": "return _BATCH_SIZES[provider_str]",
+      "id": "property-llm-batch-0-14",
+      "severity": "critical",
+      "message": "SQL injection via f-string",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:14",
+      "detail": "The use of f-strings to construct SQL queries allows an attacker to inject malicious SQL code by manipulating the 'name' parameter in the search_users function.",
+      "code": "cursor.execute(f\"SELECT * FROM users WHERE name = '{name}'\")",
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "7aa3e54e6358634150725d40815d5bcca71e63d78fde7841118bfd6a0896d58a"
+      "fingerprint": "3f04ab96eb94f55b98ef3d10ee879ca0aa634e7f7daf332e43f8bb4198e83688"
     },
     {
-      "id": "fuzz-array_access_no_bounds-153",
-      "severity": "medium",
-      "message": "Array/list access without bounds checking",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:153",
-      "detail": "Validate index is within bounds before access",
-      "code": "return _BATCH_SIZES[inner_provider]",
+      "id": "property-llm-batch-0-20",
+      "severity": "critical",
+      "message": "SQL injection via string concatenation",
+      "location": "/Users/alperduzgun/Development/Personal/warden-core/verify/corpus/python_sqli.py:20",
+      "detail": "The use of string concatenation to construct SQL queries allows an attacker to inject malicious SQL code by manipulating the 'q' parameter in the search_items function.",
+      "code": "cursor.execute(\"SELECT * FROM items WHERE title LIKE '%\" + query + \"'%\")",
       "line": 0,
       "column": 0,
       "isBlocker": false,
       "remediation": null,
-      "fingerprint": "30824b8dad358315e672a985098fcdc31925b136b7f228ed2079640ef14ce210"
-    },
-    {
-      "id": "fuzz-array_access_no_bounds-157",
-      "severity": "medium",
-      "message": "Array/list access without bounds checking",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:157",
-      "detail": "Validate index is within bounds before access",
-      "code": "async def batch_assess_risk_async(self, code_files: list[CodeFile]) -> dict[str, TriageDecision]:",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "0b0f1f78dbad96a8ef05d93037858382c68df2c1eb436c9e7af850bb1a34277f"
-    },
-    {
-      "id": "fuzz-array_access_no_bounds-163",
-      "severity": "medium",
-      "message": "Array/list access without bounds checking",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:163",
-      "detail": "Validate index is within bounds before access",
-      "code": "files_to_process: list[CodeFile] = []",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "206a80ade18ca812b47e064ed30a2a9524adc5f885147ad2a6acb29c15c084d7"
-    },
-    {
-      "id": "fuzz-array_access_no_bounds-252",
-      "severity": "medium",
-      "message": "Array/list access without bounds checking",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:252",
-      "detail": "Validate index is within bounds before access",
-      "code": "async def _get_llm_batch_score_async(self, code_files: list[CodeFile]) -> dict[str, RiskScore]:",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "781c5b943b585a4520bc0c0042091b31e069a22c658c473e455d95b3ed91a7be"
-    },
-    {
-      "id": "fuzz-array_access_no_bounds-310",
-      "severity": "medium",
-      "message": "Array/list access without bounds checking",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:310",
-      "detail": "Validate index is within bounds before access",
-      "code": "results[path] = RiskScore(**score_data)",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "f74ce997558ddd8538af6d463ff895d5aa4839ac9bed2aecda17b9fe2cd30a4f"
-    },
-    {
-      "id": "fuzz-type_conversion_no_validation-402",
-      "severity": "medium",
-      "message": "Type conversion without validation",
-      "location": "/Users/alper/Documents/Development/Personal/warden-core/src/warden/analysis/application/triage_service.py:402",
-      "detail": "Wrap conversion in try-catch or validate input",
-      "code": "mem_limit = max(1, int(available_gb // 2.0))  # Triage is simpler, 2GB per item",
-      "line": 0,
-      "column": 0,
-      "isBlocker": false,
-      "remediation": null,
-      "fingerprint": "7cc8645b29b14dba101cb09837717ce954ee3b20fa43856da1ce595a3add3e53"
+      "fingerprint": "c601e1f2a6ff5de2255276d4b35209e1a713971b5e2082c56b1f871ac6c22d91"
     }
   ],
   "debt_items": [
     {
-      "fingerprint": "6e3daabdd4c1e90395354fb6cc5a4ec06921d33a3e811b036161fe8810c327a7",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "architecturalconsistency-test_mirror_structure-7881-0",
+      "fingerprint": "ed4a3bdea1285df545e0828cc77270212a92fb40840764ca093511bfa9551aef",
+      "first_seen": "2026-03-16T11:47:20.586086+00:00",
+      "rule_id": "stress-no_pagination-19",
       "file_path": null,
-      "message": "No corresponding test file found",
-      "severity": "low"
+      "message": "Query fetching all records - missing pagination",
+      "severity": "medium"
     },
     {
-      "fingerprint": "4797d84ebdbc3f09987065a9e75394dd54e0a614880b314d4f9e609fd58f32d2",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "property-division_no_zero_check-86",
+      "fingerprint": "3f01c571529c5efd08380429cbffb1edaf6d264ed8bd2b4019ab2ae9ba7abeae",
+      "first_seen": "2026-03-16T11:47:20.586086+00:00",
+      "rule_id": "stress-no_pagination-28",
+      "file_path": null,
+      "message": "Query fetching all records - missing pagination",
+      "severity": "medium"
+    },
+    {
+      "fingerprint": "ac13b7b13b0e86cd4f7373161de1abe998c2a78c76aec17078c73693088dff67",
+      "first_seen": "2026-03-16T11:47:20.586086+00:00",
+      "rule_id": "WARDEN-TIMEOUT",
+      "file_path": null,
+      "message": "File processing timed out after 15s (size: 0.6 KB). Consider splitting this file or increasing the timeout.",
+      "severity": "medium"
+    },
+    {
+      "fingerprint": "fe760b60ad9e6af15dd82c056a4a22a53934328aea8259aad81d1fc74db92747",
+      "first_seen": "2026-03-16T11:47:20.586086+00:00",
+      "rule_id": "security-taint-analysis-0",
+      "file_path": null,
+      "message": "[Taint Analysis] Unsanitized data flow: request.args.get (line 16) -> cursor.execute [SQL-value] (line 19)",
+      "severity": "high"
+    },
+    {
+      "fingerprint": "8fc5a359a2480281136192b5ffd3815e1b1d851a31a4740534be2c84a1fcb175",
+      "first_seen": "2026-03-16T11:47:20.586086+00:00",
+      "rule_id": "security-taint-analysis-1",
+      "file_path": null,
+      "message": "[Taint Analysis] Unsanitized data flow: request.args.get (line 25) -> cursor.execute [SQL-value] (line 28)",
+      "severity": "high"
+    },
+    {
+      "fingerprint": "3e73f87223ace8e94ab29a332b1a008cb3a8ebf03dfe58cdc8a954c9477eaf63",
+      "first_seen": "2026-03-16T11:47:20.586086+00:00",
+      "rule_id": "property-division_no_zero_check-14",
       "file_path": null,
       "message": "Division operation without zero check",
       "severity": "medium"
     },
     {
-      "fingerprint": "4797d84ebdbc3f09987065a9e75394dd54e0a614880b314d4f9e609fd58f32d2",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "property-division_no_zero_check-86",
+      "fingerprint": "e1b7a933add53568123bc5c3f75fb0accdeb2d9f65469fc215276f8395dc4e92",
+      "first_seen": "2026-03-16T11:47:20.586086+00:00",
+      "rule_id": "property-division_no_zero_check-23",
       "file_path": null,
       "message": "Division operation without zero check",
       "severity": "medium"
     },
     {
-      "fingerprint": "a2226f756122e6439fd6029fc37a9fc9c06cf7585db8e57db5c96320fed41bcb",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "property-division_no_zero_check-87",
+      "fingerprint": "8fcf16788e7f3ba7d20ba8a716f852adecc4848cd782c7e10d3f4b4e9e0017de",
+      "first_seen": "2026-03-16T11:50:38.672839+00:00",
+      "rule_id": "architecturalconsistency-init_py_presence-5627-0",
       "file_path": null,
-      "message": "Division operation without zero check",
+      "message": "Package directory missing __init__.py",
       "severity": "medium"
     },
     {
-      "fingerprint": "a2226f756122e6439fd6029fc37a9fc9c06cf7585db8e57db5c96320fed41bcb",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "property-division_no_zero_check-87",
+      "fingerprint": "3f04ab96eb94f55b98ef3d10ee879ca0aa634e7f7daf332e43f8bb4198e83688",
+      "first_seen": "2026-03-16T11:50:38.672839+00:00",
+      "rule_id": "property-llm-batch-0-14",
       "file_path": null,
-      "message": "Division operation without zero check",
-      "severity": "medium"
+      "message": "SQL injection via f-string",
+      "severity": "critical"
     },
     {
-      "fingerprint": "874ea5647f5d988a19b825f39b5a72cf087bb03a374da68f0d8369f802fff77a",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "property-division_no_zero_check-169",
+      "fingerprint": "c601e1f2a6ff5de2255276d4b35209e1a713971b5e2082c56b1f871ac6c22d91",
+      "first_seen": "2026-03-16T11:50:38.672839+00:00",
+      "rule_id": "property-llm-batch-0-20",
       "file_path": null,
-      "message": "Division operation without zero check",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "e6bfcb664a612c4cc835c55e3f4bd443937ab0c640de43a0456720d6429a46c1",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "property-division_no_zero_check-396",
-      "file_path": null,
-      "message": "Division operation without zero check",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "a3d46298d4b441cfbde795d6f57173778ffda9e832eeaba9daa9507c6f494a8c",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "property-no-assertions",
-      "file_path": null,
-      "message": "File has 13 functions but no assertions",
-      "severity": "low"
-    },
-    {
-      "fingerprint": "b5031fbe0ee3f4a7761992d5dd518d6f1eb58ae7f21b44704a20d151a0a29e95",
-      "first_seen": "2026-02-27T08:07:07.814096+00:00",
-      "rule_id": "property-llm-batch-0-385",
-      "file_path": null,
-      "message": "Risk Score Thresholds Misalignment",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "c7ca92e8583944f1a5a0523560fee3f8e987c7759c29ef30121049f1e4d242a0",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-no_empty_string_check-262",
-      "file_path": null,
-      "message": "String operation without empty string check",
-      "severity": "low"
-    },
-    {
-      "fingerprint": "43952129d5b213502729751ef85b13e25e8687ff6bcedcc4d325e43c332a855d",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-array_access_no_bounds-137",
-      "file_path": null,
-      "message": "Array/list access without bounds checking",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "c25f0bccfb79f96149cb2ed724816c1095a86cd04e377f016bd69943e6486956",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-array_access_no_bounds-140",
-      "file_path": null,
-      "message": "Array/list access without bounds checking",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "7aa3e54e6358634150725d40815d5bcca71e63d78fde7841118bfd6a0896d58a",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-array_access_no_bounds-145",
-      "file_path": null,
-      "message": "Array/list access without bounds checking",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "30824b8dad358315e672a985098fcdc31925b136b7f228ed2079640ef14ce210",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-array_access_no_bounds-153",
-      "file_path": null,
-      "message": "Array/list access without bounds checking",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "0b0f1f78dbad96a8ef05d93037858382c68df2c1eb436c9e7af850bb1a34277f",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-array_access_no_bounds-157",
-      "file_path": null,
-      "message": "Array/list access without bounds checking",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "206a80ade18ca812b47e064ed30a2a9524adc5f885147ad2a6acb29c15c084d7",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-array_access_no_bounds-163",
-      "file_path": null,
-      "message": "Array/list access without bounds checking",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "781c5b943b585a4520bc0c0042091b31e069a22c658c473e455d95b3ed91a7be",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-array_access_no_bounds-252",
-      "file_path": null,
-      "message": "Array/list access without bounds checking",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "f74ce997558ddd8538af6d463ff895d5aa4839ac9bed2aecda17b9fe2cd30a4f",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-array_access_no_bounds-310",
-      "file_path": null,
-      "message": "Array/list access without bounds checking",
-      "severity": "medium"
-    },
-    {
-      "fingerprint": "7cc8645b29b14dba101cb09837717ce954ee3b20fa43856da1ce595a3add3e53",
-      "first_seen": "2026-02-27T08:09:18.295315+00:00",
-      "rule_id": "fuzz-type_conversion_no_validation-402",
-      "file_path": null,
-      "message": "Type conversion without validation",
-      "severity": "medium"
+      "message": "SQL injection via string concatenation",
+      "severity": "critical"
     }
   ],
   "created_at": "2026-02-23T10:54:25.434085+00:00",
-  "updated_at": "2026-02-27T08:09:18.295425+00:00",
-  "debt_count": 19,
+  "updated_at": "2026-03-16T11:50:38.672909+00:00",
+  "debt_count": 10,
   "oldest_debt_age_days": 0
 }

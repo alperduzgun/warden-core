@@ -1,6 +1,6 @@
 # Warden Technical Debt
 
-Last updated: 2026-02-27 by warden scan
+Last updated: 2026-03-16 by warden scan
 
 ## God Classes (500+ lines)
 

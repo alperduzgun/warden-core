@@ -1,8 +1,8 @@
 <svg width="400" height="100" viewBox="0 0 400 100" fill="none" xmlns="http://www.w3.org/2000/svg"
-     data-warden-score="7.1"
-     data-warden-timestamp="1772179758"
-     data-warden-signature="1323d77b89606d72a330bbf7ad29583934c5236ef3616fc03c890eb63693da88">
-    <a href="https://warden.ai/verify?score=7.1&amp;sig=1323d77b89606d72a330bbf7ad29583934c5236ef3616fc03c890eb63693da88&amp;ts=1772179758" target="_blank">
+     data-warden-score="6.2"
+     data-warden-timestamp="1773661838"
+     data-warden-signature="8d0ba49e3256c50ffc5f9a5b0cdfe6c3658faf7058a2eddaee9c2c3eb1108806">
+    <a href="https://warden.ai/verify?score=6.2&amp;sig=8d0ba49e3256c50ffc5f9a5b0cdfe6c3658faf7058a2eddaee9c2c3eb1108806&amp;ts=1773661838" target="_blank">
         <!-- Drop Shadow Filter -->
         <defs>
             <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
@@ -39,7 +39,7 @@
 
         <!-- Score Display (Improved Alignment) -->
         <text x="100" y="72" fill="#fff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-weight="700">
-            <tspan font-size="36">7.1</tspan>
+            <tspan font-size="36">6.2</tspan>
             <tspan font-size="18" fill="#71717a" font-weight="400" dx="2">/ 10</tspan>
         </text>
 
@@ -49,7 +49,7 @@
 
         <!-- Progress Bar Section -->
         <line x1="284" y1="64" x2="376" y2="64" stroke="#3f3f46" stroke-width="4" stroke-linecap="round" stroke-opacity="0.5"/>
-        <line x1="284" y1="64" x2="349.017667844523" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
+        <line x1="284" y1="64" x2="341.5" y2="64" stroke="url(#scoreGrad)" stroke-width="4" stroke-linecap="round"/>
 
         <!-- Footer Meta -->
         <text x="376" y="84" fill="#52525b" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="9" text-anchor="end" letter-spacing="0.5">AI-NATIVE GUARDIAN</text>
