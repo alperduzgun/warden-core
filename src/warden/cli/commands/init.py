@@ -65,6 +65,12 @@ def init_command(
     warden_dir = Path(".warden")
     warden_dir.mkdir(parents=True, exist_ok=True)
 
+    # Mark incomplete — if init crashes, next run can detect and warn
+    incomplete_marker = warden_dir / ".incomplete"
+    if incomplete_marker.exists():
+        console.print("[yellow]⚠ Previous init was incomplete. Re-running...[/yellow]")
+    incomplete_marker.touch()  # Always mark, even re-init
+
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
 
     # --- Step 1: Detect Project ---
@@ -123,3 +129,10 @@ def init_command(
         is_interactive=is_interactive,
         grammars=grammars,
     )
+
+    # Init completed (with possible warnings) — remove marker
+    # Partial completion with warnings is still considered complete.
+    try:
+        incomplete_marker.unlink(missing_ok=True)
+    except OSError:
+        pass  # Best effort cleanup
