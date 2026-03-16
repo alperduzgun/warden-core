@@ -684,23 +684,27 @@ def print_findings_detail(result_data: dict, console: Console) -> None:
         return
 
     # Severity counts
-    severity_counts: dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    severity_counts: dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for finding in all_findings:
         sev = get_finding_severity(finding)
         if sev in severity_counts:
             severity_counts[sev] += 1
+        else:
+            severity_counts["info"] += 1
 
     _SEVERITY_ICONS = {
         "critical": ("red", "CRITICAL"),
         "high": ("dark_orange", "HIGH"),
         "medium": ("yellow3", "MEDIUM"),
         "low": ("steel_blue1", "LOW"),
+        "info": ("dim", "INFO"),
     }
     _DISPLAY_ICONS = {
         "critical": "🔴",
         "high": "🟠",
         "medium": "🟡",
         "low": "🔵",
+        "info": "⚪",
     }
 
     console.print("\n  [bold]Findings by Severity:[/bold]")
@@ -763,7 +767,7 @@ def print_findings_detail(result_data: dict, console: Console) -> None:
             if len(message) > 80:
                 message = message[:77] + "..."
 
-            sev_abbr = label[:3] if label != "CRITICAL" else "CRIT"
+            _ABBR = {"CRITICAL": "CRIT", "HIGH": "HIGH", "MEDIUM": "MED", "LOW": "LOW", "INFO": "INFO"}; sev_abbr = _ABBR.get(label, label[:4])
             console.print(
                 f"    {icon} [{color}]{sev_abbr:<4}[/]  [dim]{line_display:<6}[/]  {message}"
             )
