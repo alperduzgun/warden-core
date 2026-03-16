@@ -1,4 +1,3 @@
-import pytest
 """Scan performance benchmarks with SLA targets.
 
 Validates that scan performance doesn't regress beyond defined thresholds.
@@ -173,8 +172,7 @@ class TestBasicLevelPerformance:
 
         tracemalloc.start()
         try:
-        await orchestrator.execute_async(files, analysis_level="basic")
-        _, peak = tracemalloc.get_traced_memory()
+            await orchestrator.execute_async(files, analysis_level="basic")
         finally:
             _, peak = tracemalloc.get_traced_memory()
             tracemalloc.stop()
