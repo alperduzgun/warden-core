@@ -109,6 +109,11 @@ class LlmConfiguration:
     tpm_limit: int = 1000  # Tokens per minute (free-tier default)
     rpm_limit: int = 6  # Requests per minute (free-tier default)
 
+    # Per-provider rate limit overrides from config.yaml.
+    # Keys: provider name (e.g. "openai", "groq") → {"tpm": int, "rpm": int}
+    # Takes precedence over the hard-coded defaults in GlobalRateLimiter.
+    provider_rate_limits: dict[str, dict[str, int]] | None = None
+
     # Centralized token budgets for all LLM consumers (triage-aware).
     # Keys: category name → {"deep": int, "fast": int}
     # Overrides built-in defaults in warden.shared.utils.llm_context.DEFAULT_TOKEN_BUDGETS.
@@ -631,6 +636,23 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         if "rpm_limit" in config_override:
             with contextlib.suppress(ValueError, TypeError):
                 config.rpm_limit = int(config_override["rpm_limit"])
+
+        # Per-provider rate limit overrides from config.yaml
+        if "provider_rate_limits" in config_override:
+            raw_prl = config_override["provider_rate_limits"]
+            if isinstance(raw_prl, dict):
+                parsed_prl: dict[str, dict[str, int]] = {}
+                for prov_key, limits in raw_prl.items():
+                    if isinstance(limits, dict):
+                        parsed_limits: dict[str, int] = {}
+                        for limit_key in ("tpm", "rpm"):
+                            if limit_key in limits:
+                                with contextlib.suppress(ValueError, TypeError):
+                                    parsed_limits[limit_key] = int(limits[limit_key])
+                        if parsed_limits:
+                            parsed_prl[prov_key] = parsed_limits
+                if parsed_prl:
+                    config.provider_rate_limits = parsed_prl
 
         # Smart tier provider override from config.yaml (env var takes precedence)
         if "smart_tier_provider" in config_override and not config.smart_tier_provider:
