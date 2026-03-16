@@ -153,10 +153,9 @@ class GlobalRateLimiter:
         ``"default"`` bucket so that project-level config.yaml settings
         (e.g. free-tier 6 rpm / 1000 tpm) take effect globally.
 
-        Provider-specific limiters (openai, anthropic, …) are intentionally
-        left unchanged — they reflect the provider's own published limits.
-        Projects that need stricter per-provider control can extend this
-        method in the future.
+        If ``config.provider_rate_limits`` is set, also updates the matching
+        provider-specific buckets.  Unknown provider keys are silently ignored
+        (they will receive the default bucket at runtime).
 
         Args:
             config: Loaded LlmConfiguration instance.
@@ -169,6 +168,24 @@ class GlobalRateLimiter:
             tpm_limit=tpm,
             rpm_limit=rpm,
         )
+
+        # Update provider-specific limits from config if provided
+        provider_limits = getattr(config, "provider_rate_limits", None)
+        if provider_limits and isinstance(provider_limits, dict):
+            for provider_key, limits in provider_limits.items():
+                if provider_key in self._limiters:
+                    existing = self._limiters[provider_key]
+                    new_tpm = limits.get("tpm", existing.config.tpm)
+                    new_rpm = limits.get("rpm", existing.config.rpm)
+                    self._limiters[provider_key] = RateLimiter(
+                        RateLimitConfig(tpm=new_tpm, rpm=new_rpm)
+                    )
+                    _logger.info(
+                        "provider_rate_limit_configured",
+                        provider=provider_key,
+                        tpm=new_tpm,
+                        rpm=new_rpm,
+                    )
 
     def get_stats(self, provider: str = "default") -> dict:
         """
