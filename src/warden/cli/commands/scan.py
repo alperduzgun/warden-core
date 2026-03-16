@@ -186,7 +186,7 @@ def scan_command(
     ),
     output: str | None = typer.Option(None, "--output", "-o", help="Output file path"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed logs"),
-    level: str = typer.Option("standard", "--level", help="Analysis level: basic, standard, deep"),
+    level: str | None = typer.Option(None, "--level", help="Analysis level: basic, standard, deep"),
     no_ai: bool = typer.Option(False, "--disable-ai", help="Shorthand for --level basic"),
     quick_start: bool = typer.Option(
         False, "--quick-start", help="Fast deterministic scan: no LLM, no setup required"
@@ -256,6 +256,13 @@ def scan_command(
     baseline_fingerprints = None
     intelligence_context = None
     try:
+        # Resolve level: CLI flag > env var > default "standard"
+        # level is None when --level was not explicitly passed by the user
+        if level is None:
+            import os as _os
+            _env_level = _os.environ.get("WARDEN_ANALYSIS_LEVEL", "").strip().lower()
+            level = _env_level if _env_level else "standard"
+
         # Handle --quick-start and --no-ai shorthands
         if quick_start or no_ai:
             if level != "basic" and level != "standard":

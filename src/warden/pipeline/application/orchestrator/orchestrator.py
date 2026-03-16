@@ -255,45 +255,53 @@ class PhaseOrchestrator:
             logger.info("force_scan_enabled", reason="bypassing memory cache")
             self.config.force_scan = True
 
-        # Apply analysis level if provided
-        if analysis_level:
-            from warden.pipeline.domain.enums import AnalysisLevel
+        # Apply analysis level: CLI arg > env var > config.yaml > default
+        import os
+        from warden.pipeline.domain.enums import AnalysisLevel
 
+        if not analysis_level:
+            # Check env var
+            env_level = os.environ.get("WARDEN_ANALYSIS_LEVEL", "").strip().lower()
+            if env_level:
+                analysis_level = env_level
+                logger.info("analysis_level_from_env", level=env_level)
+
+        if analysis_level:
             try:
                 self.config.analysis_level = AnalysisLevel(analysis_level.lower())
-                logger.info("analysis_level_overridden", level=self.config.analysis_level.value)
-
-                # Global overrides for BASIC level to ensure speed and local-only execution
-                if self.config.analysis_level == AnalysisLevel.BASIC:
-                    self.config.use_llm = False
-                    self.config.enable_fortification = False
-                    self.config.enable_cleaning = False
-                    self.config.enable_issue_validation = False
-                    logger.info("basic_level_overrides_applied", use_llm=False, fortification=False, cleaning=False)
-                elif self.config.analysis_level == AnalysisLevel.STANDARD:
-                    self.config.use_llm = True
-                    self.config.enable_issue_validation = True
-                    # Fortification stays at config default (False) — only DEEP enables it
-                    logger.info("standard_level_overrides_applied", use_llm=True, verification=True)
-                elif self.config.analysis_level == AnalysisLevel.DEEP:
-                    self.config.use_llm = True
-                    self.config.enable_fortification = True
-                    self.config.enable_cleaning = True
-                    self.config.enable_issue_validation = True
-                    self.config.frame_timeout = 180  # Extended per-frame timeout for thorough analysis
-                    self.config.timeout = 600  # Extended total pipeline timeout
-                    logger.info(
-                        "deep_level_overrides_applied",
-                        use_llm=True,
-                        fortification=True,
-                        cleaning=True,
-                        frame_timeout=180,
-                        pipeline_timeout=600,
-                    )
+                logger.info("analysis_level_overridden", level=self.config.analysis_level.value, source="cli_or_env")
             except ValueError:
                 logger.warning(
                     "invalid_analysis_level", provided=analysis_level, fallback=self.config.analysis_level.value
                 )
+
+        # Apply level-specific overrides unconditionally — covers CLI, env var, and config.yaml sources
+        if self.config.analysis_level == AnalysisLevel.BASIC:
+            self.config.use_llm = False
+            self.config.enable_fortification = False
+            self.config.enable_cleaning = False
+            self.config.enable_issue_validation = False
+            logger.info("basic_level_overrides_applied", use_llm=False, fortification=False, cleaning=False)
+        elif self.config.analysis_level == AnalysisLevel.STANDARD:
+            self.config.use_llm = True
+            self.config.enable_issue_validation = True
+            # Fortification stays at config default (False) — only DEEP enables it
+            logger.info("standard_level_overrides_applied", use_llm=True, verification=True)
+        elif self.config.analysis_level == AnalysisLevel.DEEP:
+            self.config.use_llm = True
+            self.config.enable_fortification = True
+            self.config.enable_cleaning = True
+            self.config.enable_issue_validation = True
+            self.config.frame_timeout = 180  # Extended per-frame timeout for thorough analysis
+            self.config.timeout = 600  # Extended total pipeline timeout
+            logger.info(
+                "deep_level_overrides_applied",
+                use_llm=True,
+                fortification=True,
+                cleaning=True,
+                frame_timeout=180,
+                pipeline_timeout=600,
+            )
 
         # Initialize shared context
         context = PipelineContext(
