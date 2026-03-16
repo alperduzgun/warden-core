@@ -116,8 +116,18 @@ class ConfigHandler(BaseHandler):
             post_rules = [rule_map[rid] for rid in fr_data.post_rules if rid in rule_map]
             pipeline_frame_rules[fid] = FrameRules(pre_rules=pre_rules, post_rules=post_rules, on_fail=fr_data.on_fail)
 
+# Read analysis_level from config (CLI/env var override happens later in orchestrator)
+        from warden.pipeline.domain.enums import AnalysisLevel
+        config_level = settings.get("analysis_level", "standard")
+        try:
+            analysis_level_enum = AnalysisLevel(config_level.lower())
+        except (ValueError, AttributeError):
+            logger.warning("invalid_analysis_level_in_config", value=config_level, fallback="standard")
+            analysis_level_enum = AnalysisLevel.STANDARD
+
         try:
             pipeline_config = PipelineConfig(
+                analysis_level=analysis_level_enum,
                 fail_fast=settings.get("fail_fast", True),
                 timeout=settings.get("timeout", 300),
                 frame_timeout=settings.get("frame_timeout", 120),

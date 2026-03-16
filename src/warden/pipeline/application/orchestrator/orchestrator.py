@@ -255,13 +255,21 @@ class PhaseOrchestrator:
             logger.info("force_scan_enabled", reason="bypassing memory cache")
             self.config.force_scan = True
 
-        # Apply analysis level if provided
+        # Apply analysis level: CLI arg > env var > config.yaml > default
+        import os
+        if not analysis_level:
+            # Check env var
+            env_level = os.environ.get("WARDEN_ANALYSIS_LEVEL", "").strip().lower()
+            if env_level:
+                analysis_level = env_level
+                logger.info("analysis_level_from_env", level=env_level)
+
         if analysis_level:
             from warden.pipeline.domain.enums import AnalysisLevel
 
             try:
                 self.config.analysis_level = AnalysisLevel(analysis_level.lower())
-                logger.info("analysis_level_overridden", level=self.config.analysis_level.value)
+                logger.info("analysis_level_overridden", level=self.config.analysis_level.value, source="cli_or_env")
 
                 # Global overrides for BASIC level to ensure speed and local-only execution
                 if self.config.analysis_level == AnalysisLevel.BASIC:
