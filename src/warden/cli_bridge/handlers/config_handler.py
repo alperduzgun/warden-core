@@ -138,7 +138,7 @@ class ConfigHandler(BaseHandler):
                 global_rules=global_rules_objects,
                 frame_rules=pipeline_frame_rules,
             )
-        except Exception as e:
+        except (ValidationError, ValueError, TypeError) as e:
             logger.warning("config_validation_error", error=str(e), fallback="using defaults")
             pipeline_config = self._get_default_pipeline_config()
             pipeline_config.global_rules = global_rules_objects
