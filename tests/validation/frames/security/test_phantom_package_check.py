@@ -391,3 +391,135 @@ async def test_finding_has_suggestion_and_url(check):
     assert findings[0].suggestion is not None
     assert "pypi.org" in findings[0].suggestion.lower() or "pypi" in findings[0].suggestion.lower()
     assert findings[0].documentation_url is not None
+
+
+# ---------------------------------------------------------------------------
+# Fix: cache logic — 429/500 must not be cached as "exists"
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_rate_limit_response_not_cached(check):
+    """A 429 response must not be cached — next call must retry the registry."""
+    import sys
+    from pathlib import Path
+
+    internal_dir = str(
+        Path(__file__).resolve().parents[4]
+        / "src/warden/validation/frames/security"
+    )
+    if internal_dir not in sys.path:
+        sys.path.insert(0, internal_dir)
+    from _internal.phantom_package_check import _REGISTRY_CACHE, _package_exists
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = mock_client_cls.return_value.__aenter__.return_value
+        mock_client.head = AsyncMock(return_value=_make_response(429))
+        result = await _package_exists("pypi", "rate-limited-pkg")
+
+    # 429 must return True (assume exists) but NOT cache the result
+    assert result is True
+    assert "pypi:rate-limited-pkg" not in _REGISTRY_CACHE, (
+        "429 responses must not be cached"
+    )
+
+
+@pytest.mark.asyncio
+async def test_server_error_not_cached(check):
+    """A 500 response must not be cached."""
+    import sys
+    from pathlib import Path
+
+    internal_dir = str(
+        Path(__file__).resolve().parents[4]
+        / "src/warden/validation/frames/security"
+    )
+    if internal_dir not in sys.path:
+        sys.path.insert(0, internal_dir)
+    from _internal.phantom_package_check import _REGISTRY_CACHE, _package_exists
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = mock_client_cls.return_value.__aenter__.return_value
+        mock_client.head = AsyncMock(return_value=_make_response(500))
+        result = await _package_exists("pypi", "server-error-pkg")
+
+    assert result is True
+    assert "pypi:server-error-pkg" not in _REGISTRY_CACHE, (
+        "500 responses must not be cached"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix: scoped JS subpath imports — @scope/pkg/subpath → @scope/pkg
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_scoped_js_subpath_stripped(check):
+    """@scope/pkg/subpath must resolve to @scope/pkg for npm lookup."""
+    code = "import { foo } from '@testing-library/react/pure';\n"
+
+    call_args = []
+
+    async def capturing_exists(ecosystem, package):
+        call_args.append(package)
+        return True  # exists — no finding
+
+    with patch("_internal.phantom_package_check._package_exists", side_effect=capturing_exists):
+        result = await check.execute_async(_make_code_file(
+            code, language="javascript", path="App.test.js"
+        ))
+
+    # Must only look up @testing-library/react, not @testing-library/react/pure
+    assert any(pkg == "@testing-library/react" for pkg in call_args), (
+        f"Expected '@testing-library/react' lookup, got: {call_args}"
+    )
+    assert not any("/pure" in pkg for pkg in call_args), (
+        f"Subpath '/pure' should have been stripped: {call_args}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fix: Python submodule import line matching (from pkg.submodule import X)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_find_import_line_submodule(check):
+    """_find_import_line must match 'from pkg.submodule import X' style imports."""
+    code = "import os\nfrom ghost_pkg.submodule import helper\n"
+
+    async def fake_exists(ecosystem, package):
+        return False
+
+    with patch("_internal.phantom_package_check._package_exists", side_effect=fake_exists):
+        result = await check.execute_async(_make_code_file(code, path="test.py"))
+
+    findings = _phantom_findings(result)
+    assert len(findings) == 1, f"Expected 1 finding, got {len(findings)}"
+    assert ":2" in findings[0].location, (
+        f"Expected line 2 location, got: {findings[0].location}"
+    )
+    assert "ghost_pkg" in findings[0].message
+
+
+# ---------------------------------------------------------------------------
+# Fix: Python package name normalization (underscores → hyphens for PyPI)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_python_underscore_package_normalized_for_pypi(check):
+    """'my_package' must be looked up as 'my-package' on PyPI."""
+    code = "import my_package\n"
+
+    call_args = []
+
+    async def capturing_exists(ecosystem, package):
+        call_args.append((ecosystem, package))
+        return True  # exists — no finding
+
+    with patch("_internal.phantom_package_check._package_exists", side_effect=capturing_exists):
+        result = await check.execute_async(_make_code_file(code))
+
+    assert result.passed
+    # Should be called with hyphenated form
+    assert any(pkg == "my-package" for _, pkg in call_args), (
+        f"Expected 'my-package' lookup (hyphenated), got: {call_args}"
+    )

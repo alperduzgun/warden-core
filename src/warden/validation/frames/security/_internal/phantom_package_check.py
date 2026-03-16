@@ -161,9 +161,13 @@ def _extract_js_imports(content: str) -> list[str]:
     names: list[str] = []
     for match in _JS_IMPORT_RE.finditer(content):
         raw = match.group(1)
-        # Strip scoped package prefix (@scope/name → check full name)
-        # but keep scoped names as-is for npm lookup
-        pkg = raw.split("/")[0] if not raw.startswith("@") else raw
+        if raw.startswith("@"):
+            # Scoped package: @scope/pkg/subpath → keep only @scope/pkg
+            parts = raw.split("/")
+            pkg = "/".join(parts[:2])
+        else:
+            # Unscoped: strip any subpath (pkg/subpath → pkg)
+            pkg = raw.split("/")[0]
         names.append(pkg)
     return names
 
@@ -194,9 +198,14 @@ async def _package_exists(ecosystem: str, package: str) -> bool:
     async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
         response = await client.head(url)
 
-    exists = response.status_code != 404
-    _REGISTRY_CACHE[cache_key] = exists
-    return exists
+    if response.status_code == 404:
+        _REGISTRY_CACHE[cache_key] = False
+        return False
+    if response.status_code == 200:
+        _REGISTRY_CACHE[cache_key] = True
+        return True
+    # Other status codes (429, 500, etc.) — don't cache, assume exists
+    return True
 
 
 class PhantomPackageCheck(ValidationCheck):
@@ -286,7 +295,9 @@ class PhantomPackageCheck(ValidationCheck):
 
         for pkg in to_check:
             try:
-                exists = await _package_exists(ecosystem, pkg)
+                # Normalize Python package names for PyPI lookup (underscores → hyphens)
+                lookup_pkg = pkg.replace("_", "-").lower() if ecosystem == "pypi" else pkg
+                exists = await _package_exists(ecosystem, lookup_pkg)
                 checked_count += 1
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
                 # Network issues → skip this package, do not crash the scan
@@ -382,7 +393,7 @@ class PhantomPackageCheck(ValidationCheck):
         """Return 1-based line number of first import of `package`."""
         lines = content.split("\n")
         pkg_pattern = re.compile(
-            rf"^\s*(?:import\s+{re.escape(package)}|from\s+{re.escape(package)}\s)",
+            rf"^\s*(?:import\s+{re.escape(package)}(?:\s|$)|from\s+{re.escape(package)}(?:\.|\s))",
         )
         for i, line in enumerate(lines, start=1):
             if pkg_pattern.match(line):
