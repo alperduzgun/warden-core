@@ -189,12 +189,42 @@ class FrameMetadata:
         return FrameCategory(self.category)
 
     def get_priority_enum(self) -> FramePriority:
-        """Get priority as enum."""
-        return FramePriority(self.priority)
+        """Get priority as FramePriority enum.
+
+        Accepts lowercase name strings from YAML (e.g. 'high', 'medium').
+        Strips surrounding whitespace before lookup. Falls back to MEDIUM
+        on unrecognised values.
+
+        Example::
+
+            metadata.priority = "high"
+            assert metadata.get_priority_enum() == FramePriority.HIGH
+        """
+        try:
+            return FramePriority[self.priority.strip().upper()]
+        except (KeyError, AttributeError):
+            return FramePriority.MEDIUM
 
     def get_scope_enum(self) -> FrameScope:
-        """Get scope as enum."""
-        return FrameScope(self.scope)
+        """Get scope as FrameScope enum.
+
+        Accepts lowercase value strings from YAML (e.g. 'file_level').
+        Tries value-based lookup first (FrameScope is a str enum), then
+        falls back to name-based lookup for forward-compatibility.
+        Defaults to FILE_LEVEL if neither lookup succeeds.
+
+        Example::
+
+            metadata.scope = "file_level"
+            assert metadata.get_scope_enum() == FrameScope.FILE_LEVEL
+        """
+        try:
+            return FrameScope(self.scope)  # Try value first (str enum)
+        except ValueError:
+            try:
+                return FrameScope[self.scope.upper()]  # Try name
+            except (KeyError, AttributeError):
+                return FrameScope.FILE_LEVEL
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary (for JSON serialization)."""
