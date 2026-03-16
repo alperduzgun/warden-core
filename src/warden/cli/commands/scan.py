@@ -329,6 +329,11 @@ def scan_command(
                             added = file_diff.get_all_added_lines()
                             if added:
                                 diff_changed_lines[file_diff.file_path] = added
+                        # Ensure files with only deletions are in the map (empty set = drop all findings)
+                        for f in changed_files:
+                            rel = str(Path(f).resolve().relative_to(Path.cwd().resolve())) if Path(f).is_absolute() else f
+                            if rel not in diff_changed_lines:
+                                diff_changed_lines[rel] = set()
                         if diff_changed_lines:
                             _logger.info(
                                 "diff_line_map_built",

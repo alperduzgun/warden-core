@@ -250,3 +250,43 @@ class TestDiffModeFiltering:
 
         result = ctx.frame_results["sec"]["result"]
         assert len(result.findings) == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: deletion-only files (empty set in changed_lines)
+# ---------------------------------------------------------------------------
+
+
+class TestDeletionOnlyFiles:
+    def _make_context(self, **kwargs) -> PipelineContext:
+        defaults = {
+            "pipeline_id": "test-deletion-only",
+            "started_at": datetime.now(),
+            "file_path": Path("test.py"),
+            "source_code": "",
+        }
+        defaults.update(kwargs)
+        return PipelineContext(**defaults)
+
+    def _make_finding(self, file_path: str, line: int, message: str) -> Finding:
+        return Finding(
+            id=f"finding-{line}",
+            severity="high",
+            message=message,
+            location=f"{file_path}:{line}",
+            line=line,
+        )
+
+    def test_empty_changed_lines_drops_all_findings(self):
+        """File in changed_lines with empty set = all findings dropped."""
+        context = self._make_context()
+        context.changed_lines = {"src/app.py": set()}  # empty = all lines are "old"
+        # Add a finding for that file
+        finding = self._make_finding("src/app.py", line=10, message="Should be dropped")
+        context.frame_results = {"security": {"result": MagicMock(findings=[finding], status="failed", metadata={})}}
+        context.findings = [finding]
+
+        post_processor = _make_processor()
+        post_processor.filter_by_diff_lines(context)
+
+        assert len(context.findings) == 0  # All dropped

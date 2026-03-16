@@ -145,6 +145,7 @@ class GitHelper:
             if not self._ref_exists(target):
                 target = base_branch
                 if not self._ref_exists(target):
+                    logger.warning("diff_output_empty", base_branch=base_branch, hint="Neither origin/<base> nor <base> found")
                     return ""
 
             result = subprocess.run(
