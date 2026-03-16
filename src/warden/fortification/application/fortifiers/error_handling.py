@@ -321,6 +321,7 @@ Format: JSON array of objects with keys: issueLine (int), suggestion (string)"""
                 prompt,
                 system_prompt="You are a code safety expert. Provide suggestions for fixing code issues. Never write code, only suggest what to do.",
                 max_tokens=200,
+                use_fast_tier=True,  # Text suggestion, not security verdict
             )
 
             if not response or not response.content:

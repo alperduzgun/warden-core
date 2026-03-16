@@ -111,6 +111,7 @@ class InputValidationFortifier(BaseFortifier):
                 prompt,
                 system_prompt="You are a security expert. Add input validation to Python functions. Return ONLY the modified code.",
                 max_tokens=800,
+                use_fast_tier=True,  # Code generation, not security verdict
             )
 
             if not response or not response.content:
