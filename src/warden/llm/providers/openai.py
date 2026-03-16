@@ -25,6 +25,8 @@ from .base import ILlmClient
 class OpenAIClient(ILlmClient):
     """OpenAI GPT client - supports both OpenAI and Azure OpenAI"""
 
+    _rate_limited_until: float = 0.0  # Class-level backoff timer (shared across instances)
+
     def __init__(self, config: ProviderConfig, provider: LlmProvider = LlmProvider.OPENAI):
         if not config.api_key:
             raise ValueError(f"{provider.value} API key is required")
@@ -84,6 +86,18 @@ class OpenAIClient(ILlmClient):
     @resilient(name="openai_send", timeout_seconds=60.0, retry_max_attempts=3)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         start_time = time.time()
+
+        # Pre-check: skip if still rate-limited from a previous 429
+        now = time.time()
+        remaining = OpenAIClient._rate_limited_until - now
+        if remaining > 0:
+            if remaining > request.timeout_seconds:
+                return LlmResponse.error(
+                    f"OpenAI rate limited — retry in {remaining:.0f}s",
+                    provider=self.provider,
+                    duration_ms=LlmResponse.elapsed_ms(start_time),
+                )
+            await asyncio.sleep(remaining)
 
         try:
             from warden.llm.global_rate_limiter import GlobalRateLimiter
@@ -153,9 +167,19 @@ class OpenAIClient(ILlmClient):
                 duration_ms=duration_ms,
             )
 
-        except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        except httpx.HTTPStatusError as e:
             duration_ms = LlmResponse.elapsed_ms(start_time)
+            if e.response.status_code == 429:
+                retry_after = int(e.response.headers.get("retry-after", "5"))
+                OpenAIClient._rate_limited_until = time.time() + retry_after
+                return LlmResponse.error(
+                    f"OpenAI rate limited (429) — retry after {retry_after}s",
+                    provider=self.provider, duration_ms=duration_ms,
+                )
             return LlmResponse.error(f"HTTP error: {e!s}", provider=self.provider, duration_ms=duration_ms)
+        except httpx.RequestError as e:
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(f"Request error: {e!s}", provider=self.provider, duration_ms=duration_ms)
         except (json.JSONDecodeError, KeyError) as e:
             duration_ms = LlmResponse.elapsed_ms(start_time)
             return LlmResponse.error(f"JSON/Data error: {e!s}", provider=self.provider, duration_ms=duration_ms)
@@ -236,9 +260,19 @@ class OpenAIClient(ILlmClient):
                 duration_ms=duration_ms,
             )
 
-        except (httpx.HTTPStatusError, httpx.RequestError) as e:
+        except httpx.HTTPStatusError as e:
             duration_ms = LlmResponse.elapsed_ms(start_time)
+            if e.response.status_code == 429:
+                retry_after = int(e.response.headers.get("retry-after", "5"))
+                OpenAIClient._rate_limited_until = time.time() + retry_after
+                return LlmResponse.error(
+                    f"OpenAI rate limited (429) — retry after {retry_after}s",
+                    provider=self.provider, duration_ms=duration_ms,
+                )
             return LlmResponse.error(f"HTTP error: {e!s}", provider=self.provider, duration_ms=duration_ms)
+        except httpx.RequestError as e:
+            duration_ms = LlmResponse.elapsed_ms(start_time)
+            return LlmResponse.error(f"Request error: {e!s}", provider=self.provider, duration_ms=duration_ms)
         except (json.JSONDecodeError, KeyError) as e:
             duration_ms = LlmResponse.elapsed_ms(start_time)
             return LlmResponse.error(f"JSON/Data error: {e!s}", provider=self.provider, duration_ms=duration_ms)

@@ -30,6 +30,8 @@ class AnthropicClient(ILlmClient):
     Supports Claude 3.5 Sonnet and other models
     """
 
+    _rate_limited_until: float = 0.0  # Class-level 429 backoff timer
+
     def __init__(self, config: ProviderConfig):
         """
         Initialize Anthropic client
@@ -139,6 +141,13 @@ class AnthropicClient(ILlmClient):
 
         except httpx.HTTPStatusError as e:
             duration_ms = LlmResponse.elapsed_ms(start_time)
+            if e.response.status_code == 429:
+                retry_after = int(e.response.headers.get("retry-after", "5"))
+                AnthropicClient._rate_limited_until = time.time() + retry_after
+                return LlmResponse.error(
+                    f"Anthropic rate limited (429) — retry after {retry_after}s",
+                    provider=self.provider, duration_ms=duration_ms,
+                )
             response_text = e.response.text[:200] if e.response.text else "No response body"
             error_msg = f"HTTP {e.response.status_code}: {response_text}"
             return LlmResponse.error(error_msg, provider=self.provider, duration_ms=duration_ms)
@@ -217,6 +226,13 @@ class AnthropicClient(ILlmClient):
 
         except httpx.HTTPStatusError as e:
             duration_ms = LlmResponse.elapsed_ms(start_time)
+            if e.response.status_code == 429:
+                retry_after = int(e.response.headers.get("retry-after", "5"))
+                AnthropicClient._rate_limited_until = time.time() + retry_after
+                return LlmResponse.error(
+                    f"Anthropic rate limited (429) — retry after {retry_after}s",
+                    provider=self.provider, duration_ms=duration_ms,
+                )
             response_text = e.response.text[:200] if e.response.text else "No response body"
             error_msg = f"HTTP {e.response.status_code}: {response_text}"
             return LlmResponse.error(error_msg, provider=self.provider, duration_ms=duration_ms)
