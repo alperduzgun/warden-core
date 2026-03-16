@@ -52,7 +52,6 @@ class StaleAPICheck(ValidationCheck):
     - cgi.parse (deprecated in Python 3.11)
     - imp.load_module (deprecated since Python 3.4)
     - optparse (deprecated since Python 3.2)
-    - formatter module (deprecated since Python 3.4)
     - pickle.loads on untrusted data (RCE risk)
     - yaml.load without SafeLoader (code execution risk)
     - eval() on untrusted input (code execution risk)
@@ -62,8 +61,7 @@ class StaleAPICheck(ValidationCheck):
     - fs.exists() (deprecated since Node.js 4.0)
     - crypto.createCipher() (use createCipheriv instead)
     - url.parse() (deprecated since Node.js 11.0)
-    - querystring module (deprecated since Node.js 14.0)
-    - domain module (deprecated since Node.js 4.0)
+    - require('querystring') (deprecated since Node.js 14.0)
 
     Severity: varies per pattern (see DEPRECATED_APIS)
     """
@@ -124,13 +122,6 @@ class StaleAPICheck(ValidationCheck):
             "reason": "optparse deprecated since Python 3.2",
         },
         {
-            "pattern": r"formatter\.",
-            "replacement": "custom formatter",
-            "language": "python",
-            "severity": "low",
-            "reason": "formatter module deprecated since Python 3.4",
-        },
-        {
             "pattern": r"pickle\.loads?\(",
             "replacement": "json.loads() or restricted unpickler",
             "language": "python",
@@ -138,14 +129,14 @@ class StaleAPICheck(ValidationCheck):
             "reason": "pickle.loads on untrusted data = RCE risk (CWE-502)",
         },
         {
-            "pattern": r"yaml\.load\([^)]*\)(?!.*Loader)",
+            "pattern": r"yaml\.load\((?!.*Loader)",
             "replacement": "yaml.safe_load()",
             "language": "python",
             "severity": "high",
             "reason": "yaml.load without SafeLoader = code execution risk",
         },
         {
-            "pattern": r"eval\(",
+            "pattern": r"(?<!\w)eval\(",
             "replacement": "ast.literal_eval() or JSON parsing",
             "language": "python",
             "severity": "high",
@@ -183,18 +174,11 @@ class StaleAPICheck(ValidationCheck):
             "reason": "url.parse deprecated since Node.js 11.0",
         },
         {
-            "pattern": r"querystring\.",
+            "pattern": r"require\(['\"]querystring['\"]\)",
             "replacement": "URLSearchParams",
             "language": "javascript",
             "severity": "low",
             "reason": "querystring deprecated since Node.js 14.0",
-        },
-        {
-            "pattern": r"domain\.",
-            "replacement": "async_hooks or try/catch",
-            "language": "javascript",
-            "severity": "medium",
-            "reason": "domain module deprecated since Node.js 4.0",
         },
     ]
 

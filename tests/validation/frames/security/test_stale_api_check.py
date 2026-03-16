@@ -6,28 +6,24 @@ Covers:
 - JavaScript deprecated APIs: new Buffer, fs.exists, crypto.createCipher
 - Clean code with no findings (no false positives)
 - Language isolation: Python patterns don't fire on JS files and vice versa
+- Regex precision: eval word-boundary, yaml.load lookahead, removed overbroad patterns
 """
 
 import pytest
 
 from warden.validation.domain.frame import CodeFile
+from warden.validation.frames.security._internal.stale_api_check import StaleAPICheck
 
 
 @pytest.fixture
-def SecurityFrame():
-    from warden.validation.infrastructure.frame_registry import FrameRegistry
-
-    registry = FrameRegistry()
-    registry.discover_all()
-    cls = registry.get_frame_by_id("security")
-    if not cls:
-        pytest.skip("SecurityFrame not found in registry")
-    return cls
+def check() -> StaleAPICheck:
+    """Return a fresh StaleAPICheck instance."""
+    return StaleAPICheck()
 
 
-def _get_stale_findings(findings):
-    """Filter findings to only stale-api check results."""
-    return [f for f in findings if "stale-api" in f.id]
+def _stale_findings(result):
+    """Return all findings from a StaleAPICheck result."""
+    return result.findings
 
 
 # =============================================================================
@@ -36,7 +32,7 @@ def _get_stale_findings(findings):
 
 
 @pytest.mark.asyncio
-async def test_python_hashlib_md5_detected(SecurityFrame):
+async def test_python_hashlib_md5_detected(check):
     """hashlib.md5() in Python should be flagged as deprecated."""
     code = """
 import hashlib
@@ -45,15 +41,14 @@ def hash_token(token):
     return hashlib.md5(token.encode()).hexdigest()
 """
     code_file = CodeFile(path="utils.py", content=code, language="python")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) >= 1
-    assert any("MD5" in f.message for f in stale)
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    assert len(findings) >= 1
+    assert any("MD5" in f.message for f in findings)
 
 
 @pytest.mark.asyncio
-async def test_python_pickle_loads_detected(SecurityFrame):
+async def test_python_pickle_loads_detected(check):
     """pickle.loads() in Python should be flagged due to RCE risk."""
     code = """
 import pickle
@@ -62,15 +57,14 @@ def deserialize(data):
     return pickle.loads(data)
 """
     code_file = CodeFile(path="serializer.py", content=code, language="python")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) >= 1
-    assert any("pickle" in f.message.lower() or "CWE-502" in f.message for f in stale)
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    assert len(findings) >= 1
+    assert any("pickle" in f.message.lower() or "CWE-502" in f.message for f in findings)
 
 
 @pytest.mark.asyncio
-async def test_python_eval_detected(SecurityFrame):
+async def test_python_eval_detected(check):
     """eval() in Python should be flagged as dangerous."""
     code = """
 def process_input(user_input):
@@ -78,15 +72,14 @@ def process_input(user_input):
     return result
 """
     code_file = CodeFile(path="processor.py", content=code, language="python")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) >= 1
-    assert any("eval" in f.message.lower() or "CWE-95" in f.message for f in stale)
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    assert len(findings) >= 1
+    assert any("eval" in f.message.lower() or "CWE-95" in f.message for f in findings)
 
 
 @pytest.mark.asyncio
-async def test_python_yaml_load_without_loader_detected(SecurityFrame):
+async def test_python_yaml_load_without_loader_detected(check):
     """yaml.load() without SafeLoader should be flagged."""
     code = """
 import yaml
@@ -95,15 +88,14 @@ def parse_config(config_str):
     return yaml.load(config_str)
 """
     code_file = CodeFile(path="config.py", content=code, language="python")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) >= 1
-    assert any("yaml" in f.message.lower() or "SafeLoader" in f.message for f in stale)
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    assert len(findings) >= 1
+    assert any("yaml" in f.message.lower() or "SafeLoader" in f.message for f in findings)
 
 
 @pytest.mark.asyncio
-async def test_python_os_popen_detected(SecurityFrame):
+async def test_python_os_popen_detected(check):
     """os.popen() should be flagged as deprecated since Python 3.0."""
     code = """
 import os
@@ -113,11 +105,10 @@ def run_command(cmd):
     return output
 """
     code_file = CodeFile(path="runner.py", content=code, language="python")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) >= 1
-    assert any("popen" in f.message.lower() or "deprecated" in f.message.lower() for f in stale)
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    assert len(findings) >= 1
+    assert any("popen" in f.message.lower() or "deprecated" in f.message.lower() for f in findings)
 
 
 # =============================================================================
@@ -126,7 +117,7 @@ def run_command(cmd):
 
 
 @pytest.mark.asyncio
-async def test_js_new_buffer_detected(SecurityFrame):
+async def test_js_new_buffer_detected(check):
     """new Buffer() in Node.js should be flagged as deprecated."""
     code = """
 function createBuffer(data) {
@@ -135,15 +126,14 @@ function createBuffer(data) {
 }
 """
     code_file = CodeFile(path="buffer_util.js", content=code, language="javascript")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) >= 1
-    assert any("Buffer" in f.message for f in stale)
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    assert len(findings) >= 1
+    assert any("Buffer" in f.message for f in findings)
 
 
 @pytest.mark.asyncio
-async def test_js_fs_exists_detected(SecurityFrame):
+async def test_js_fs_exists_detected(check):
     """fs.exists() in Node.js should be flagged as deprecated."""
     code = """
 const fs = require('fs');
@@ -155,15 +145,14 @@ function checkFile(path) {
 }
 """
     code_file = CodeFile(path="file_util.js", content=code, language="javascript")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) >= 1
-    assert any("exists" in f.message.lower() or "deprecated" in f.message.lower() for f in stale)
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    assert len(findings) >= 1
+    assert any("exists" in f.message.lower() or "deprecated" in f.message.lower() for f in findings)
 
 
 @pytest.mark.asyncio
-async def test_js_crypto_create_cipher_detected(SecurityFrame):
+async def test_js_crypto_create_cipher_detected(check):
     """crypto.createCipher() in Node.js should be flagged as deprecated."""
     code = """
 const crypto = require('crypto');
@@ -174,11 +163,10 @@ function encrypt(key, data) {
 }
 """
     code_file = CodeFile(path="crypto_util.js", content=code, language="javascript")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) >= 1
-    assert any("createCipher" in f.message or "IV" in f.message for f in stale)
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    assert len(findings) >= 1
+    assert any("createCipher" in f.message or "IV" in f.message for f in findings)
 
 
 # =============================================================================
@@ -187,7 +175,7 @@ function encrypt(key, data) {
 
 
 @pytest.mark.asyncio
-async def test_clean_python_code_no_findings(SecurityFrame):
+async def test_clean_python_code_no_findings(check):
     """Modern Python code should produce no stale-api findings."""
     code = """
 import hashlib
@@ -205,14 +193,12 @@ def run_cmd(cmd: list[str]) -> str:
     return result.stdout
 """
     code_file = CodeFile(path="modern_utils.py", content=code, language="python")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) == 0
+    result = await check.execute_async(code_file)
+    assert len(_stale_findings(result)) == 0
 
 
 @pytest.mark.asyncio
-async def test_clean_js_code_no_findings(SecurityFrame):
+async def test_clean_js_code_no_findings(check):
     """Modern JavaScript code should produce no stale-api findings."""
     code = """
 const crypto = require('crypto');
@@ -233,10 +219,8 @@ function buildQuery(params) {
 }
 """
     code_file = CodeFile(path="modern_crypto.js", content=code, language="javascript")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    assert len(stale) == 0
+    result = await check.execute_async(code_file)
+    assert len(_stale_findings(result)) == 0
 
 
 # =============================================================================
@@ -245,7 +229,7 @@ function buildQuery(params) {
 
 
 @pytest.mark.asyncio
-async def test_python_patterns_dont_match_js_files(SecurityFrame):
+async def test_python_patterns_dont_match_js_files(check):
     """Python-specific patterns (hashlib.md5) must not fire on JS files."""
     code = """
 // This is JavaScript — hashlib.md5 is a Python API, not JS
@@ -255,17 +239,14 @@ function hashValue(val) {
 }
 """
     code_file = CodeFile(path="helpers.js", content=code, language="javascript")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    # Comments aside, JS file should not trigger Python-only patterns
-    # (comment text could match regex, but language filter prevents it)
-    python_md5_findings = [f for f in stale if "MD5" in f.message and "hashlib" in (f.code_snippet or "")]
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    python_md5_findings = [f for f in findings if "MD5" in f.message]
     assert len(python_md5_findings) == 0
 
 
 @pytest.mark.asyncio
-async def test_js_patterns_dont_match_python_files(SecurityFrame):
+async def test_js_patterns_dont_match_python_files(check):
     """JS-specific patterns (new Buffer) must not fire on Python files."""
     code = """
 # Python file — 'new Buffer(' is a Node.js API
@@ -274,8 +255,138 @@ def process(data):
     return data
 """
     code_file = CodeFile(path="processor.py", content=code, language="python")
-    frame = SecurityFrame()
-    result = await frame.execute_async(code_file)
-    stale = _get_stale_findings(result.findings)
-    buffer_findings = [f for f in stale if "Buffer" in f.message]
+    result = await check.execute_async(code_file)
+    findings = _stale_findings(result)
+    buffer_findings = [f for f in findings if "Buffer" in f.message]
     assert len(buffer_findings) == 0
+
+
+# =============================================================================
+# Regex precision — Copilot review fixes
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_yaml_load_with_loader_not_flagged(check):
+    """yaml.load(data, Loader=yaml.SafeLoader) must NOT be flagged."""
+    code = """
+import yaml
+
+def parse_safe(data):
+    return yaml.load(data, Loader=yaml.SafeLoader)
+"""
+    code_file = CodeFile(path="safe_config.py", content=code, language="python")
+    result = await check.execute_async(code_file)
+    yaml_findings = [f for f in _stale_findings(result) if "yaml" in f.message.lower()]
+    assert len(yaml_findings) == 0, (
+        "yaml.load with Loader= should not be flagged"
+    )
+
+
+@pytest.mark.asyncio
+async def test_yaml_load_without_loader_multiword_args_flagged(check):
+    """yaml.load(stream, encoding='utf-8') without Loader should still be flagged."""
+    code = """
+import yaml
+
+def parse_config(stream):
+    return yaml.load(stream, encoding='utf-8')
+"""
+    code_file = CodeFile(path="config.py", content=code, language="python")
+    result = await check.execute_async(code_file)
+    yaml_findings = [f for f in _stale_findings(result) if "yaml" in f.message.lower()]
+    assert len(yaml_findings) >= 1, (
+        "yaml.load without Loader= should be flagged even with other args"
+    )
+
+
+@pytest.mark.asyncio
+async def test_literal_eval_not_flagged(check):
+    """ast.literal_eval() must NOT be flagged — word boundary prevents it."""
+    code = """
+import ast
+
+def safe_parse(expr):
+    return ast.literal_eval(expr)
+"""
+    code_file = CodeFile(path="parser.py", content=code, language="python")
+    result = await check.execute_async(code_file)
+    eval_findings = [f for f in _stale_findings(result) if "eval" in f.message.lower()]
+    assert len(eval_findings) == 0, (
+        "ast.literal_eval should not be flagged by eval pattern"
+    )
+
+
+@pytest.mark.asyncio
+async def test_bare_eval_flagged(check):
+    """Bare eval() call must still be flagged after word-boundary fix."""
+    code = """
+def dangerous(user_input):
+    return eval(user_input)
+"""
+    code_file = CodeFile(path="bad.py", content=code, language="python")
+    result = await check.execute_async(code_file)
+    eval_findings = [f for f in _stale_findings(result) if "eval" in f.message.lower()]
+    assert len(eval_findings) >= 1
+
+
+@pytest.mark.asyncio
+async def test_querystring_local_var_no_false_positive(check):
+    """Local variable named querystring must NOT be flagged (pattern removed)."""
+    code = """
+function buildUrl(querystring) {
+    return '/api?' + querystring;
+}
+
+const querystring = 'foo=bar';
+console.log(buildUrl(querystring));
+"""
+    code_file = CodeFile(path="url_builder.js", content=code, language="javascript")
+    result = await check.execute_async(code_file)
+    qs_findings = [f for f in _stale_findings(result) if "querystring" in f.message.lower()]
+    assert len(qs_findings) == 0, (
+        "querystring pattern was removed to prevent false positives on local variables"
+    )
+
+
+@pytest.mark.asyncio
+async def test_domain_local_var_no_false_positive(check):
+    """Local variable 'domain' or 'domain.example.com' must NOT be flagged (pattern removed)."""
+    code = """
+const domain = 'example.com';
+const url = `https://${domain}/api/v1`;
+console.log(domain.toUpperCase());
+"""
+    code_file = CodeFile(path="config.js", content=code, language="javascript")
+    result = await check.execute_async(code_file)
+    domain_findings = [f for f in _stale_findings(result) if "domain" in f.message.lower()]
+    assert len(domain_findings) == 0, (
+        "domain pattern was removed to prevent false positives"
+    )
+
+
+@pytest.mark.asyncio
+async def test_formatter_attribute_no_false_positive(check):
+    """logging.Formatter or any .formatter attribute must NOT be flagged (pattern removed)."""
+    code = """
+import logging
+
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+"""
+    code_file = CodeFile(path="logging_setup.py", content=code, language="python")
+    result = await check.execute_async(code_file)
+    fmt_findings = [f for f in _stale_findings(result) if "formatter" in f.message.lower()]
+    assert len(fmt_findings) == 0, (
+        "formatter pattern was removed to prevent false positives with logging.Formatter"
+    )
+
+
+@pytest.mark.asyncio
+async def test_pattern_count():
+    """Sanity check: exactly 14 patterns after removals."""
+    check = StaleAPICheck()
+    assert len(check.DEPRECATED_APIS) == 14, (
+        f"Expected 14 patterns after removing formatter, querystring, domain; got {len(check.DEPRECATED_APIS)}"
+    )
