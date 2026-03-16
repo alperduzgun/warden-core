@@ -539,7 +539,7 @@ class LLMPhaseBase(ABC):
         # 3. Complexity-Based Smart Routing (Auto-Upgrade)
         # If using Fast Tier (usually small 3b/7b model) and request is big,
         # PROACTIVELY upgrade to Smart Tier (Cloud) to prevent context failure/timeout.
-        complexity_threshold = 2000  # Conservative limit for 3b model context + output
+        complexity_threshold = 3000  # Allows classification (~2200 tokens) to stay on fast tier
 
         if use_fast_tier and estimated_tokens > complexity_threshold:
             logger.info(

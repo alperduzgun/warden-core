@@ -111,6 +111,7 @@ class ResourceDisposalFortifier(BaseFortifier):
                 prompt,
                 system_prompt="You are a resource management expert. Add context managers (with statements) to Python code for proper resource cleanup. Return ONLY the modified code.",
                 max_tokens=800,
+                use_fast_tier=True,  # Code generation, not security verdict
             )
 
             if not response or not response.content:

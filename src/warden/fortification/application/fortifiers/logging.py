@@ -115,6 +115,7 @@ class LoggingFortifier(BaseFortifier):
                 prompt,
                 system_prompt="You are a logging expert. Add structured logging (using structlog) to Python code. Return ONLY the modified code.",
                 max_tokens=800,
+                use_fast_tier=True,  # Code generation, not security verdict
             )
 
             if not response or not response.content:

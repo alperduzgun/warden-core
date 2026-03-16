@@ -246,7 +246,7 @@ class StaleSyncFrame(ValidationFrame, DataFlowAware):
                     "You are a software architect. Respond only with a JSON object. "
                     "No markdown, no code blocks, no extra text."
                 ),
-                use_fast_tier=False,
+                use_fast_tier=True,  # Code quality verdict, not security-critical
             )
             raw = response.content if hasattr(response, "content") else str(response)
             return self._parse_verdict(raw)
