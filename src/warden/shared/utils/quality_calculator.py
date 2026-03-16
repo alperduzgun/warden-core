@@ -82,3 +82,28 @@ def calculate_base_score(linter_metrics: dict[str, Any] | None = None) -> float:
 
     score = 10.0 * (20.0 / (penalty + 20.0))
     return round(max(0.1, min(10.0, score)), 1)
+
+
+def score_to_grade(score: float) -> str:
+    """
+    Convert a numeric quality score (0–10) to a letter grade.
+
+    Args:
+        score: Float quality score, typically from calculate_quality_score().
+
+    Returns:
+        Letter grade string: A+, A, B+, B, C, D, or F.
+    """
+    if score >= 9.5:
+        return "A+"
+    if score >= 9.0:
+        return "A"
+    if score >= 8.0:
+        return "B+"
+    if score >= 7.0:
+        return "B"
+    if score >= 6.0:
+        return "C"
+    if score >= 5.0:
+        return "D"
+    return "F"

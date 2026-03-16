@@ -33,6 +33,7 @@ from warden.cli.commands.scan_output import (
     _generate_configured_reports,
     _write_ai_status_file,
     _update_tech_debt_file,
+    print_findings_detail,
 )
 
 
@@ -1015,6 +1016,9 @@ async def _run_scan_async(
             # Display per-frame cost breakdown if requested
             if cost_report:
                 _display_frame_cost_breakdown()
+
+            # 2.1 Rich findings detail: severity icons + per-file listing
+            print_findings_detail(final_result_data, console)
 
         # 2.5 Display Contract Mode Summary panel (when --contract-mode is active)
         if contract_mode and final_result_data:

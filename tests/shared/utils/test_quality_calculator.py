@@ -155,3 +155,17 @@ def _make_linter_result(
         blocker_count=blockers,
         total_errors=errors,
     )
+
+
+class TestScoreToGrade:
+    def test_boundaries(self):
+        from warden.shared.utils.quality_calculator import score_to_grade
+        assert score_to_grade(10.0) == "A+"
+        assert score_to_grade(9.5) == "A+"
+        assert score_to_grade(9.0) == "A"
+        assert score_to_grade(8.0) == "B+"
+        assert score_to_grade(7.0) == "B"
+        assert score_to_grade(6.0) == "C"
+        assert score_to_grade(5.0) == "D"
+        assert score_to_grade(4.9) == "F"
+        assert score_to_grade(0.0) == "F"
