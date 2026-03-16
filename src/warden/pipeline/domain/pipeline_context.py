@@ -174,6 +174,10 @@ class PipelineContext:
     # Phase 0: TAINT Results (populated after PRE-ANALYSIS, consumed by TaintAware frames)
     taint_paths: dict[str, list[Any]] = field(default_factory=dict)  # file_path -> list[TaintPath]
 
+    # Diff-mode line filtering: maps relative file path → set of changed line numbers.
+    # Populated by the scan command when --diff is used. Empty means full-scan mode.
+    changed_lines: dict[str, set[int]] = field(default_factory=dict)
+
     # Phase 0: Contract Mode --- Data Dependency Graph
     # Populated when contract_mode=True; consumed by DataFlowAware frames.
     data_dependency_graph: Any | None = None  # DataDependencyGraph instance

@@ -88,6 +88,10 @@ class PhaseOrchestrator:
         self.project_root = project_root or Path.cwd()
         self.llm_service = llm_service
 
+        # Diff-mode line filtering: set this before calling execute_pipeline_async
+        # to restrict findings to only changed lines. Empty = full-scan mode.
+        self.changed_lines: dict[str, set[int]] = {}
+
         # Initialize rule validator if global rules or frame rules exist
         self.rule_validator = None
         if self.config.global_rules or self.config.frame_rules:
@@ -303,6 +307,7 @@ class PhaseOrchestrator:
             llm_config=getattr(self.llm_service, "config", None) if hasattr(self.llm_service, "config") else None,
             llm_provider=str(getattr(getattr(self.llm_service, "provider", None), "value", "") or "").lower(),
             contract_mode=getattr(self.config, "contract_mode", False),
+            changed_lines=dict(self.changed_lines),  # Inject diff-mode line map (copy for isolation)
         )
 
         # Create pipeline entity

@@ -128,6 +128,51 @@ class GitHelper:
             logger.error("git_diff_failed", error=str(e), stderr=e.stderr)
             raise RuntimeError(f"Git diff failed: {e.stderr}") from e
 
+    def get_diff_output(self, base_branch: str = "main") -> str:
+        """
+        Get the raw unified diff output relative to base branch.
+
+        Used to parse changed line numbers for diff-mode line filtering.
+
+        Args:
+            base_branch: Branch to compare against (default: main)
+
+        Returns:
+            Raw git diff output string (unified format). Empty string on failure.
+        """
+        try:
+            target = f"origin/{base_branch}"
+            if not self._ref_exists(target):
+                target = base_branch
+                if not self._ref_exists(target):
+                    logger.warning("diff_output_empty", base_branch=base_branch, hint="Neither origin/<base> nor <base> found")
+                    return ""
+
+            result = subprocess.run(
+                [self.git_cmd, "diff", f"{target}...HEAD"],
+                cwd=str(self.working_dir),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            diff_output = result.stdout
+
+            # Also include unstaged/staged changes vs HEAD
+            result_dirty = subprocess.run(
+                [self.git_cmd, "diff", "HEAD"],
+                cwd=str(self.working_dir),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            if result_dirty.stdout:
+                diff_output += "\n" + result_dirty.stdout
+
+            return diff_output
+        except subprocess.CalledProcessError as e:
+            logger.warning("git_diff_output_failed", error=str(e))
+            return ""
+
     def _ref_exists(self, ref: str) -> bool:
         """Check if a git reference exists."""
         try:
