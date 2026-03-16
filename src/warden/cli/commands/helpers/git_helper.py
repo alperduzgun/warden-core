@@ -89,12 +89,24 @@ class GitHelper:
             changed_files = set()
 
             # A. Committed changes diff (base...HEAD comparison)
-            # Only run if we have a proper base comparison (contains "...")
+            # Try 3-dot (merge-base) first, fallback to 2-dot if no merge-base
             if any("..." in arg for arg in cmd):
-                result = subprocess.run(cmd, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
-                for line in result.stdout.splitlines():
-                    if line.strip():
-                        changed_files.add(line.strip())
+                try:
+                    result = subprocess.run(cmd, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
+                    for line in result.stdout.splitlines():
+                        if line.strip():
+                            changed_files.add(line.strip())
+                except subprocess.CalledProcessError:
+                    # 3-dot failed (no merge-base) — fallback to 2-dot diff
+                    cmd_2dot = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", f"{target}..HEAD"]
+                    logger.warning("merge_base_fallback", target=target, strategy="2-dot diff")
+                    try:
+                        result = subprocess.run(cmd_2dot, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
+                        for line in result.stdout.splitlines():
+                            if line.strip():
+                                changed_files.add(line.strip())
+                    except subprocess.CalledProcessError as e2:
+                        logger.warning("git_diff_2dot_also_failed", error=str(e2))
 
             # B. Unstaged/Staged changes (Current working tree vs HEAD)
             cmd_dirty = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", "HEAD"]
@@ -127,6 +139,11 @@ class GitHelper:
         except subprocess.CalledProcessError as e:
             logger.error("git_diff_failed", error=str(e), stderr=e.stderr)
             raise RuntimeError(f"Git diff failed: {e.stderr}") from e
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.error("git_diff_unexpected", error=str(e))
+            raise RuntimeError(f"Git diff failed unexpectedly: {e}") from e
 
     def get_diff_output(self, base_branch: str = "main") -> str:
         """
@@ -148,14 +165,26 @@ class GitHelper:
                     logger.warning("diff_output_empty", base_branch=base_branch, hint="Neither origin/<base> nor <base> found")
                     return ""
 
-            result = subprocess.run(
-                [self.git_cmd, "diff", f"{target}...HEAD"],
-                cwd=str(self.working_dir),
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            diff_output = result.stdout
+            try:
+                result = subprocess.run(
+                    [self.git_cmd, "diff", f"{target}...HEAD"],
+                    cwd=str(self.working_dir),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                diff_output = result.stdout
+            except subprocess.CalledProcessError:
+                # 3-dot failed (no merge-base) — fallback to 2-dot
+                logger.warning("diff_output_merge_base_fallback", target=target)
+                result = subprocess.run(
+                    [self.git_cmd, "diff", f"{target}..HEAD"],
+                    cwd=str(self.working_dir),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                diff_output = result.stdout
 
             # Also include unstaged/staged changes vs HEAD
             result_dirty = subprocess.run(
