@@ -133,11 +133,14 @@ llm:
 ### 4. 🛡️ Core Validation Frames (Built-in)
 Warden ships with **13+ validation frames**, including these core frames:
 1.  **SecurityFrame:** Detects vulnerabilities (SQLi, Secrets, XSS) with **multi-language taint analysis**.
+    - **10 built-in checks:** SQL injection, XSS, secrets, hardcoded passwords, HTTP security, CSRF, weak crypto, JWT misconfig, phantom packages, deprecated APIs
+    - **Phantom Package Detection:** Verifies imports against PyPI/npm registries — catches AI-hallucinated packages that don't exist (supply chain risk)
+    - **Stale API Detection:** 16 deprecated API patterns across Python and JavaScript (e.g., `hashlib.md5`, `new Buffer()`, `yaml.load` without SafeLoader)
 2.  **ResilienceFrame:** Validates error handling, retry, and circuit-breaker patterns.
 3.  **ArchitecturalFrame:** Enforces project structure and clean code references.
 4.  **SpecFrame (API Contract):** Extracts and compares API contracts (Consumer vs Provider).
     - **Why SpecFrame?** Unit tests only prove that components work *internally*. SpecFrame is the only mechanism that audits both sides simultaneously to detect "Invisible Drift" (e.g., when the Frontend and Backend start speaking different languages). It automatically identifies what is missing or incorrect in the Consumer/Provider pair.
-5.  **AntiPatternFrame:** Detects code smells, god classes, and bad practices.
+5.  **AntiPatternFrame:** Detects code smells, god classes, bad practices, and **code duplication** (Jaccard similarity matching for near-identical functions).
 6.  **OrphanFrame:** Detects dead code and unreferenced assets.
 
 #### 🔍 Source-to-Sink Taint Analysis (Shared Service)
@@ -531,12 +534,58 @@ Warden outputs **SARIF 2.1.0** — the same format used by CodeQL, Semgrep, and 
 
 ### CI/CD Setup (GitHub Actions)
 
-Add this to your existing workflow:
+**Simplest — 3 lines with the official Action:**
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: alperduzgun/warden-core@v1
+```
+
+This runs a standard scan, posts a PR comment with severity breakdown and findings, and uploads SARIF to GitHub Security tab.
+
+**Standard — with quality gate and PR comment:**
+
+```yaml
+name: Warden Security Scan
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+jobs:
+  warden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: alperduzgun/warden-core@v1
+        with:
+          level: standard
+          fail-on-severity: high
+          post-comment: "true"
+```
+
+The PR comment updates on each push (idempotent `<!-- warden-scan-report -->` marker):
+
+```
+## Warden Security Report
+**Score: 8.5 (A)** — Passed
+
+| Severity | Count |
+|----------|-------|
+| 🔴 Critical | 0 |
+| 🟠 High | 2 |
+| 🟡 Medium | 5 |
+```
+
+**Manual pip install (full control):**
 
 ```yaml
     - name: Run Warden Scan
       env:
-        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}  # or any supported provider
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         WARDEN_LLM_PROVIDER: "groq"
       run: |
         pip install warden-core
@@ -550,7 +599,9 @@ Add this to your existing workflow:
         category: warden-security
 ```
 
-That's it. After the first run, navigate to **Security > Code Scanning** in your repository — Warden will appear as a tool with all findings listed.
+See [CI/CD Integration Guide](docs/ci-cd-guide.md) for GitLab CI, diff-only scanning, nightly audits, and more.
+
+After the first run, navigate to **Security > Code Scanning** in your repository — Warden will appear as a tool with all findings listed.
 
 ### How It Looks
 
@@ -734,6 +785,21 @@ Note: Core will always remain under an OSI‑approved license. Cloud ships as a 
 
 Note: **Warden Cloud** (enterprise features like SSO/RBAC, centralized policy, multi‑repo management, etc.) is a separate
 commercial product and is licensed independently of this repository. Warden Core will remain open source.
+
+---
+
+## 🧪 Verification Suite
+
+Warden ships with a built-in verification suite that validates the scan pipeline against known-vulnerable corpus files:
+
+```bash
+python verify/verify.py                    # Full suite (54 checks, ~8s)
+python verify/verify.py --no-llm           # Deterministic only (45 checks, ~4s)
+python verify/verify.py --phase taint      # Taint analysis only
+python verify/verify.py --frame security   # SecurityFrame only
+```
+
+The corpus includes 10 files (SQL injection, XSS, command injection, secrets, weak crypto, deserialization, prototype pollution, and 2 clean files for false positive testing). Each file has phase-by-phase expected results in `verify/expected.yaml`.
 
 ---
 
