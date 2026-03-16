@@ -625,6 +625,9 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         # If provider was env-var-overridden, config.yaml models belong to the old provider.
         if "smart_model" in config_override and not env_provider:
             config.smart_model = config_override["smart_model"]
+        elif "model" in config_override and "smart_model" not in config_override and not env_provider:
+            # Alias: llm.model → smart_model (common user expectation)
+            config.smart_model = config_override["model"]
 
         if "fast_model" in config_override and not env_provider:
             config.fast_model = config_override["fast_model"]
