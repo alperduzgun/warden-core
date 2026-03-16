@@ -63,15 +63,13 @@ def init_command(
     console.print("[bold blue]🛡️  Initializing Warden (Smart Mode)...[/bold blue]")
 
     warden_dir = Path(".warden")
-    is_fresh_init = not warden_dir.exists()
     warden_dir.mkdir(parents=True, exist_ok=True)
 
     # Mark incomplete — if init crashes, next run can detect and warn
     incomplete_marker = warden_dir / ".incomplete"
-    if is_fresh_init:
-        incomplete_marker.touch()
-    elif incomplete_marker.exists():
+    if incomplete_marker.exists():
         console.print("[yellow]⚠ Previous init was incomplete. Re-running...[/yellow]")
+    incomplete_marker.touch()  # Always mark, even re-init
 
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
 
@@ -132,7 +130,9 @@ def init_command(
         grammars=grammars,
     )
 
-    # Init completed successfully — remove incomplete marker
-    incomplete_marker = warden_dir / ".incomplete"
-    if incomplete_marker.exists():
+    # Init completed (with possible warnings) — remove marker
+    # Partial completion with warnings is still considered complete.
+    try:
         incomplete_marker.unlink(missing_ok=True)
+    except OSError:
+        pass  # Best effort cleanup
