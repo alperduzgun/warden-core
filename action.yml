@@ -107,6 +107,10 @@ runs:
 
         if [ "${INPUT_DIFF_MODE}" = "true" ]; then
           ARGS="${ARGS} --diff"
+          # Use PR base branch when available (otherwise warden defaults to main)
+          if [ -n "${GITHUB_BASE_REF}" ]; then
+            ARGS="${ARGS} --base ${GITHUB_BASE_REF}"
+          fi
         fi
 
         if [ -n "${INPUT_EXTRA_ARGS}" ]; then
