@@ -31,6 +31,10 @@ inputs:
     description: "Python version to use"
     required: false
     default: "3.11"
+  diff-mode:
+    description: "Scan only changed files in this PR (faster, recommended for PR gates)"
+    required: false
+    default: "false"
   extra-args:
     description: "Additional arguments passed to warden scan"
     required: false
@@ -90,6 +94,7 @@ runs:
         INPUT_FORMAT: ${{ inputs.format }}
         INPUT_OUTPUT_FILE: ${{ inputs.output-file }}
         INPUT_QUICK_START: ${{ inputs.quick-start }}
+        INPUT_DIFF_MODE: ${{ inputs.diff-mode }}
         INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
       run: |
         ARGS="${INPUT_SCAN_PATH} --format ${INPUT_FORMAT} --output ${INPUT_OUTPUT_FILE}"
@@ -98,6 +103,14 @@ runs:
           ARGS="${ARGS} --quick-start"
         else
           ARGS="${ARGS} --level ${INPUT_LEVEL}"
+        fi
+
+        if [ "${INPUT_DIFF_MODE}" = "true" ]; then
+          ARGS="${ARGS} --diff"
+          # Use PR base branch when available (otherwise warden defaults to main)
+          if [ -n "${GITHUB_BASE_REF}" ]; then
+            ARGS="${ARGS} --base ${GITHUB_BASE_REF}"
+          fi
         fi
 
         if [ -n "${INPUT_EXTRA_ARGS}" ]; then
