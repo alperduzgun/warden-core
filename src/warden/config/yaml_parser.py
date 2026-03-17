@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import ValidationError as PydanticValidationError
+from pydantic import ValidationError
 
 from warden.config.domain.models import (
     PipelineConfig,
@@ -144,8 +144,8 @@ def parse_simple_format(data: dict[str, Any]) -> PipelineConfig:
             "parallel": settings_data.get("parallel", False),
             "enable_issue_validation": settings_data.get("enable_issue_validation", True),
         })
-    except PydanticValidationError as e:
-        raise YAMLParseError(f"Invalid pipeline settings: {e}") from e
+    except ValidationError as e:
+        raise YAMLParseError(f"Invalid pipeline settings: {e}")
 
     # Generate nodes
     nodes: list[PipelineNode] = []
@@ -276,8 +276,8 @@ def parse_full_format(data: dict[str, Any]) -> PipelineConfig:
             "parallel": settings_data.get("parallel", False),
             "enable_issue_validation": settings_data.get("enable_issue_validation", True),
         })
-    except PydanticValidationError as e:
-        raise YAMLParseError(f"Invalid pipeline settings: {e}") from e
+    except ValidationError as e:
+        raise YAMLParseError(f"Invalid pipeline settings: {e}")
 
     return PipelineConfig(
         id=data["id"],
