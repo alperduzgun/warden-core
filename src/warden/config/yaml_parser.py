@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError as PydanticValidationError
 
 from warden.config.domain.models import (
     PipelineConfig,
@@ -136,12 +137,15 @@ def parse_simple_format(data: dict[str, Any]) -> PipelineConfig:
 
     # Parse settings
     settings_data = data.get("settings", {})
-    settings = PipelineSettings.model_validate({
-        "fail_fast": settings_data.get("fail_fast", True),
-        "timeout": settings_data.get("timeout"),
-        "parallel": settings_data.get("parallel", False),
-        "enable_issue_validation": settings_data.get("enable_issue_validation", True),
-    })
+    try:
+        settings = PipelineSettings.model_validate({
+            "fail_fast": settings_data.get("fail_fast", True),
+            "timeout": settings_data.get("timeout"),
+            "parallel": settings_data.get("parallel", False),
+            "enable_issue_validation": settings_data.get("enable_issue_validation", True),
+        })
+    except PydanticValidationError as e:
+        raise YAMLParseError(f"Invalid pipeline settings: {e}") from e
 
     # Generate nodes
     nodes: list[PipelineNode] = []
@@ -265,12 +269,15 @@ def parse_full_format(data: dict[str, Any]) -> PipelineConfig:
 
     # Parse settings
     settings_data = data.get("settings", {})
-    settings = PipelineSettings.model_validate({
-        "fail_fast": settings_data.get("fail_fast", True),
-        "timeout": settings_data.get("timeout"),
-        "parallel": settings_data.get("parallel", False),
-        "enable_issue_validation": settings_data.get("enable_issue_validation", True),
-    })
+    try:
+        settings = PipelineSettings.model_validate({
+            "fail_fast": settings_data.get("fail_fast", True),
+            "timeout": settings_data.get("timeout"),
+            "parallel": settings_data.get("parallel", False),
+            "enable_issue_validation": settings_data.get("enable_issue_validation", True),
+        })
+    except PydanticValidationError as e:
+        raise YAMLParseError(f"Invalid pipeline settings: {e}") from e
 
     return PipelineConfig(
         id=data["id"],
