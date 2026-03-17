@@ -1,4 +1,3 @@
-import logging
 import os
 import shutil
 import sys
@@ -16,10 +15,11 @@ from warden.cli.commands.init_steps import (
     run_post_setup,
     select_mode,
 )
+from warden.shared.infrastructure.logging import get_logger
 
 from rich.console import Console
 
-_logger = logging.getLogger(__name__)
+_logger = get_logger(__name__)
 
 console = Console()
 
@@ -68,15 +68,16 @@ def init_command(
 
     warden_dir = Path(".warden")
     fresh_init = not warden_dir.exists()
-    warden_dir.mkdir(parents=True, exist_ok=True)
-
-    # Mark incomplete — if init crashes, next run can detect and warn
-    incomplete_marker = warden_dir / ".incomplete"
-    if incomplete_marker.exists():
-        console.print("[yellow]⚠ Previous init was incomplete. Re-running...[/yellow]")
-    incomplete_marker.touch()  # Always mark, even re-init
 
     try:
+        warden_dir.mkdir(parents=True, exist_ok=True)
+
+        # Mark incomplete — if init crashes, next run can detect and warn
+        incomplete_marker = warden_dir / ".incomplete"
+        if incomplete_marker.exists():
+            console.print("[yellow]⚠ Previous init was incomplete. Re-running...[/yellow]")
+        incomplete_marker.touch()  # Always mark, even re-init
+
         _run_init_steps(
             warden_dir=warden_dir,
             force=force,
@@ -91,17 +92,17 @@ def init_command(
         )
     except KeyboardInterrupt:
         console.print("\n[yellow]Init cancelled by user.[/yellow]")
-        _rollback_on_failure(warden_dir, fresh_init, incomplete_marker)
+        _rollback_on_failure(warden_dir, fresh_init)
         raise typer.Exit(130)
     except Exception as exc:
-        _logger.error("init failed: %s", exc, exc_info=True)
+        _logger.error("init_failed", error=str(exc), exc_info=True)
         console.print(f"\n[red]❌ Init failed: {exc}[/red]")
-        _rollback_on_failure(warden_dir, fresh_init, incomplete_marker)
+        _rollback_on_failure(warden_dir, fresh_init)
         raise typer.Exit(1)
 
     # Init completed (with possible warnings) — remove marker
     try:
-        incomplete_marker.unlink(missing_ok=True)
+        (warden_dir / ".incomplete").unlink(missing_ok=True)
     except OSError:
         pass
 
@@ -109,7 +110,6 @@ def init_command(
 def _rollback_on_failure(
     warden_dir: Path,
     fresh_init: bool,
-    incomplete_marker: Path,
 ) -> None:
     """Clean up .warden/ after a failed init.
 
