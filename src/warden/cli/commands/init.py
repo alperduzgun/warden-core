@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -14,8 +15,11 @@ from warden.cli.commands.init_steps import (
     run_post_setup,
     select_mode,
 )
+from warden.shared.infrastructure.logging import get_logger
 
 from rich.console import Console
+
+_logger = get_logger(__name__)
 
 console = Console()
 
@@ -63,14 +67,83 @@ def init_command(
     console.print("[bold blue]🛡️  Initializing Warden (Smart Mode)...[/bold blue]")
 
     warden_dir = Path(".warden")
-    warden_dir.mkdir(parents=True, exist_ok=True)
+    fresh_init = not warden_dir.exists()
 
-    # Mark incomplete — if init crashes, next run can detect and warn
-    incomplete_marker = warden_dir / ".incomplete"
-    if incomplete_marker.exists():
-        console.print("[yellow]⚠ Previous init was incomplete. Re-running...[/yellow]")
-    incomplete_marker.touch()  # Always mark, even re-init
+    try:
+        warden_dir.mkdir(parents=True, exist_ok=True)
 
+        # Mark incomplete — if init crashes, next run can detect and warn
+        incomplete_marker = warden_dir / ".incomplete"
+        if incomplete_marker.exists():
+            console.print("[yellow]⚠ Previous init was incomplete. Re-running...[/yellow]")
+        incomplete_marker.touch()  # Always mark, even re-init
+
+        _run_init_steps(
+            warden_dir=warden_dir,
+            force=force,
+            mode=mode,
+            ci=ci,
+            skip_mcp=skip_mcp,
+            agent=agent,
+            baseline=baseline,
+            intel=intel,
+            grammars=grammars,
+            provider=provider,
+        )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Init cancelled by user.[/yellow]")
+        _rollback_on_failure(warden_dir, fresh_init)
+        raise typer.Exit(130)
+    except Exception as exc:
+        _logger.error("init_failed", error=str(exc), exc_info=True)
+        console.print(f"\n[red]❌ Init failed: {exc}[/red]")
+        _rollback_on_failure(warden_dir, fresh_init)
+        raise typer.Exit(1)
+
+    # Init completed (with possible warnings) — remove marker
+    try:
+        (warden_dir / ".incomplete").unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _rollback_on_failure(
+    warden_dir: Path,
+    fresh_init: bool,
+) -> None:
+    """Clean up .warden/ after a failed init.
+
+    - Fresh init (dir didn't exist before): remove entirely.
+    - Re-init (dir pre-existed): leave dir but keep .incomplete marker.
+    """
+    if fresh_init:
+        try:
+            shutil.rmtree(warden_dir)
+            console.print("[dim]Rolled back .warden/ directory.[/dim]")
+        except OSError as rm_err:
+            _logger.warning("rollback failed: %s", rm_err)
+            console.print(f"[dim]Could not clean up .warden/: {rm_err}[/dim]")
+    else:
+        # Keep the marker so next init detects the broken state
+        console.print(
+            "[dim]Kept .warden/.incomplete marker — re-run 'warden init' to retry.[/dim]"
+        )
+
+
+def _run_init_steps(
+    *,
+    warden_dir: Path,
+    force: bool,
+    mode: str,
+    ci: bool,
+    skip_mcp: bool,
+    agent: bool,
+    baseline: bool,
+    intel: bool,
+    grammars: bool,
+    provider: str | None,
+) -> None:
+    """Execute all init steps. Raises on failure — caller handles cleanup."""
     is_interactive = sys.stdin.isatty() and os.environ.get("WARDEN_NON_INTERACTIVE") != "true"
 
     # --- Step 1: Detect Project ---
@@ -129,10 +202,3 @@ def init_command(
         is_interactive=is_interactive,
         grammars=grammars,
     )
-
-    # Init completed (with possible warnings) — remove marker
-    # Partial completion with warnings is still considered complete.
-    try:
-        incomplete_marker.unlink(missing_ok=True)
-    except OSError:
-        pass  # Best effort cleanup
