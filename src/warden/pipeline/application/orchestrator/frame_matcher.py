@@ -272,6 +272,23 @@ class FrameMatcher:
             # STEP 3: Merge AI selection + User preferences
             final_frames = ai_frames + user_enabled_frames
 
+            # STEP 3.5: Filter by config.yaml `frames:` allowlist
+            # self.frames contains only the frames listed in config.yaml `frames:` key.
+            # If the user defined an explicit list, restrict execution to that set.
+            if self.frames:
+                config_frame_ids = {f.frame_id for f in self.frames}
+                before_count = len(final_frames)
+                final_frames = [f for f in final_frames if f.frame_id in config_frame_ids]
+                config_filtered = before_count - len(final_frames)
+                if config_filtered > 0:
+                    logger.info(
+                        "config_frames_filter_applied",
+                        before=before_count,
+                        after=len(final_frames),
+                        filtered=config_filtered,
+                        config_allowlist=sorted(config_frame_ids),
+                    )
+
             # Log comprehensive summary
             logger.info(
                 "final_frame_selection",
