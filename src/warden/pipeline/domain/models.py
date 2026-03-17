@@ -85,7 +85,11 @@ class PipelineConfig(BaseDomainModel):
     enable_suppression: bool = True  # Apply suppression filtering after validation
     enable_issue_validation: bool = True  # Apply confidence-based false positive detection
 
+    # Filtering
+    min_severity: str = "low"  # Minimum severity threshold for reporting (low/medium/high/critical)
+
     # Phase-specific configurations
+    classification_config: dict[str, Any] | None = None  # Classification phase configuration
     discovery_config: dict[str, Any] | None = None  # Discovery configuration options
 
     # PRE-ANALYSIS configuration (NEW!)
