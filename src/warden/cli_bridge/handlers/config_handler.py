@@ -91,10 +91,16 @@ class ConfigHandler(BaseHandler):
             frames = self._select_frames(frame_names, frame_map, available_frames)
             self.active_config_name = config_data.get("name", "project-config")
 
-        settings = config_data.get("settings", {})
+        settings = config_data.get("settings") or {}
+        if not isinstance(settings, dict):
+            logger.warning("settings_not_a_dict", value=type(settings).__name__)
+            settings = {}
 
         # Merge useful advanced keys as fallbacks (advanced section is semi-deprecated)
-        advanced = config_data.get("advanced", {})
+        advanced = config_data.get("advanced") or {}
+        if not isinstance(advanced, dict):
+            logger.warning("advanced_not_a_dict", value=type(advanced).__name__)
+            advanced = {}
         if advanced:
             if "max_workers" in advanced and "parallel_limit" not in settings:
                 settings["parallel_limit"] = advanced["max_workers"]
