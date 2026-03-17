@@ -337,9 +337,9 @@ def scan_command(
                             added = file_diff.get_all_added_lines()
                             if added:
                                 diff_changed_lines[file_diff.file_path] = added
-                                # Map old path too so findings referencing pre-rename path aren't dropped
-                                if file_diff.old_path and file_diff.old_path != file_diff.file_path:
-                                    diff_changed_lines[file_diff.old_path] = added
+                            # Map old path for renames regardless of added lines
+                            if file_diff.old_path and file_diff.old_path != file_diff.file_path:
+                                diff_changed_lines[file_diff.old_path] = added or set()
                         # Ensure files with only deletions are in the map (empty set = drop all findings)
                         for f in changed_files:
                             rel = str(Path(f).resolve().relative_to(Path.cwd().resolve())) if Path(f).is_absolute() else f
