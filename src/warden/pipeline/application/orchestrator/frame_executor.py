@@ -103,7 +103,8 @@ class FrameExecutor:
             )
 
             selected_frames = getattr(context, "selected_frames", None)
-            frames_to_execute = self.frame_matcher.get_frames_to_execute(selected_frames)
+            cli_override = getattr(context, "cli_frame_override", False)
+            frames_to_execute = self.frame_matcher.get_frames_to_execute(selected_frames, cli_override=cli_override)
 
             # Emit phase_started with accurate total (frames * filtered_files + rules files)
             rules_file_count = len(filtered_files) if self.rule_validator and self.rule_validator.rules else 0

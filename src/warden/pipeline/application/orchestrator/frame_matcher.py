@@ -205,6 +205,7 @@ class FrameMatcher:
     def get_frames_to_execute(
         self,
         selected_frames: list[str] | None = None,
+        cli_override: bool = False,
     ) -> list[ValidationFrame]:
         """
         Get frames to execute with user preference enforcement.
@@ -251,23 +252,25 @@ class FrameMatcher:
                     logger.warning(f"Could not match frame: {selected_name}")
 
             # STEP 2: Collect user-enforced frames (explicit enabled: true)
+            # Skip when CLI --frame override is active (CLI = exact set, no extras)
             user_enabled_frames = []
-            for frame in self.available_frames:
-                # Skip if manually disabled (hard constraint overrides everything)
-                if self.is_manually_disabled(frame):
-                    continue
+            if not cli_override:
+                for frame in self.available_frames:
+                    # Skip if manually disabled (hard constraint overrides everything)
+                    if self.is_manually_disabled(frame):
+                        continue
 
-                # Check if user explicitly enabled this frame
-                if self.is_manually_enabled(frame):
-                    # Only add if NOT already in AI selection
-                    if frame not in ai_frames:
-                        user_enabled_frames.append(frame)
-                        logger.info(
-                            "user_enforced_frame",
-                            frame_id=frame.frame_id,
-                            reason="explicit_user_enable",
-                            ai_selected=False,
-                        )
+                    # Check if user explicitly enabled this frame
+                    if self.is_manually_enabled(frame):
+                        # Only add if NOT already in AI selection
+                        if frame not in ai_frames:
+                            user_enabled_frames.append(frame)
+                            logger.info(
+                                "user_enforced_frame",
+                                frame_id=frame.frame_id,
+                                reason="explicit_user_enable",
+                                ai_selected=False,
+                            )
 
             # STEP 3: Merge AI selection + User preferences
             final_frames = ai_frames + user_enabled_frames
@@ -275,7 +278,8 @@ class FrameMatcher:
             # STEP 3.5: Filter by config.yaml `frames:` allowlist
             # self.frames contains only the frames listed in config.yaml `frames:` key.
             # If the user defined an explicit list, restrict execution to that set.
-            if self.frames:
+            # CLI --frame override bypasses this filter (highest priority).
+            if self.frames and not cli_override:
                 config_frame_ids = {f.frame_id for f in self.frames}
                 before_count = len(final_frames)
                 final_frames = [f for f in final_frames if f.frame_id in config_frame_ids]

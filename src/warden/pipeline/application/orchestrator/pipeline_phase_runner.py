@@ -399,6 +399,7 @@ class PipelinePhaseRunner:
     def _apply_manual_frame_override(self, context: PipelineContext, frames_to_execute: list[str]) -> None:
         """Apply manual frame selection, skipping AI classification."""
         context.selected_frames = frames_to_execute
+        context.cli_frame_override = True
         context.classification_reasoning = "User manually selected frames via CLI"
         logger.info("using_frame_override", selected_frames=frames_to_execute)
 
