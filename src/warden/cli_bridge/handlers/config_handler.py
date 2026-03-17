@@ -92,6 +92,14 @@ class ConfigHandler(BaseHandler):
             self.active_config_name = config_data.get("name", "project-config")
 
         settings = config_data.get("settings", {})
+
+        # Merge useful advanced keys as fallbacks (advanced section is semi-deprecated)
+        advanced = config_data.get("advanced", {})
+        if advanced:
+            if "max_workers" in advanced and "parallel_limit" not in settings:
+                settings["parallel_limit"] = advanced["max_workers"]
+            if "frame_timeout" in advanced and "frame_timeout" not in settings:
+                settings["frame_timeout"] = advanced["frame_timeout"]
         # Load all rules using RulesYAMLLoader
         from warden.rules.domain.models import FrameRules
         from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
