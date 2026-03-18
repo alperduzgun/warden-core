@@ -212,14 +212,9 @@ class ReportGenerator:
         """Determine if the scan execution was successful based on actual state.
 
         executionSuccessful reflects whether the tool ran without crashing,
-        NOT whether LLM was used. LLM-free (basic) scans are successful.
+        NOT whether LLM was used or metrics collected successfully.
         """
-        # Check for LLM metrics error (metrics collection failed — infrastructure issue)
-        llm_metrics = scan_results.get("llmMetrics", {})
-        if isinstance(llm_metrics, dict) and llm_metrics.get("error"):
-            return False
-
-        # Check for frame execution errors (tool crash, not findings)
+        # Only fail on actual frame execution errors (tool crash)
         frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
         for fr in frame_results:
             if fr.get("status") == "error":
