@@ -150,7 +150,7 @@ class StaleAPICheck(ValidationCheck):
             "reason": "Returning traceback to client leaks internal details (CWE-209)",
         },
         {
-            "pattern": r"subprocess\.call\(.*shell\s*=\s*True",
+            "pattern": r"subprocess\.(?:call|run|Popen)\(.*shell\s*=\s*True",
             "replacement": "subprocess.run([cmd, arg], shell=False)",
             "language": "python",
             "severity": "high",

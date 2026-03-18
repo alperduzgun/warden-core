@@ -110,8 +110,8 @@ class TestSarifRemediationFixes:
         finally:
             out_path.unlink(missing_ok=True)
 
-    def test_finding_with_empty_remediation_code_has_no_fixes(self):
-        """A finding with remediation but empty code should not have fixes."""
+    def test_finding_with_empty_remediation_code_has_description_only_fix(self):
+        """A finding with remediation description but empty code gets description-only fix."""
         findings = [
             {
                 "id": "empty-catch",
@@ -140,7 +140,10 @@ class TestSarifRemediationFixes:
             assert len(results) >= 1
 
             result = results[0]
-            assert "fixes" not in result
+            # With description present, fixes should exist but without artifactChanges
+            assert "fixes" in result
+            assert result["fixes"][0]["description"]["text"] == "Log the error or handle it properly"
+            assert "artifactChanges" not in result["fixes"][0]
         finally:
             out_path.unlink(missing_ok=True)
 
