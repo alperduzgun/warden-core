@@ -56,7 +56,10 @@ class PipelineResultBuilder:
         if not base_score or base_score <= 0.0:
             base_score = calculate_base_score(getattr(context, "linter_metrics", None))
 
-        quality_score = calculate_quality_score(findings, base_score)
+        # Score uses ALL findings (pre-baseline) to reflect actual code health.
+        # CI gate uses post-baseline findings (new regressions only).
+        all_findings_for_score = getattr(context, "all_findings_pre_baseline", None) or findings
+        quality_score = calculate_quality_score(all_findings_for_score, base_score)
         context.quality_score_after = quality_score
 
         # Count blocker violations from pre/post custom rules
@@ -93,6 +96,8 @@ class PipelineResultBuilder:
             low_findings=low_findings,
             manual_review_findings=manual_review_count,
             blocker_violations=blocker_violations,
+            baseline_suppressed_count=getattr(context, "baseline_suppressed_count", 0),
+            total_findings_pre_baseline=len(all_findings_for_score),
             findings=[f if isinstance(f, dict) else f.to_dict() for f in findings],
             frame_results=frame_results,
             metadata={

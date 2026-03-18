@@ -218,6 +218,11 @@ class PipelineContext:
     # Each entry: {id, file, title, severity, matched_rule, matched_files, timestamp}
     suppressed_findings: list[dict[str, Any]] = field(default_factory=list)
 
+    # Baseline: pre-filter snapshot for quality scoring
+    all_findings_pre_baseline: list[dict[str, Any]] = field(default_factory=list)
+    baseline_suppressed_count: int = 0
+    baseline_resolved_count: int = 0
+
     # Phase 4: FORTIFICATION Results
     fortifications: list[dict[str, Any]] = field(default_factory=list)
     applied_fixes: list[dict[str, Any]] = field(default_factory=list)

@@ -224,8 +224,10 @@ def _render_text_report(
     )
 
     baseline_info = res.get("baseline_update", {})
-    technical_debt = baseline_info.get("total_debt", total_findings)
-    new_debt_added = baseline_info.get("new_debt", total_findings)
+    baseline_suppressed = res.get("baseline_suppressed_count", 0)
+    total_pre_baseline = res.get("total_findings_pre_baseline", total_findings)
+    technical_debt = baseline_info.get("total_debt", 0)
+    new_debt_added = baseline_info.get("new_debt", 0)
 
     # Fallback: try pipeline summary fields when no findings objects exist
     if total_findings == 0:
@@ -446,13 +448,12 @@ def _render_text_report(
         "Quality issues",
         f"[bold white]{quality_issues}[/]",
     )
-    if technical_debt > 0 or new_debt_added > 0:
-        new_debt_col = "red" if new_debt_added > 0 else "green"
+    if baseline_suppressed > 0 or technical_debt > 0 or new_debt_added > 0:
         stat_table.add_row(
-            "Technical debt",
-            f"[bold white]{technical_debt}[/]",
-            "New debt",
-            f"[bold {new_debt_col}]{'+' if new_debt_added > 0 else ''}{new_debt_added}[/]",
+            "Existing debt",
+            f"[bold yellow]{baseline_suppressed}[/]",
+            "New findings",
+            f"[bold {'red' if total_findings > 0 else 'green'}]{total_findings}[/]",
         )
 
     duration_str = f"{scan_duration:.1f}s" if scan_duration > 0 else "—"
