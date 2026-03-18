@@ -74,9 +74,8 @@ class PipelineResultBuilder:
         frames_skipped = 0
 
         actual_total = frames_passed + frames_failed + frames_skipped
-        planned_total = len(getattr(context, "selected_frames", [])) or len(self.frames)
         executed_count = len(frame_results)
-        total_frames = max(actual_total, planned_total, executed_count)
+        total_frames = max(actual_total, executed_count)
 
         return PipelineResult(
             pipeline_id=context.pipeline_id,
