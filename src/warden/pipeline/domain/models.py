@@ -350,7 +350,8 @@ class PipelineResult(BaseDomainModel):
             logger.warning("llm_metrics_collection_failed", error=str(e))
             data["llmMetrics"] = {"error": "metrics_collection_failed", "detail": str(e)}
 
-        data["qualityScore"] = self.quality_score
+        rounded_score = round(self.quality_score, 1)
+        data["qualityScore"] = rounded_score
         data["artifacts"] = self.artifacts
 
         # IMPORTANT: Add snake_case keys for CLI compatibility (types.ts expects snake_case)
@@ -365,7 +366,7 @@ class PipelineResult(BaseDomainModel):
         data["medium_findings"] = self.medium_findings
         data["low_findings"] = self.low_findings
         data["manual_review_findings"] = self.manual_review_findings
-        data["quality_score"] = self.quality_score
+        data["quality_score"] = rounded_score
 
         return data
 
