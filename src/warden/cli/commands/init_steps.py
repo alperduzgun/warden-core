@@ -252,13 +252,16 @@ frame_rules:
       - no-secrets
     on_fail: stop
 
+  resilience:
+    on_fail: continue
+
   orphan:
     on_fail: continue
 
-  architecture:
+  fuzz:
     on_fail: continue
 
-  resilience:
+  property:
     on_fail: continue
 """
     root_yaml_path.write_text(content, encoding="utf-8")
