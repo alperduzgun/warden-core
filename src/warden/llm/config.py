@@ -37,7 +37,7 @@ class ProviderConfig:
             List of validation errors (empty if valid)
         """
         errors = []
-        local_providers = {"ollama", "claude_code", "codex"}
+        local_providers = {"ollama", "claude_code", "codex", "qwencode"}
 
         if not self.api_key:
             if provider_name.lower() not in local_providers:
@@ -530,6 +530,13 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.codex.enabled = True
         config.codex.endpoint = "cli"
         configured_providers.append(LlmProvider.CODEX)
+
+    # Configure Qwen Code (Local CLI) - auto-detect
+    import shutil as _shutil
+    if _shutil.which("qwen"):
+        config.qwencode.enabled = True
+        config.qwencode.endpoint = "cli"
+        configured_providers.append(LlmProvider.QWENCODE)
 
     # --- AUTO-PILOT LOGIC ---
     # Only runs when NO explicit provider was configured (no config.yaml provider: / no env var).

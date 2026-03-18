@@ -54,7 +54,7 @@ def _ensure_providers_registered() -> None:
         provider_modules = [
             "warden.llm.providers.anthropic",
             "warden.llm.providers.deepseek",
-            "warden.llm.providers.qwencode",
+            "warden.llm.providers.qwen_cli",
             "warden.llm.providers.openai",
             "warden.llm.providers.groq",
             "warden.llm.providers.ollama",
@@ -92,7 +92,7 @@ def create_provider_client(provider: LlmProvider, config: ProviderConfig) -> ILl
         ValueError: If provider is not configured, enabled, or registered
     """
     # Validate configuration before creating client
-    local_providers = {LlmProvider.OLLAMA, LlmProvider.CLAUDE_CODE, LlmProvider.CODEX}
+    local_providers = {LlmProvider.OLLAMA, LlmProvider.CLAUDE_CODE, LlmProvider.CODEX, LlmProvider.QWENCODE}
     if provider not in local_providers:
         if not config.enabled or not config.api_key:
             raise ValueError(f"Provider {provider.value} is not configured or enabled")
