@@ -17,6 +17,11 @@ from warden.shared.utils.retry_utils import async_retry
 
 logger = get_logger(__name__)
 
+# Deterministic detection sources that should NEVER be suppressed by LLM verification.
+# These are produced by pattern matching, AST analysis, taint tracing, or Rust engine —
+# their output is factual, not probabilistic.
+_DETERMINISTIC_SOURCES = frozenset({"regex", "ast", "taint", "rust_engine"})
+
 
 class FindingVerificationService:
     """
@@ -104,6 +109,20 @@ Return ONLY a JSON object:
                 self._set(finding, "confidence", 1.0)
                 self._set(finding, "is_true_positive", True)
                 self._set(finding, "verification_source", "linter_deterministic")
+                verified_findings.append(finding)
+                continue
+
+            # Exempt deterministic findings from LLM verification.
+            # Regex, AST, taint, and rust_engine findings are produced by
+            # deterministic analyzers — LLM should not suppress them.
+            det_source = (
+                self._get(finding, "detection_source")
+                or self._get(finding, "detectionSource")
+            )
+            if det_source in _DETERMINISTIC_SOURCES:
+                self._set(finding, "confidence", 1.0)
+                self._set(finding, "is_true_positive", True)
+                self._set(finding, "verification_source", "deterministic_exempt")
                 verified_findings.append(finding)
                 continue
 
@@ -279,9 +298,11 @@ Return ONLY a JSON object:
             if any(t in code for t in ["Optional", "List", "Dict", "Union", "Any"]):
                 return True
 
-        # 3. Import check
+        # 3. Import check — but NOT for phantom-package or secrets detection
+        finding_id = (self._get(finding, "id") or "").lower()
         if code.startswith(("import ", "from ", "require(")):
-            return True
+            if "phantom" not in finding_id and "secret" not in finding_id:
+                return True
 
         # 4. Dummy/Example data in Test files
         location = (self._get(finding, "location") or "").lower()
