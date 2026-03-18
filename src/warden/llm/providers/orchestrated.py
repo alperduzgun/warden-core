@@ -293,13 +293,15 @@ class OrchestratedLlmClient(ILlmClient):
                     )
 
             # If we are here, all fast clients failed, timed out, or were circuit-broken
-            logger.warning(
-                "all_fast_tier_providers_failed_falling_back_to_smart",
-                completed=len(done) if eligible_clients else 0,
-                timeout=len(pending) if eligible_clients else 0,
-                total=len(self.fast_clients),
-                circuit_open=len(skipped_providers),
-            )
+            if not getattr(self, "_fast_fallback_logged", False):
+                logger.warning(
+                    "all_fast_tier_providers_failed_falling_back_to_smart",
+                    completed=len(done) if eligible_clients else 0,
+                    timeout=len(pending) if eligible_clients else 0,
+                    total=len(self.fast_clients),
+                    circuit_open=len(skipped_providers),
+                )
+                self._fast_fallback_logged = True
 
             # Track fallback metric
             fast_timeout_val = min(request.timeout_seconds / 3, 30.0) if eligible_clients else 0
@@ -316,11 +318,13 @@ class OrchestratedLlmClient(ILlmClient):
         # Check smart tier circuit breaker -- but since it is the last resort,
         # we only log a warning and still attempt (better to try than to give up)
         if cb.is_open(self.smart_client.provider):
-            logger.warning(
-                "smart_tier_circuit_open_but_attempting",
-                provider=self.smart_client.provider.value,
-                message="Smart tier circuit is open but attempting as last resort",
-            )
+            if not getattr(self, "_circuit_open_logged", False):
+                logger.warning(
+                    "smart_tier_circuit_open_but_attempting",
+                    provider=self.smart_client.provider.value,
+                    message="Smart tier circuit is open but attempting as last resort",
+                )
+                self._circuit_open_logged = True
 
         target_model = request.model or self.smart_model
 
@@ -367,11 +371,13 @@ class OrchestratedLlmClient(ILlmClient):
             from warden.shared.infrastructure.exceptions import ExternalServiceError
 
             if self.fast_clients:
-                logger.warning(
-                    "smart_tier_failed_trying_fallback",
-                    error=response.error_message,
-                    fast_clients_available=len(self.fast_clients),
-                )
+                if not getattr(self, "_smart_fallback_logged", False):
+                    logger.warning(
+                        "smart_tier_failed_trying_fallback",
+                        error=response.error_message,
+                        fast_clients_available=len(self.fast_clients),
+                    )
+                    self._smart_fallback_logged = True
                 # Filter circuit-open providers (circuit breaker replaces per-client is_available_async check)
                 eligible_fallback = [fc for fc in self.fast_clients if not cb.is_open(fc.provider)]
 
