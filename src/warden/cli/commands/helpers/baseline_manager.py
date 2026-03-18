@@ -8,6 +8,7 @@ Now supports module-based baseline structure for CI optimization.
 
 import hashlib
 import json
+import re
 import shlex
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -19,24 +20,42 @@ from warden.shared.utils.finding_utils import get_finding_attribute
 
 logger = get_logger(__name__)
 
+# Regex to strip line-number references from messages before fingerprinting.
+# Covers: "(line 19)", "at line 11", " (line 20)"
+_LINE_REF_RE = re.compile(r"\s*\(line \d+\)|\bat line \d+\b")
+
+# Extract taint structural parts for collision-safe fingerprinting.
+# Matches: "Unsanitized data flow: SOURCE (line N) -> SINK [TYPE] (line N)"
+_TAINT_MSG_RE = re.compile(
+    r"Unsanitized data flow:\s*(?P<src>\S+)\s+\(line \d+\)\s*->\s*(?P<sink>\S+)\s+\[(?P<type>[^\]]+)\]"
+)
+
 
 def _compute_finding_fingerprint(finding: dict[str, Any]) -> str:
-    """Canonical fingerprint for a finding: sha256(rule_id:file_path:message).
+    """Canonical fingerprint: sha256(rule_id:file_path:stable_message).
 
-    Deliberately excludes code_snippet so the fingerprint is stable across
-    minor refactors that change the snippet but not the finding itself (#151).
-    Both call-sites in BaselineManager must use this function to ensure a
-    finding always maps to the same hash regardless of which code path ran.
+    Line-number references are stripped so fingerprints survive code shifts.
+    Taint findings use structural source→sink keys to avoid same-file collision.
+    Excludes code_snippet for stability across minor refactors (#151).
     """
     rule = finding.get("id") or finding.get("rule_id") or finding.get("ruleId", "unknown")
-    # Prefer explicit path fields; fall back to "file" part of "file:line" location
     path = finding.get("file_path") or finding.get("path") or finding.get("file")
     if not path:
         location = finding.get("location", "")
         path = location.split(":")[0] if location else ""
     path = path or "unknown"
+
     msg = finding.get("message", "")
-    return hashlib.sha256(f"{rule}:{path}:{msg}".encode()).hexdigest()
+
+    # Taint findings: extract source→sink structure (collision-safe, line-free)
+    m = _TAINT_MSG_RE.search(msg)
+    if m:
+        stable_msg = f"taint:{m.group('src')}->{m.group('sink')}[{m.group('type')}]"
+    else:
+        # All other findings: strip line references, keep everything else
+        stable_msg = _LINE_REF_RE.sub("", msg).strip()
+
+    return hashlib.sha256(f"{rule}:{path}:{stable_msg}".encode()).hexdigest()
 
 
 class ModuleBaseline:
