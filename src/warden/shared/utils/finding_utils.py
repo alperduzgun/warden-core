@@ -48,7 +48,11 @@ def set_finding_attribute(finding: Any, attr: str, value: Any) -> None:
         pass
 
 
+_KNOWN_SEVERITIES = frozenset({"critical", "high", "medium", "low"})
+
+
 def get_finding_severity(finding: Any) -> str:
-    """Safely gets normalized severity."""
+    """Safely gets normalized severity. Unknown values map to 'low'."""
     sev = get_finding_attribute(finding, "severity", "medium")
-    return str(sev).lower() if sev else "medium"
+    normalized = str(sev).lower() if sev else "medium"
+    return normalized if normalized in _KNOWN_SEVERITIES else "low"
