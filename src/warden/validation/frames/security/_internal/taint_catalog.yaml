@@ -196,6 +196,27 @@ sinks:
   logger.warn: LOG-output
   logger.debug: LOG-output
 
+  # Deserialization sinks (CWE-502) — Python
+  pickle.loads: DESERIALIZATION
+  pickle.load: DESERIALIZATION
+  pickle.Unpickler: DESERIALIZATION
+  yaml.load: DESERIALIZATION
+  yaml.unsafe_load: DESERIALIZATION
+  marshal.loads: DESERIALIZATION
+
+  # HTTP response sinks (CWE-209) — Python
+  jsonify: HTTP-response
+  flask.jsonify: HTTP-response
+  make_response: HTTP-response
+  Response: HTTP-response
+
+  # Cache sinks (CWE-525) — Python
+  redis_client.set: CACHE-write
+  redis_client.setex: CACHE-write
+  redis_client.get: CACHE-read
+  cache.set: CACHE-write
+  cache.get: CACHE-read
+
 
 # ── Sanitizers (functions that neutralize taint for a given sink type) ──────
 
@@ -248,6 +269,14 @@ sanitizers:
     - scrub
     - anonymize
     - re.sub
+  DESERIALIZATION:
+    - json.loads
+    - ast.literal_eval
+  HTTP-response:
+    - redact
+    - sanitize_output
+  CACHE-write: []
+  CACHE-read: []
 
 # ── JS DOM property-assignment sinks ────────────────────────────────────────
 
