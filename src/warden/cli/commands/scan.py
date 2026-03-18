@@ -195,6 +195,7 @@ def scan_command(
     ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
     diff: bool = typer.Option(False, "--diff", help="Scan only files changed relative to base branch"),
     base: str = typer.Option("main", "--base", help="Base branch for diff comparison (default: main)"),
+    fail_on_severity: str = typer.Option("critical", "--fail-on-severity", help="Fail if findings at this severity or above: critical, high, medium, low, none"),
     no_update_baseline: bool = typer.Option(False, "--no-update-baseline", help="Skip baseline update after scan"),
     cost_report: bool = typer.Option(False, "--cost-report", help="Display per-frame LLM cost breakdown"),
     auto_fix: bool = typer.Option(False, "--auto-fix", help="Apply auto-fixable fortification fixes"),
@@ -439,6 +440,7 @@ def scan_command(
                 contract_mode=contract_mode,
                 resume=resume,
                 diff_changed_lines=diff_changed_lines,
+                fail_on_severity=fail_on_severity,
             )
         )
 
@@ -483,6 +485,7 @@ def scan_command(
                         contract_mode=contract_mode,
                         resume=resume,
                         diff_changed_lines=diff_changed_lines,
+                        fail_on_severity=fail_on_severity,
                     )
                 )
                 if exit_code != 0:
@@ -930,6 +933,7 @@ async def _run_scan_async(
     contract_mode: bool = False,
     resume: bool = False,
     diff_changed_lines: dict | None = None,
+    fail_on_severity: str = "critical",
 ) -> int:
     """Async implementation of scan command."""
 
@@ -1162,10 +1166,19 @@ async def _run_scan_async(
             )
             return 2  # Exit code 2: Policy Failure (Blocker rule violated)
 
-        if critical_count > 0:
-            console.print(f"[bold red]❌ Scan failed: {critical_count} critical issues found.[/bold red]")
+        # Severity gate: fail if findings at configured severity or above
+        _sev_threshold = fail_on_severity.lower() if fail_on_severity else "critical"
+        _sev_counts = {
+            "critical": critical_count,
+            "high": critical_count + (final_result_data.get("high_findings", 0) if final_result_data else 0),
+            "medium": critical_count + (final_result_data.get("high_findings", 0) if final_result_data else 0) + (final_result_data.get("medium_findings", 0) if final_result_data else 0),
+            "low": (final_result_data.get("total_findings", 0) if final_result_data else 0),
+        }
+        _gate_count = _sev_counts.get(_sev_threshold, critical_count)
+        if _gate_count > 0 and _sev_threshold != "none":
+            console.print(f"[bold red]❌ Scan failed: {_gate_count} issue(s) at severity '{_sev_threshold}' or above.[/bold red]")
             await _generate_smart_failure_summary(critical_count, frames_failed, final_result_data)
-            return 2  # Exit code 2: Policy Failure (Findings found)
+            return 2  # Exit code 2: Policy Failure
 
         if frames_failed > 0:
             console.print(f"[bold red]❌ Scan failed: {frames_failed} frames failed.[/bold red]")

@@ -231,10 +231,11 @@ class FindingsPostProcessor:
         return self.project_root / ".warden" / "baseline.json"
 
     def apply_baseline(self, context: PipelineContext) -> None:
-        """Filter out existing issues present in baseline."""
+        """Filter out existing issues present in baseline (legacy + module-based)."""
         baseline_path = self._resolve_baseline_path()
+        baseline_dir = self.project_root / ".warden" / "baseline"
 
-        if not baseline_path.exists():
+        if not baseline_path.exists() and not baseline_dir.is_dir():
             return
 
         settings = getattr(self.config, "settings", {})
@@ -242,54 +243,56 @@ class FindingsPostProcessor:
             pass
 
         try:
-            with open(baseline_path) as f:
-                baseline_data = json.load(f)
+            from warden.cli.commands.helpers.baseline_manager import (
+                BaselineManager,
+                _compute_finding_fingerprint,
+            )
 
-            known_issues = set()
-            for frame_res in baseline_data.get("frame_results", []):
-                for finding in frame_res.get("findings", []):
-                    rid = get_finding_attribute(finding, "rule_id")
-                    fpath = get_finding_attribute(finding, "file_path") or get_finding_attribute(finding, "path")
+            known_fingerprints: set[str] = set()
 
-                    if not fpath:
-                        continue
+            # Load from module-based baseline (v2.0) first
+            baseline_dir = self.project_root / ".warden" / "baseline"
+            if baseline_dir.is_dir():
+                mgr = BaselineManager(self.project_root)
+                known_fingerprints = mgr.get_fingerprints()
+                logger.info("baseline_loaded_v2", fingerprints=len(known_fingerprints), source="module-based")
 
-                    rel_path = self._normalize_path(fpath)
+            # Fallback: load from legacy baseline.json
+            if not known_fingerprints and baseline_path.exists():
+                with open(baseline_path) as f:
+                    baseline_data = json.load(f)
+                for frame_res in baseline_data.get("frame_results", baseline_data.get("frameResults", [])):
+                    for finding in frame_res.get("findings", []):
+                        fp = _compute_finding_fingerprint(finding)
+                        if fp:
+                            known_fingerprints.add(fp)
+                logger.info("baseline_loaded_legacy", fingerprints=len(known_fingerprints), source="legacy")
 
-                    if rid:
-                        known_issues.add(f"{rid}:{rel_path}")
-
-            if not known_issues:
+            if not known_fingerprints:
                 return
 
-            logger.info("baseline_loaded", known_issues_count=len(known_issues))
-
-            # Snapshot ALL findings before baseline filtering — quality score uses this
+            # Snapshot ALL findings before filtering — quality score uses this
             context.all_findings_pre_baseline = list(context.findings) if context.findings else []
 
             total_suppressed = 0
 
             for _fid, f_res in context.frame_results.items():
                 result_obj = f_res.get("result")
-                if not result_obj:
-                    continue
-
-                current_findings = result_obj.findings
-                if not current_findings:
+                if not result_obj or not result_obj.findings:
                     continue
 
                 filtered_findings = []
-                suppressed_in_frame = 0
+                for finding in result_obj.findings:
+                    # Build dict for canonical fingerprint
+                    f_dict = finding if isinstance(finding, dict) else {
+                        "id": getattr(finding, "id", getattr(finding, "rule_id", "")),
+                        "file_path": getattr(finding, "file_path", getattr(finding, "path", "")),
+                        "message": getattr(finding, "message", ""),
+                        "location": getattr(finding, "location", ""),
+                    }
+                    fp = _compute_finding_fingerprint(f_dict)
 
-                for finding in current_findings:
-                    rid = getattr(finding, "rule_id", getattr(finding, "check_id", None))
-                    fpath = getattr(finding, "file_path", getattr(finding, "path", str(context.file_path)))
-
-                    rel_path = self._normalize_path(fpath)
-                    key = f"{rid}:{rel_path}"
-
-                    if key in known_issues:
-                        suppressed_in_frame += 1
+                    if fp in known_fingerprints:
                         total_suppressed += 1
                     else:
                         filtered_findings.append(finding)
@@ -323,10 +326,8 @@ class FindingsPostProcessor:
                 if hasattr(context, "validated_issues") and context.validated_issues:
                     before_count = len(context.validated_issues)
                     context.validated_issues = [
-                        vf
-                        for vf in context.validated_issues
-                        if f"{vf.get('rule_id') or vf.get('check_id')}:"
-                        f"{self._normalize_path(vf.get('file_path') or vf.get('path', ''))}" not in known_issues
+                        vf for vf in context.validated_issues
+                        if _compute_finding_fingerprint(vf) not in known_fingerprints
                     ]
                     logger.info(
                         "baseline_validated_issues_synced",

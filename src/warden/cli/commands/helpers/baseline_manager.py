@@ -223,30 +223,47 @@ class BaselineManager:
     def get_fingerprints(self) -> set[str]:
         """
         Returns a set of fingerprints for all findings in the baseline.
-        Fingerprint formation: hash(rule_id + file_path + line_context_hash + message)
-
-        Note: File paths in baseline are relative to project root.
+        Reads from module-based baseline (v2.0) first, falls back to legacy.
         """
+        fingerprints: set[str] = set()
+
+        # Try module-based baseline first (.warden/baseline/*.json)
+        baseline_dir = self.project_root / ".warden" / "baseline"
+        if baseline_dir.is_dir():
+            for module_file in baseline_dir.glob("*.json"):
+                if module_file.name == "_meta.json":
+                    continue
+                try:
+                    module_data = json.load(open(module_file, encoding="utf-8"))
+                    for f in module_data.get("findings", []):
+                        fp = f.get("fingerprint")
+                        if fp:
+                            fingerprints.add(fp)
+                        else:
+                            fingerprints.add(_compute_finding_fingerprint(f))
+                except Exception:
+                    continue
+
+        if fingerprints:
+            return fingerprints
+
+        # Fallback: legacy baseline.json
         data = self.load_baseline()
         if not data:
             return set()
 
         findings = []
-        # Handle structured report with frameResults
         if "frameResults" in data:
             for fr in data["frameResults"]:
                 findings.extend(fr.get("findings", []))
-        # Handle flat list or legacy format
         elif "findings" in data:
             findings = data["findings"]
 
-        fingerprints = set()
         for f in findings:
             fp = f.get("fingerprint")
             if fp:
                 fingerprints.add(fp)
             else:
-                # Dynamic fingerprint generation if missing in baseline
                 fingerprints.add(_compute_finding_fingerprint(f))
 
         return fingerprints
