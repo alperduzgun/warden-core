@@ -31,19 +31,22 @@ def _needs_ollama() -> bool:
                 llm = data.get("llm", {}) or {}
                 provider = (llm.get("provider", "") or "").lower()
 
-                # 2. If primary provider is a cloud service, no Ollama needed
+                # 2. Explicit local LLM flag always requires Ollama
+                use_local = llm.get("use_local_llm", False)
+                if use_local:
+                    return True
+
+                # 3. If primary provider is a cloud service, no Ollama needed
                 if provider in _CLOUD_PROVIDERS:
                     return False
 
-                # 3. Check routing — if smart_tier is cloud, Ollama is optional
+                # 4. Check routing — if smart_tier is cloud, Ollama is optional
                 routing = data.get("routing", {}) or {}
                 smart_tier = (routing.get("smart_tier", "") or "").lower()
                 if smart_tier in _CLOUD_PROVIDERS:
                     return False
 
-                # 4. Explicit local LLM flag or Ollama provider
-                use_local = llm.get("use_local_llm", False)
-                return provider == "ollama" or bool(use_local)
+                return provider == "ollama"
             except Exception:
                 return False
 
