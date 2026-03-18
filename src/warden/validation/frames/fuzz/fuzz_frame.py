@@ -189,7 +189,7 @@ Output must be a valid JSON object with the following structure:
                 if not tp.is_sanitized:
                     findings.append(
                         Finding(
-                            id=f"{self.frame_id}-taint-fuzz-{tp.source.line}",
+                            id=f"{self.frame_id}-taint-fuzz-{tp.source.name.replace(' ', '_')}-{tp.sink.name.replace(' ', '_')}",
                             severity="high",
                             message=f"Taint source at line {tp.source.line} flows to {tp.sink.name} — high-priority fuzz target",
                             location=f"{code_file.path}:{tp.source.line}",
