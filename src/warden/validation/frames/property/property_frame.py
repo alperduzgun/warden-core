@@ -70,7 +70,7 @@ class PropertyFrame(ValidationFrame, BatchExecutable):
     # Property check patterns
     PATTERNS = {
         "division_no_zero_check": {
-            "pattern": r"(?<=[\w\)])\s*\/\s*(\w+)(?!\s*(?:if|&&|\|\||\?|assert|\!=?\s*0))",
+            "pattern": r"(?<=[\w\)\]\}])\s*\/\s*(\w+)(?!\s*(?:if|&&|\|\||\?|assert|\!=?\s*0))",
             "severity": "medium",
             "message": "Division operation without zero check",
             "suggestion": "Check divisor is not zero before division",
