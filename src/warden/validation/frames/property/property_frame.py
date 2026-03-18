@@ -70,7 +70,7 @@ class PropertyFrame(ValidationFrame, BatchExecutable):
     # Property check patterns
     PATTERNS = {
         "division_no_zero_check": {
-            "pattern": r"(?<=[\w\)\]\}])\s*\/\s*(\w+)(?!\s*(?:if|&&|\|\||\?|assert|\!=?\s*0))",
+            "pattern": r"(?:=|return)\s+[\w\.\(\)\[\]]+\s*\/\s*(\w+)(?!\s*(?:if|&&|\|\||\?|assert|\!=?\s*0))",
             "severity": "medium",
             "message": "Division operation without zero check",
             "suggestion": "Check divisor is not zero before division",
@@ -490,11 +490,13 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
             lines = code_file.content.split("\n")
 
             for line_num, line in enumerate(lines, start=1):
-                # Skip comments, decorators, and string-only lines
+                # Skip comments, decorators, string-only lines, and logging/print statements
                 stripped = line.strip()
                 if stripped.startswith(("#", "//", "/*", "*", "@")):
                     continue
                 if stripped.startswith(("'", '"')) or stripped.startswith(("f'", 'f"', "b'", 'b"')):
+                    continue
+                if stripped.startswith(("console.print", "print(", "logger.", "log.", "logging.")):
                     continue
 
                 matches = compiled_pattern.finditer(line)
