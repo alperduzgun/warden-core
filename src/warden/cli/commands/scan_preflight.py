@@ -5,16 +5,22 @@ from rich.console import Console
 console = Console()
 
 
+_CLOUD_PROVIDERS = frozenset({
+    "anthropic", "openai", "groq", "azure", "deepseek", "gemini", "claude_code",
+})
+
+
 def _needs_ollama() -> bool:
-    """Return True if the project config requires Ollama."""
+    """Return True only if the project config explicitly requires Ollama
+    AND no cloud provider override is active (env or config routing)."""
     import os
 
     import yaml
 
-    # Respect CI env var overrides — if provider is forced to a cloud provider, skip
+    # 1. Env var override — highest priority
     env_provider = os.environ.get("WARDEN_LLM_PROVIDER", "").strip().lower()
-    if env_provider and env_provider != "ollama":
-        return False
+    if env_provider:
+        return env_provider == "ollama"
 
     config_candidates = [Path.cwd() / "warden.yaml", Path.cwd() / ".warden" / "config.yaml"]
     for cfg_path in config_candidates:
@@ -22,10 +28,25 @@ def _needs_ollama() -> bool:
             try:
                 with open(cfg_path) as f:
                     data = yaml.safe_load(f) or {}
-                llm = data.get("llm", {})
-                provider = llm.get("provider", "")
+                llm = data.get("llm", {}) or {}
+                provider = (llm.get("provider", "") or "").lower()
+
+                # 2. Explicit local LLM flag always requires Ollama
                 use_local = llm.get("use_local_llm", False)
-                return provider == "ollama" or bool(use_local)
+                if use_local:
+                    return True
+
+                # 3. If primary provider is a cloud service, no Ollama needed
+                if provider in _CLOUD_PROVIDERS:
+                    return False
+
+                # 4. Check routing — if smart_tier is cloud, Ollama is optional
+                routing = data.get("routing", {}) or {}
+                smart_tier = (routing.get("smart_tier", "") or "").lower()
+                if smart_tier in _CLOUD_PROVIDERS:
+                    return False
+
+                return provider == "ollama"
             except Exception:
                 return False
 
@@ -49,12 +70,10 @@ def _preflight_ollama_check(rich_console: "Console") -> bool:
     # 1. Check binary exists first — distinct message from "server not running"
     rich_console.print("[dim]🔍 Preflight: checking Ollama...[/dim]")
     if not manager.is_installed():
-        rich_console.print("[red]❌ Ollama is not installed.[/red]")
-        rich_console.print("[dim]   macOS : brew install ollama[/dim]")
-        rich_console.print("[dim]   Linux : curl -fsSL https://ollama.com/install.sh | sh[/dim]")
-        rich_console.print("[dim]   or    : https://ollama.com/download[/dim]")
-        rich_console.print("[dim]   After installing, run: warden scan (preflight will auto-start the server)[/dim]")
-        return False
+        rich_console.print("[yellow]⚠ Ollama is not installed. LLM features will be disabled.[/yellow]")
+        rich_console.print("[dim]   Install: brew install ollama (macOS) or https://ollama.com/download[/dim]")
+        rich_console.print("[dim]   Scan continues with deterministic analysis only.[/dim]")
+        return True  # Continue without LLM — don't block the scan
 
     # 2. Ensure server is running
     if not manager.ensure_ollama_running():
