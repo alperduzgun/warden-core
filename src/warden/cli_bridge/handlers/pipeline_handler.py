@@ -262,16 +262,11 @@ class PipelineHandler(BaseHandler):
                 else:
                     rel_path = path_str
 
-                # Include code snippet to distinguish findings in same file
-                if is_dict:
-                    snippet = f.get("code_snippet") or f.get("codeSnippet") or f.get("code", "")
-                else:
-                    snippet = (
-                        getattr(f, "code_snippet", None) or getattr(f, "codeSnippet", None) or getattr(f, "code", "")
-                    )
+                # Use canonical fingerprint (same as baseline_manager) — 3-field hash
+                from warden.cli.commands.helpers.baseline_manager import _compute_finding_fingerprint
 
-                composite = f"{rule_id}:{rel_path}:{msg}:{snippet}"
-                fp = hashlib.sha256(composite.encode()).hexdigest()
+                finding_dict = {"id": rule_id, "file_path": rel_path, "message": msg}
+                fp = _compute_finding_fingerprint(finding_dict)
 
                 if fp in baseline_fingerprints:
                     filtered_count += 1

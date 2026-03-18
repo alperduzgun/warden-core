@@ -221,6 +221,7 @@ class PipelineContext:
     # Baseline: pre-filter snapshot for quality scoring
     all_findings_pre_baseline: list[dict[str, Any]] = field(default_factory=list)
     baseline_suppressed_count: int = 0
+    baseline_suppressed_findings: list[dict[str, Any]] = field(default_factory=list)
     baseline_resolved_count: int = 0
 
     # Phase 4: FORTIFICATION Results

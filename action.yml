@@ -95,6 +95,7 @@ runs:
         INPUT_OUTPUT_FILE: ${{ inputs.output-file }}
         INPUT_QUICK_START: ${{ inputs.quick-start }}
         INPUT_DIFF_MODE: ${{ inputs.diff-mode }}
+        INPUT_FAIL_SEVERITY: ${{ inputs.fail-on-severity }}
         INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
       run: |
         ARGS="${INPUT_SCAN_PATH} --format ${INPUT_FORMAT} --output ${INPUT_OUTPUT_FILE}"
@@ -111,6 +112,10 @@ runs:
           if [ -n "${GITHUB_BASE_REF}" ]; then
             ARGS="${ARGS} --base ${GITHUB_BASE_REF}"
           fi
+        fi
+
+        if [ "${INPUT_FAIL_SEVERITY}" != "critical" ] && [ -n "${INPUT_FAIL_SEVERITY}" ]; then
+          ARGS="${ARGS} --fail-on-severity ${INPUT_FAIL_SEVERITY}"
         fi
 
         if [ -n "${INPUT_EXTRA_ARGS}" ]; then

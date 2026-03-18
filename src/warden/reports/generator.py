@@ -379,6 +379,14 @@ class ReportGenerator:
         # Add custom properties for LLM usage and metrics
         properties = {}
 
+        # Core metrics
+        q_score = scan_results.get("quality_score", scan_results.get("qualityScore"))
+        if q_score is not None:
+            properties["qualityScore"] = q_score
+        properties["totalFrames"] = scan_results.get("total_frames", scan_results.get("totalFrames", 0))
+        properties["baselineSuppressedCount"] = scan_results.get("baseline_suppressed_count", 0)
+        properties["totalFindingsPreBaseline"] = scan_results.get("total_findings_pre_baseline", 0)
+
         llm_usage = scan_results.get("llmUsage", {})
         if llm_usage:
             properties["llmUsage"] = llm_usage
@@ -387,8 +395,7 @@ class ReportGenerator:
         if llm_metrics:
             properties["llmMetrics"] = llm_metrics
 
-        if properties:
-            sarif["runs"][0]["properties"] = properties
+        sarif["runs"][0]["properties"] = properties
 
         run = sarif["runs"][0]
         rules_map = {}
@@ -533,8 +540,41 @@ class ReportGenerator:
 
                 run["results"].append(result)
 
-        # Include suppressed findings in SARIF with suppressions array (SARIF 2.1.0 §3.35) (#125).
-        # GitHub Security tab and audit tools can then distinguish suppressed from active findings.
+        # Include baseline-suppressed findings (technical debt) in SARIF with suppressions array.
+        baseline_suppressed = scan_results.get("baseline_suppressed_findings", [])
+        for sf in baseline_suppressed:
+            rule_id = str(self._get_val(sf, "id", "unknown")).lower().replace(" ", "-")
+            location_str = self._get_val(sf, "location", "unknown")
+            _lc = location_str.rfind(":")
+            file_path = location_str[:_lc] if _lc > 1 else location_str
+            if not rule_id or not file_path or file_path == "unknown":
+                continue
+            line_num = 1
+            if ":" in location_str:
+                try:
+                    line_num = int(location_str.split(":")[-1])
+                except (ValueError, IndexError):
+                    pass
+            sev_map = {"critical": "error", "high": "warning", "medium": "note", "low": "note"}
+            sev = str(self._get_val(sf, "severity", "medium")).lower()
+            run["results"].append({
+                "ruleId": rule_id,
+                "kind": "open",
+                "level": sev_map.get(sev, "note"),
+                "message": {"text": self._get_val(sf, "message", "Baseline technical debt")},
+                "locations": [{
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": self._to_relative_uri(file_path), "uriBaseId": "%SRCROOT%"},
+                        "region": {"startLine": line_num},
+                    }
+                }],
+                "suppressions": [{
+                    "kind": "inSource",
+                    "justification": "Baseline technical debt — accepted in previous scan",
+                }],
+            })
+
+        # Include config-suppressed findings in SARIF (rule-based suppressions).
         suppressed_findings = scan_results.get("suppressed_findings", [])
         if suppressed_findings:
             logger.info(
@@ -630,15 +670,15 @@ class ReportGenerator:
         """
         from warden.shared.utils.quality_calculator import calculate_quality_score
 
-        # Extract findings
-        all_findings = []
-        frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
-        for frame in frame_results:
-            all_findings.extend(frame.get("findings", []))
-        manual = scan_results.get("manual_review_findings_list", [])
-        all_findings.extend(manual)
-
-        score = calculate_quality_score(all_findings, 10.0)
+        # Use pre-computed quality score from pipeline (already uses pre-baseline findings)
+        score = scan_results.get("quality_score", scan_results.get("qualityScore"))
+        if score is None:
+            # Fallback: compute from frame findings
+            all_findings = []
+            frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
+            for frame in frame_results:
+                all_findings.extend(frame.get("findings", []))
+            score = calculate_quality_score(all_findings, 10.0)
 
         # Determine Color Gradient
         if score >= 9.0:
@@ -956,6 +996,18 @@ class ReportGenerator:
                     desc = self._get_val(remediation, "description", "")
                     if desc:
                         lines.append(f"> **Remediation:** {desc}\n")
+
+        # Baseline Summary section
+        suppressed = sanitized.get("baseline_suppressed_count", 0)
+        pre_baseline = sanitized.get("total_findings_pre_baseline", 0)
+        if suppressed > 0 or pre_baseline > total:
+            lines.append("\n## Baseline Summary\n")
+            lines.append("| Metric | Count |")
+            lines.append("|--------|-------|")
+            lines.append(f"| New findings | {total} |")
+            lines.append(f"| Existing debt | {suppressed} |")
+            lines.append(f"| Score (all findings) | {score}/10 |")
+            lines.append("")
 
         content = "\n".join(lines) + "\n"
 
