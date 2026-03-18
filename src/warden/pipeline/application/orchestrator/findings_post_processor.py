@@ -264,6 +264,9 @@ class FindingsPostProcessor:
 
             logger.info("baseline_loaded", known_issues_count=len(known_issues))
 
+            # Snapshot ALL findings before baseline filtering — quality score uses this
+            context.all_findings_pre_baseline = list(context.findings) if context.findings else []
+
             total_suppressed = 0
 
             for _fid, f_res in context.frame_results.items():
@@ -299,6 +302,8 @@ class FindingsPostProcessor:
                     and not self._has_blocker_violations(result_obj)
                 ):
                     result_obj.status = "passed"
+
+            context.baseline_suppressed_count = total_suppressed
 
             if total_suppressed > 0:
                 logger.info("baseline_applied", suppressed_issues=total_suppressed)

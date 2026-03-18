@@ -286,6 +286,10 @@ class PipelineResult(BaseDomainModel):
     artifacts: list[dict[str, Any]] = Field(default_factory=list)
     quality_score: float = 0.0
 
+    # Baseline debt metrics
+    baseline_suppressed_count: int = 0
+    total_findings_pre_baseline: int = 0
+
     # Blocker violations from custom rules (is_blocker: true)
     blocker_violations: int = 0
 
@@ -367,6 +371,8 @@ class PipelineResult(BaseDomainModel):
         data["low_findings"] = self.low_findings
         data["manual_review_findings"] = self.manual_review_findings
         data["quality_score"] = rounded_score
+        data["baseline_suppressed_count"] = self.baseline_suppressed_count
+        data["total_findings_pre_baseline"] = self.total_findings_pre_baseline
 
         return data
 
