@@ -518,25 +518,21 @@ class ReportGenerator:
                 if remediation:
                     rem_code = self._get_val(remediation, "code", "")
                     rem_description = self._get_val(remediation, "description", "")
-                    if rem_code and file_path:
-                        result["fixes"] = [
-                            {
-                                "description": {"text": rem_description},
-                                "artifactChanges": [
-                                    {
-                                        "artifactLocation": {"uri": self._to_relative_uri(file_path), "uriBaseId": "%SRCROOT%"},
-                                        "replacements": [
-                                            {
-                                                "deletedRegion": {
-                                                    "startLine": max(1, _line_from_location),
-                                                },
-                                                "insertedContent": {"text": rem_code},
-                                            }
-                                        ],
-                                    }
-                                ],
-                            }
-                        ]
+                    if rem_description:
+                        fix_entry: dict[str, Any] = {"description": {"text": rem_description}}
+                        if rem_code and file_path:
+                            fix_entry["artifactChanges"] = [
+                                {
+                                    "artifactLocation": {"uri": self._to_relative_uri(file_path), "uriBaseId": "%SRCROOT%"},
+                                    "replacements": [
+                                        {
+                                            "deletedRegion": {"startLine": max(1, _line_from_location)},
+                                            "insertedContent": {"text": rem_code},
+                                        }
+                                    ],
+                                }
+                            ]
+                        result["fixes"] = [fix_entry]
 
                 run["results"].append(result)
 
@@ -994,8 +990,11 @@ class ReportGenerator:
                 remediation = self._get_val(f, "remediation", None)
                 if remediation:
                     desc = self._get_val(remediation, "description", "")
+                    code = self._get_val(remediation, "code", "")
                     if desc:
                         lines.append(f"> **Remediation:** {desc}\n")
+                    if code:
+                        lines.append(f"```\n{code}\n```\n")
 
         # Baseline Summary section
         suppressed = sanitized.get("baseline_suppressed_count", 0)

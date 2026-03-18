@@ -25,6 +25,7 @@ from warden.validation.domain.frame import (
     Finding,
     FrameResult,
     MachineContext,
+    Remediation,
     ValidationFrame,
 )
 from warden.validation.domain.mixins import BatchExecutable, CodeGraphAware, TaintAware
@@ -900,7 +901,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                         f" -> {tp.sink.name} [{tp.sink_type}] (line {tp.sink.line})"
                     ),
                     location=f"{file_path}:{tp.sink.line}",
-                    suggestion=f"Sanitize the tainted value before passing to {tp.sink.name}.",
+                    suggestion=self._build_taint_suggestion(tp),
                     code_snippet=None,
                     is_blocker=is_high_conf,
                 )
@@ -913,6 +914,19 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             passed=False,
             findings=taint_findings,
         )
+
+    @staticmethod
+    def _build_taint_suggestion(tp: Any) -> str:
+        """Build specific remediation for taint finding using KNOWN_SANITIZERS."""
+        from warden.validation.frames.security._internal.taint_analyzer import KNOWN_SANITIZERS
+
+        base = f"Sanitize the tainted value before passing to {tp.sink.name}."
+        sink_type = getattr(tp, "sink_type", "")
+        sanitizers = KNOWN_SANITIZERS.get(sink_type, set())
+        if sanitizers:
+            examples = ", ".join(f"`{s}`" for s in sorted(sanitizers)[:3])
+            return f"{base}\n↳ Recommended: {examples}"
+        return base
 
     def _aggregate_findings(
         self,
@@ -957,6 +971,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     code=check_finding.code_snippet,
                     is_blocker=check_finding.is_blocker,
                     detection_source=detection_source,
+                    remediation=Remediation(
+                        description=check_finding.suggestion or "",
+                        code="",
+                    ) if check_finding.suggestion else None,
                 )
 
                 # Populate explicitly tagged LLM context instances on creation
