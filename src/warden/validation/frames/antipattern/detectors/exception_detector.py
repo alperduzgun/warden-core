@@ -182,7 +182,7 @@ class ExceptionDetector(BaseDetector):
             "logging.",
             "log.",  # Logging
             "raise",  # Re-raising
-            "traceback",  # Traceback handling
+            "traceback.print_exc",  # Traceback logging (format_exc may leak to response)
             "print(",  # Even print is better than silent
             "sys.exc_info",  # Exception info access
             "exc_info=true",  # Logging with exc_info

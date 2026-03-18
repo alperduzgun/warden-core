@@ -142,6 +142,34 @@ class StaleAPICheck(ValidationCheck):
             "severity": "high",
             "reason": "eval() on untrusted input = code execution (CWE-95)",
         },
+        {
+            "pattern": r"traceback\.format_exc\(\)",
+            "replacement": "Log the traceback server-side, return generic error to client",
+            "language": "python",
+            "severity": "high",
+            "reason": "Returning traceback to client leaks internal details (CWE-209)",
+        },
+        {
+            "pattern": r"subprocess\.call\(.*shell\s*=\s*True",
+            "replacement": "subprocess.run([cmd, arg], shell=False)",
+            "language": "python",
+            "severity": "high",
+            "reason": "shell=True enables command injection (CWE-78)",
+        },
+        {
+            "pattern": r"app\.run\(.*debug\s*=\s*True",
+            "replacement": "app.run(debug=False) or use FLASK_DEBUG env var",
+            "language": "python",
+            "severity": "medium",
+            "reason": "Debug mode in production exposes debugger and stack traces (CWE-489)",
+        },
+        {
+            "pattern": r"random\.randint\(|random\.choice\(|random\.random\(",
+            "replacement": "secrets.token_hex() or secrets.randbelow()",
+            "language": "python",
+            "severity": "medium",
+            "reason": "random module is not cryptographically secure (CWE-330)",
+        },
         # ----------------------------------------------------------------
         # JavaScript / Node.js
         # ----------------------------------------------------------------
