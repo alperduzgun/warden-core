@@ -292,7 +292,8 @@ class FrameRunner:
             )
             return skip_result
 
-        if self.llm_service:
+        use_llm = getattr(self.config, "use_llm", True) if self.config else True
+        if self.llm_service and use_llm:
             frame.llm_service = self.llm_service
             # Enable agentic loop with project context
             project_root = getattr(context, "project_root", None) or Path.cwd()

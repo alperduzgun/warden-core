@@ -40,7 +40,7 @@ class RustValidationEngine:
     async def load_rules_from_yaml_async(self, yaml_path: Path) -> None:
         """Load global rules from a YAML file (Async)."""
         if not RUST_AVAILABLE:
-            logger.warning("rust_unavailable_skipping_rules", path=str(yaml_path))
+            logger.debug("rust_unavailable_skipping_rules", path=str(yaml_path))
             return
 
         try:

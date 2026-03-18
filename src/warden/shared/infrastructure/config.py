@@ -127,7 +127,7 @@ class Settings(BaseSettings):
             else:
                 # Auto-generate in dev mode with loud warning
                 self.secret_key = secrets.token_urlsafe(32)
-                logger.warning(
+                logger.debug(
                     "auto_generated_secret_key",
                     message="SECRET_KEY was empty. Auto-generated a random key for development. "
                     "Set SECRET_KEY in .env for production use.",

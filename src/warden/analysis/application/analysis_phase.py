@@ -139,7 +139,7 @@ class AnalysisPhase:
             import json
 
             self._cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self._cache_file.write_text(json.dumps(self._cache_data, indent=2))
+            self._cache_file.write_text(json.dumps(self._cache_data, indent=2, default=str))
         except Exception as e:
             logger.warning("analysis_cache_save_failed", error=str(e))
 
