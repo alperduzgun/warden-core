@@ -956,7 +956,7 @@ def generate_config(
                 "fail_fast": mode_config["fail_fast"],
                 "mode": ["vibe", "normal", "strict"][int(mode_choice) - 1],
                 "min_severity": mode_config.get("min_severity", "high"),
-                "timeout": 3600,
+                "timeout": 300,
                 "use_llm": provider != "none",
                 "use_local_llm": llm_config.get("use_local_llm", False),
                 "enable_pre_analysis": True,
@@ -1263,7 +1263,7 @@ rules:
     isBlocker: false
     description: Use logger instead of print() in production code
     enabled: true
-    type: pattern
+    type: convention
     conditions:
       patterns:
         - "print\\\\("
@@ -1280,7 +1280,7 @@ rules:
     isBlocker: true
     description: Remove debugger breakpoints before committing
     enabled: true
-    type: pattern
+    type: convention
     conditions:
       patterns:
         - "import pdb"
