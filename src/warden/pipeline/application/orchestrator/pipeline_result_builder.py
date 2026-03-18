@@ -97,6 +97,7 @@ class PipelineResultBuilder:
             manual_review_findings=manual_review_count,
             blocker_violations=blocker_violations,
             baseline_suppressed_count=getattr(context, "baseline_suppressed_count", 0),
+            baseline_suppressed_findings=getattr(context, "baseline_suppressed_findings", []),
             total_findings_pre_baseline=len(all_findings_for_score),
             findings=[f if isinstance(f, dict) else f.to_dict() for f in findings],
             frame_results=frame_results,

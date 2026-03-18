@@ -275,6 +275,7 @@ class FindingsPostProcessor:
             context.all_findings_pre_baseline = list(context.findings) if context.findings else []
 
             total_suppressed = 0
+            baseline_suppressed_list: list[dict] = []
 
             for _fid, f_res in context.frame_results.items():
                 result_obj = f_res.get("result")
@@ -289,11 +290,13 @@ class FindingsPostProcessor:
                         "file_path": getattr(finding, "file_path", getattr(finding, "path", "")),
                         "message": getattr(finding, "message", ""),
                         "location": getattr(finding, "location", ""),
+                        "severity": getattr(finding, "severity", "medium"),
                     }
                     fp = _compute_finding_fingerprint(f_dict)
 
                     if fp in known_fingerprints:
                         total_suppressed += 1
+                        baseline_suppressed_list.append(f_dict)
                     else:
                         filtered_findings.append(finding)
 
@@ -307,6 +310,7 @@ class FindingsPostProcessor:
                     result_obj.status = "passed"
 
             context.baseline_suppressed_count = total_suppressed
+            context.baseline_suppressed_findings = baseline_suppressed_list
 
             if total_suppressed > 0:
                 logger.info("baseline_applied", suppressed_issues=total_suppressed)

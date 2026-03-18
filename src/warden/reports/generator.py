@@ -540,8 +540,41 @@ class ReportGenerator:
 
                 run["results"].append(result)
 
-        # Include suppressed findings in SARIF with suppressions array (SARIF 2.1.0 §3.35) (#125).
-        # GitHub Security tab and audit tools can then distinguish suppressed from active findings.
+        # Include baseline-suppressed findings (technical debt) in SARIF with suppressions array.
+        baseline_suppressed = scan_results.get("baseline_suppressed_findings", [])
+        for sf in baseline_suppressed:
+            rule_id = str(self._get_val(sf, "id", "unknown")).lower().replace(" ", "-")
+            location_str = self._get_val(sf, "location", "unknown")
+            _lc = location_str.rfind(":")
+            file_path = location_str[:_lc] if _lc > 1 else location_str
+            if not rule_id or not file_path or file_path == "unknown":
+                continue
+            line_num = 1
+            if ":" in location_str:
+                try:
+                    line_num = int(location_str.split(":")[-1])
+                except (ValueError, IndexError):
+                    pass
+            sev_map = {"critical": "error", "high": "warning", "medium": "note", "low": "note"}
+            sev = str(self._get_val(sf, "severity", "medium")).lower()
+            run["results"].append({
+                "ruleId": rule_id,
+                "kind": "open",
+                "level": sev_map.get(sev, "note"),
+                "message": {"text": self._get_val(sf, "message", "Baseline technical debt")},
+                "locations": [{
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": self._to_relative_uri(file_path), "uriBaseId": "%SRCROOT%"},
+                        "region": {"startLine": line_num},
+                    }
+                }],
+                "suppressions": [{
+                    "kind": "inSource",
+                    "justification": "Baseline technical debt — accepted in previous scan",
+                }],
+            })
+
+        # Include config-suppressed findings in SARIF (rule-based suppressions).
         suppressed_findings = scan_results.get("suppressed_findings", [])
         if suppressed_findings:
             logger.info(
@@ -963,6 +996,18 @@ class ReportGenerator:
                     desc = self._get_val(remediation, "description", "")
                     if desc:
                         lines.append(f"> **Remediation:** {desc}\n")
+
+        # Baseline Summary section
+        suppressed = sanitized.get("baseline_suppressed_count", 0)
+        pre_baseline = sanitized.get("total_findings_pre_baseline", 0)
+        if suppressed > 0 or pre_baseline > total:
+            lines.append("\n## Baseline Summary\n")
+            lines.append("| Metric | Count |")
+            lines.append("|--------|-------|")
+            lines.append(f"| New findings | {total} |")
+            lines.append(f"| Existing debt | {suppressed} |")
+            lines.append(f"| Score (all findings) | {score}/10 |")
+            lines.append("")
 
         content = "\n".join(lines) + "\n"
 

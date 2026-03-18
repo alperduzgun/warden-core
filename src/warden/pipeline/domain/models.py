@@ -288,6 +288,7 @@ class PipelineResult(BaseDomainModel):
 
     # Baseline debt metrics
     baseline_suppressed_count: int = 0
+    baseline_suppressed_findings: list[dict[str, Any]] = Field(default_factory=list)
     total_findings_pre_baseline: int = 0
 
     # Blocker violations from custom rules (is_blocker: true)
@@ -372,6 +373,7 @@ class PipelineResult(BaseDomainModel):
         data["manual_review_findings"] = self.manual_review_findings
         data["quality_score"] = rounded_score
         data["baseline_suppressed_count"] = self.baseline_suppressed_count
+        data["baseline_suppressed_findings"] = self.baseline_suppressed_findings
         data["total_findings_pre_baseline"] = self.total_findings_pre_baseline
 
         return data
