@@ -114,11 +114,9 @@ class ConfigHandler(BaseHandler):
         project_rule_config = RulesYAMLLoader.load_rules_sync(self.project_root)
 
         # Extract global rules as objects
+        rule_map = {r.id: r for r in project_rule_config.rules} if project_rule_config.rules else {}
         global_rules_objects = []
         if project_rule_config.global_rules:
-            # project_rule_config.global_rules is List[str] (IDs)
-            # Find the actual rule objects in project_rule_config.rules
-            rule_map = {r.id: r for r in project_rule_config.rules}
             for rid in project_rule_config.global_rules:
                 if rid in rule_map:
                     global_rules_objects.append(rule_map[rid])
