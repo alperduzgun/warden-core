@@ -53,7 +53,7 @@ def _compute_finding_fingerprint(finding: dict[str, Any]) -> str:
         stable_msg = f"taint:{m.group('src')}->{m.group('sink')}[{m.group('type')}]"
     else:
         # All other findings: strip line references, keep everything else
-        stable_msg = _LINE_REF_RE.sub("", msg).strip()
+        stable_msg = _LINE_REF_RE.sub("", msg)
 
     return hashlib.sha256(f"{rule}:{path}:{stable_msg}".encode()).hexdigest()
 
