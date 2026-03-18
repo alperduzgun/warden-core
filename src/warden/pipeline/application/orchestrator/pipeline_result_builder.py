@@ -123,21 +123,21 @@ class PipelineResultBuilder:
         findings: list = []
 
         # Start with pipeline-level findings (from SecurityFrame, ResilienceFrame, etc.)
+        # context.findings already includes rule violations (added by result_aggregator)
         if hasattr(context, "findings") and context.findings:
             findings.extend(context.findings)
         else:
+            # Fallback: collect from frame results + violations
             for frame_res in frame_results:
                 if hasattr(frame_res, "findings") and frame_res.findings:
                     findings.extend(frame_res.findings)
+            for frame_res in frame_results:
+                for attr in ("pre_rule_violations", "post_rule_violations"):
+                    violations = getattr(frame_res, attr, None)
+                    if violations:
+                        from warden.pipeline.application.orchestrator.rule_executor import RuleExecutor
 
-        # Also include custom rule violations (pre/post) as findings
-        for frame_res in frame_results:
-            for attr in ("pre_rule_violations", "post_rule_violations"):
-                violations = getattr(frame_res, attr, None)
-                if violations:
-                    from warden.pipeline.application.orchestrator.rule_executor import RuleExecutor
-
-                    findings.extend([RuleExecutor.convert_to_finding(v) for v in violations])
+                        findings.extend([RuleExecutor.convert_to_finding(v) for v in violations])
 
         return findings
 
