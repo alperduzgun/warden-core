@@ -249,7 +249,7 @@ class FrameMatcher:
                     ai_frames.append(frame)
                     logger.debug("ai_selected_frame", frame_id=frame.frame_id, source="classification")
                 else:
-                    logger.warning(f"Could not match frame: {selected_name}")
+                    logger.debug("classification_frame_not_matched", name=selected_name)
 
             # STEP 2: Collect user-enforced frames (explicit enabled: true)
             # Skip when CLI --frame override is active (CLI = exact set, no extras)

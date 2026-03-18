@@ -671,7 +671,7 @@ class ReportGenerator:
         if not badge_secret:
             from warden.shared.infrastructure.logging import get_logger as _get_logger
 
-            _get_logger(__name__).warning(
+            _get_logger(__name__).debug(
                 "badge_secret_not_set",
                 message="WARDEN_BADGE_SECRET env var not set. Badge signature uses weak default. "
                 "Set WARDEN_BADGE_SECRET for production use.",

@@ -298,7 +298,7 @@ class PreAnalysisPhase:
             # Validate Environment Hash
             is_env_valid = self._validate_environment_hash()
             if not is_env_valid:
-                logger.warning(
+                logger.info(
                     "environment_changed", reason="config_or_version_mismatch", action="invalidating_context_cache"
                 )
 
