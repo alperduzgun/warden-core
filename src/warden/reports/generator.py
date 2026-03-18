@@ -379,6 +379,14 @@ class ReportGenerator:
         # Add custom properties for LLM usage and metrics
         properties = {}
 
+        # Core metrics
+        q_score = scan_results.get("quality_score", scan_results.get("qualityScore"))
+        if q_score is not None:
+            properties["qualityScore"] = q_score
+        properties["totalFrames"] = scan_results.get("total_frames", scan_results.get("totalFrames", 0))
+        properties["baselineSuppressedCount"] = scan_results.get("baseline_suppressed_count", 0)
+        properties["totalFindingsPreBaseline"] = scan_results.get("total_findings_pre_baseline", 0)
+
         llm_usage = scan_results.get("llmUsage", {})
         if llm_usage:
             properties["llmUsage"] = llm_usage
@@ -387,8 +395,7 @@ class ReportGenerator:
         if llm_metrics:
             properties["llmMetrics"] = llm_metrics
 
-        if properties:
-            sarif["runs"][0]["properties"] = properties
+        sarif["runs"][0]["properties"] = properties
 
         run = sarif["runs"][0]
         rules_map = {}
@@ -630,15 +637,15 @@ class ReportGenerator:
         """
         from warden.shared.utils.quality_calculator import calculate_quality_score
 
-        # Extract findings
-        all_findings = []
-        frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
-        for frame in frame_results:
-            all_findings.extend(frame.get("findings", []))
-        manual = scan_results.get("manual_review_findings_list", [])
-        all_findings.extend(manual)
-
-        score = calculate_quality_score(all_findings, 10.0)
+        # Use pre-computed quality score from pipeline (already uses pre-baseline findings)
+        score = scan_results.get("quality_score", scan_results.get("qualityScore"))
+        if score is None:
+            # Fallback: compute from frame findings
+            all_findings = []
+            frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
+            for frame in frame_results:
+                all_findings.extend(frame.get("findings", []))
+            score = calculate_quality_score(all_findings, 10.0)
 
         # Determine Color Gradient
         if score >= 9.0:
