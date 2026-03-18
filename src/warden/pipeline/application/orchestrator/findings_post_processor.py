@@ -18,6 +18,20 @@ from warden.shared.utils.finding_utils import get_finding_attribute
 logger = get_logger(__name__)
 
 
+def _deduplicate_by_id(findings: list[Any]) -> list[Any]:
+    """Lightweight dedup by finding ID + location to prevent re-sync inflation."""
+    seen: set[str] = set()
+    result: list[Any] = []
+    for f in findings:
+        fid = get_finding_attribute(f, "id", "")
+        loc = get_finding_attribute(f, "location", "")
+        key = f"{fid}:{loc}"
+        if key not in seen:
+            seen.add(key)
+            result.append(f)
+    return result
+
+
 class FindingsPostProcessor:
     """Verification, baseline filtering, and state consistency for pipeline findings."""
 
@@ -294,7 +308,7 @@ class FindingsPostProcessor:
                     res = f_res.get("result")
                     if res and res.findings:
                         all_findings.extend(res.findings)
-                context.findings = all_findings
+                context.findings = _deduplicate_by_id(all_findings)
 
                 # CRITICAL: sync validated_issues so downstream phases
                 # (Fortification, SARIF) operate on the filtered set.
@@ -535,7 +549,7 @@ class FindingsPostProcessor:
                 res = f_res.get("result")
                 if res and res.findings:
                     all_findings.extend(res.findings)
-            context.findings = all_findings
+            context.findings = _deduplicate_by_id(all_findings)
 
     def _normalize_path(self, fpath: str) -> str:
         """Normalize a file path relative to project root."""
