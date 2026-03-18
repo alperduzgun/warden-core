@@ -152,8 +152,10 @@ Return ONLY a JSON object:
         for _finding in remaining_after_cache:
             _msg = getattr(_finding, "message", "") or (
                 _finding.get("message", "") if isinstance(_finding, dict) else ""
-            )
-            _code = getattr(_finding, "code", "") or (_finding.get("code", "") if isinstance(_finding, dict) else "")
+            ) or ""
+            _code = getattr(_finding, "code", "") or (
+                _finding.get("code", "") if isinstance(_finding, dict) else ""
+            ) or ""
             _est = len(_msg.split()) + len(_code.split())
             if _cur_tokens + _est > MAX_BATCH_TOKENS or len(_cur_batch) >= MAX_BATCH_SIZE:
                 if _cur_batch:
