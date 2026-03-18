@@ -209,26 +209,12 @@ class ReportGenerator:
 
     @staticmethod
     def _is_execution_successful(scan_results: dict[str, Any]) -> bool:
-        """Determine if the scan execution was successful based on actual state."""
-        # Check for LLM metrics error (metrics collection failed)
-        llm_metrics = scan_results.get("llmMetrics", {})
-        if isinstance(llm_metrics, dict) and llm_metrics.get("error"):
-            return False
+        """Determine if the scan execution was successful based on actual state.
 
-        # Check for offline mode (no LLM was available)
-        llm_usage = scan_results.get("llmUsage") or {}
-        if isinstance(llm_usage, dict) and llm_usage.get("totalTokens", 0) == 0:
-            # Only fail if frames were expected to use LLM
-            frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
-            has_non_rust_frames = any(
-                f.get("frameId", f.get("frame_id", "")) != "system_security_rules"
-                for f in frame_results
-                if f.get("status") not in ("skipped",)
-            )
-            if has_non_rust_frames:
-                return False
-
-        # Check for frame errors
+        executionSuccessful reflects whether the tool ran without crashing,
+        NOT whether LLM was used or metrics collected successfully.
+        """
+        # Only fail on actual frame execution errors (tool crash)
         frame_results = scan_results.get("frame_results", scan_results.get("frameResults", []))
         for fr in frame_results:
             if fr.get("status") == "error":
