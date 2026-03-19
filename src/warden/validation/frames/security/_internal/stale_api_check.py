@@ -143,6 +143,27 @@ class StaleAPICheck(ValidationCheck):
             "reason": "eval() on untrusted input = code execution (CWE-95)",
         },
         {
+            "pattern": r"\.from_string\(",
+            "replacement": "Use pre-compiled templates from files, never from user input",
+            "language": "python",
+            "severity": "critical",
+            "reason": "Server-Side Template Injection (SSTI) — user-controlled template string = RCE (CWE-1336)",
+        },
+        {
+            "pattern": r"setattr\(\s*\w+,\s*(?:key|k|attr|field|name)\s*,",
+            "replacement": "Use an allowlist of permitted attributes",
+            "language": "python",
+            "severity": "high",
+            "reason": "Dynamic setattr with user-controlled key = attribute injection (CWE-915)",
+        },
+        {
+            "pattern": r"yaml\.unsafe_load\(",
+            "replacement": "yaml.safe_load()",
+            "language": "python",
+            "severity": "critical",
+            "reason": "yaml.unsafe_load allows arbitrary object instantiation = RCE (CWE-502)",
+        },
+        {
             "pattern": r"traceback\.format_exc\(\)",
             "replacement": "Log the traceback server-side, return generic error to client",
             "language": "python",
