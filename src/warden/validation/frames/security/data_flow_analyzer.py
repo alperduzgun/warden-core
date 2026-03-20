@@ -86,6 +86,20 @@ async def analyze_data_flow(code_file: Any, findings: list[Any]) -> dict[str, An
                     ]
                 )
 
+            # Get type info for the variable at the finding location (if LSP available)
+            try:
+                type_info = await asyncio.wait_for(
+                    analyzer.get_type_info_async(code_file.path, location["line"], location.get("column", 0)),
+                    timeout=2.0,
+                )
+                if type_info:
+                    data_flow_context.setdefault("type_annotations", []).append({
+                        "at": f"{code_file.path}:{location['line']}",
+                        "type": str(type_info)[:100],
+                    })
+            except (asyncio.TimeoutError, TimeoutError, Exception):
+                pass  # Type info is best-effort
+
         except asyncio.TimeoutError:
             logger.debug("lsp_data_flow_timeout", location=location)
         except Exception as e:

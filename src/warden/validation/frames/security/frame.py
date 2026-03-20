@@ -422,8 +422,17 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     and self.semantic_search_service.is_available()
                 ):
                     try:
+                        # Build targeted query from AST signals instead of generic file path
+                        _qp = []
+                        for dc in ast_context.get("dangerous_calls", [])[:3]:
+                            _qp.append(dc.get("function", ""))
+                        for sq in ast_context.get("sql_queries", [])[:2]:
+                            _qp.append(sq.get("function", ""))
+                        for src in ast_context.get("input_sources", [])[:2]:
+                            _qp.append(src.get("source", ""))
+                        _query = " ".join(filter(None, _qp)) if _qp else f"security {code_file.language}"
                         search_results = await self.semantic_search_service.search(
-                            query=f"Security sensitive logic related to {code_file.path}", limit=3
+                            query=_query, limit=3
                         )
                         if search_results:
                             semantic_context += "\n[Semantic Context from other files]:\n"
@@ -445,6 +454,42 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                             dangerous_calls=len(ast_context.get("dangerous_calls", [])),
                             sql_queries=len(ast_context.get("sql_queries", [])),
                         )
+
+                # Auth decorator check from cached tree-sitter parse
+                _cached_parse = (code_file.metadata or {}).get("_cached_parse_result")
+                if _cached_parse and getattr(_cached_parse, "ast_root", None):
+                    _auth_names = {"login_required", "require_auth", "authenticated",
+                                   "auth_required", "requires_auth", "jwt_required",
+                                   "permission_required", "Authorize", "RequiresAuthentication"}
+                    _found_auth = []
+
+                    def _walk(n):
+                        yield n
+                        for c in (n.children or []):
+                            yield from _walk(c)
+
+                    for _n in _walk(_cached_parse.ast_root):
+                        for _dec in (_n.attributes or {}).get("decorators", []):
+                            if any(a in _dec for a in _auth_names):
+                                _found_auth.append(_dec)
+                    _status = f"auth_decorators={','.join(_found_auth)}" if _found_auth else "no_auth_decorator"
+                    semantic_context += f"\n[AUTH_STATUS: {_status}]\n"
+
+                # Complexity metrics from cached AST (tree-sitter)
+                if _cached_parse and getattr(_cached_parse, "ast_root", None):
+                    try:
+                        from warden.ast.domain.enums import ASTNodeType
+                        _funcs = [n for n in _walk(_cached_parse.ast_root)
+                                  if getattr(n, "node_type", None) in (ASTNodeType.FUNCTION, ASTNodeType.METHOD)]
+                        if _funcs:
+                            from warden.cleaning.domain.base import BaseCleaningAnalyzer
+                            _ba = BaseCleaningAnalyzer.__new__(BaseCleaningAnalyzer)
+                            _cc = max((_ba._calculate_cyclomatic_complexity_universal(f) for f in _funcs), default=0)
+                            _nd = max((_ba._calculate_nesting_depth_universal(f) for f in _funcs), default=0)
+                            _pc = max((_ba._count_parameters_universal(f) for f in _funcs), default=0)
+                            semantic_context += f"[COMPLEXITY: max_cyclomatic={_cc}, max_nesting={_nd}, max_params={_pc}]\n"
+                    except Exception:
+                        pass
 
                 # Add LSP Data Flow Context (Taint Analysis)
                 if data_flow_context:
@@ -495,6 +540,18 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                         symbol_ctx = format_file_symbols_for_prompt(context.code_graph, code_file.path)
                         if symbol_ctx:
                             semantic_context += f"\n{symbol_ctx}"
+                        # CALLS edges: who calls functions in this file
+                        _calls = []
+                        for edge in context.code_graph.edges:
+                            if hasattr(edge, "relation") and str(edge.relation) == "EdgeRelation.CALLS":
+                                src_file = getattr(edge, "source", "").split("::")[0] if "::" in getattr(edge, "source", "") else ""
+                                tgt = getattr(edge, "target", "")
+                                if src_file and src_file != code_file.path and tgt:
+                                    _calls.append(f"{tgt} ← {src_file.split('/')[-1]}")
+                        if _calls:
+                            semantic_context += "\n[CALL GRAPH — external callers]:\n"
+                            for c in _calls[:5]:
+                                semantic_context += f"  {c}\n"
                     except Exception as e:
                         logger.debug("symbol_context_failed", error=str(e))
 
@@ -535,9 +592,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     context=context,
                 )
 
+                _semantic_cap = self.config.get("semantic_context_max_tokens", 1200)
                 truncated_semantic = truncate_content_for_llm(
                     semantic_context,
-                    max_tokens=600,
+                    max_tokens=_semantic_cap,
                     preserve_start_lines=30,
                     preserve_end_lines=10,
                 )
