@@ -75,62 +75,11 @@ class FuzzFrame(ValidationFrame, TaintAware, ChunkingAware):
     )
 
     # Fuzz patterns (language-agnostic)
-    PATTERNS = {
-        "missing_null_check": {
-            "pattern": r"\b(if|while)\s*\([^)]*\w+\s*[!=<>]+\s*[^)]*\)",
-            "severity": "medium",
-            "message": "Function may not handle null/None input",
-            "suggestion": "Add null/None checks before using values",
-        },
-        "no_empty_string_check": {
-            "pattern": r"(\.split\(|\.replace\(|\.substring\(|\.trim\()",
-            "severity": "low",
-            "message": "String operation without empty string check",
-            "suggestion": "Check if string is empty before operations",
-            "skip_line_patterns": [
-                r"^\s*(?:def |class |import |from |@|#)",  # non-code lines
-                r"\bif\b.*\b(?:len|strip|not)\b",  # guarded: if len(s), if s.strip(), if not s
-                r"\bif\s+\w+\s*:",  # truthy guard: if s:
-                r"\bif\s+\w+\s+(?:is not None|!=\s*None|!=\s*\"\")",  # explicit None/empty guard
-            ],
-        },
-        "array_access_no_bounds": {
-            # Only match numeric-index access on list/array/tuple-like variables.
-            # Pattern: var[i] or var[idx] or var[index] or var[0] — where index
-            # is a common numeric variable name or integer literal.
-            # Excludes ALL dict access (dict[key] never raises IndexError).
-            "pattern": r"\w+\[(?:[0-9]+|[ijn]|idx|index|offset|pos|count)\]",
-            "severity": "medium",
-            "message": "Array/list access without bounds checking",
-            "suggestion": "Validate index is within bounds before access",
-            "skip_line_patterns": [
-                r"^\s*(?:def |class |import |from |@)",  # signatures, imports, decorators
-                r":\s*(?:list|dict|set|tuple|Optional|Union|Callable|Sequence|Mapping)\[",  # type annotations
-                r"->\s*\w*\[",  # return type annotations
-                r"^\s*#",  # comments
-                r"\blen\(\w+\)\s*[><=]",  # line already has len() guard
-                r"\bif\b.*\blen\(",  # if-guarded with len check
-                r"\btry\b",  # inside try block (has except handler)
-                r"\bexcept\b.*\b(?:Index|Key)Error\b",  # exception handler for index
-            ],
-        },
-        "type_conversion_no_validation": {
-            "pattern": r"(int\(|float\(|parseInt\(|parseFloat\()",
-            "severity": "medium",
-            "message": "Type conversion without validation",
-            "suggestion": "Wrap conversion in try-catch or validate input",
-            "skip_line_patterns": [
-                r"^\s*(?:def |class |import |from |@|#)",  # non-code lines
-                r"\btry\b",  # inside try block
-                r"\bexcept\b",  # exception handler context
-                # Safe numeric sources that never produce ValueError:
-                r"int\(\s*(?:time\.|os\.|len\(|round\(|math\.|random\.|float\(|self\.\w+|True|False|None)",
-                r"float\(\s*(?:time\.|os\.|len\(|round\(|math\.|random\.|int\(|self\.\w+)",
-                r"int\(\s*\w+\s*[+\-\*/%]",  # arithmetic expression: int(a + b)
-                r"int\(\s*\"[0-9]+\"\s*\)",  # literal string digit: int("42")
-            ],
-        },
-    }
+    # NOTE: Removed high-noise regex patterns (type_conversion, no_empty_string,
+    # array_access_no_bounds) — these produced 80-90% FP rates across 4 projects.
+    # The LLM analysis path covers these categories with far higher precision.
+    # Keeping only missing_null_check which has acceptable signal-to-noise ratio.
+    PATTERNS: dict = {}
 
     _SYSTEM_PROMPT_BASE = """You are an expert Fuzz Testing analyst. Analyze the provided code for edge cases, input validation vulnerabilities, and robustness issues.
 
