@@ -59,7 +59,7 @@ async def analyze_data_flow(code_file: Any, findings: list[Any]) -> dict[str, An
                         {
                             "vulnerable_at": f"{code_file.path}:{location['line']}",
                             "called_from": c.name,
-                            "caller_file": c.location,
+                            "caller_file": c.file_path,
                             "finding_type": location.get("type", "unknown"),
                         }
                         for c in callers[:3]
@@ -79,7 +79,7 @@ async def analyze_data_flow(code_file: Any, findings: list[Any]) -> dict[str, An
                         {
                             "vulnerable_at": f"{code_file.path}:{location['line']}",
                             "data_from": c.name,
-                            "source_file": c.location,
+                            "source_file": c.file_path,
                             "finding_type": location.get("type", "unknown"),
                         }
                         for c in callees[:3]

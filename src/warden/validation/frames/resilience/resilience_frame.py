@@ -625,7 +625,7 @@ class ResilienceFrame(ValidationFrame, TaintAware, ChunkingAware):
                     )
                     if callers:
                         context.callers.extend(
-                            [{"name": c.name, "file": c.location} for c in callers[: context.MAX_CALLERS_IN_CONTEXT]]
+                            [{"name": c.name, "file": c.file_path} for c in callers[: context.MAX_CALLERS_IN_CONTEXT]]
                         )
 
                     # Get callees with timeout
@@ -635,7 +635,7 @@ class ResilienceFrame(ValidationFrame, TaintAware, ChunkingAware):
                     )
                     if callees:
                         context.callees.extend(
-                            [{"name": c.name, "file": c.location} for c in callees[: context.MAX_CALLEES_IN_CONTEXT]]
+                            [{"name": c.name, "file": c.file_path} for c in callees[: context.MAX_CALLEES_IN_CONTEXT]]
                         )
 
                 except (asyncio.TimeoutError, TimeoutError):
