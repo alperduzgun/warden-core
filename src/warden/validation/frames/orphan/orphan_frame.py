@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -115,6 +116,10 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAwar
         # LSP context (injected by FrameRunner for LSPAware frames)
         self._lsp_context: dict[str, Any] | None = None
 
+        # Sibling files for cross-file reference resolution in single-file mode.
+        # Populated via set_sibling_files() when execute_async is used.
+        self._sibling_files: list[CodeFile] = []
+
         # Log if enabled but defer creation until execution (when llm_service is injected)
         if self.use_llm_filter:
             logger.info("llm_orphan_filter_enabled", mode="intelligent_filtering")
@@ -126,6 +131,111 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAwar
     # LSPAware implementation: receive dead symbols from LSP audit
     def set_lsp_context(self, lsp_context: dict[str, Any]) -> None:
         self._lsp_context = lsp_context
+
+    def set_sibling_files(self, sibling_files: list[CodeFile]) -> None:
+        """
+        Inject sibling files for cross-file reference resolution.
+
+        Called by FrameRunner (or manually) when the frame runs in single-file
+        mode (execute_async) so the cross-file blindness filter can still work.
+        In batch mode (execute_batch_async) the full code_files list is used
+        directly and this method is not needed.
+
+        Args:
+            sibling_files: All other project files that should be searched for
+                           outbound references to symbols defined in the target.
+        """
+        self._sibling_files = sibling_files
+
+    # ------------------------------------------------------------------
+    # Cross-file reference helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_cross_file_corpus(
+        all_files: list[CodeFile],
+        exclude_path: str,
+    ) -> str:
+        """
+        Concatenate source content of every file except ``exclude_path``.
+
+        This produces the corpus that is searched for identifier mentions to
+        determine whether a symbol defined in ``exclude_path`` is actually
+        referenced from another module.
+
+        Args:
+            all_files: All project CodeFile objects.
+            exclude_path: The file being analysed — excluded so its own
+                          definition lines don't count as a reference.
+
+        Returns:
+            Single string containing all other files' source code joined by
+            newlines.
+        """
+        parts: list[str] = []
+        for f in all_files:
+            if f.path != exclude_path and f.content:
+                parts.append(f.content)
+        return "\n".join(parts)
+
+    @staticmethod
+    def _is_cross_file_referenced(name: str, corpus: str) -> bool:
+        """
+        Return True if ``name`` appears as a whole-word identifier in ``corpus``.
+
+        Uses a word-boundary regex so that ``get_app`` does not match inside
+        ``get_application``.  The check is intentionally broad (any mention
+        qualifies) — false negatives (missed orphans) are acceptable here
+        because the goal is to eliminate false positives (valid exports flagged
+        as unreferenced).
+
+        Args:
+            name: Symbol name (function or class) to search for.
+            corpus: Concatenated source of all sibling files.
+
+        Returns:
+            True if any whole-word occurrence of ``name`` is found.
+        """
+        if not corpus:
+            return False
+        pattern = r"\b" + re.escape(name) + r"\b"
+        return bool(re.search(pattern, corpus))
+
+    def _filter_cross_file_orphans(
+        self,
+        findings: list[OrphanFinding],
+        corpus: str,
+    ) -> list[OrphanFinding]:
+        """
+        Remove findings for symbols that are referenced in other project files.
+
+        Only ``unreferenced_function`` and ``unreferenced_class`` findings are
+        eligible for cross-file removal.  ``unused_import`` and ``dead_code``
+        findings are left untouched because they are local by definition.
+
+        Args:
+            findings: Orphan findings from single-file AST analysis.
+            corpus: Concatenated source of all sibling files (see
+                    ``_build_cross_file_corpus``).
+
+        Returns:
+            Filtered list with cross-file-referenced symbols removed.
+        """
+        if not corpus:
+            return findings
+
+        result: list[OrphanFinding] = []
+        for finding in findings:
+            if finding.orphan_type in ("unreferenced_function", "unreferenced_class"):
+                if self._is_cross_file_referenced(finding.name, corpus):
+                    logger.debug(
+                        "orphan_cross_file_reference_found",
+                        name=finding.name,
+                        orphan_type=finding.orphan_type,
+                    )
+                    continue  # Not an orphan — referenced from another file
+            result.append(finding)
+        return result
 
     async def execute_batch_async(self, code_files: list[CodeFile]) -> list[FrameResult]:
         """
@@ -237,6 +347,23 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAwar
             for path, findings in findings_map.items():
                 code_file = valid_files_map[path]
                 final_findings_map[path] = self._filter_findings(findings, code_file)
+
+        # 2.1. Cross-file reference filter — remove functions/classes that are
+        #      called or referenced in OTHER project files (batch mode has the
+        #      full file list, so we can build the corpus here).
+        if len(code_files) > 1:
+            cross_file_filtered_count = 0
+            for path in list(final_findings_map.keys()):
+                pre_filter = final_findings_map[path]
+                corpus = self._build_cross_file_corpus(code_files, exclude_path=path)
+                final_findings_map[path] = self._filter_cross_file_orphans(pre_filter, corpus)
+                cross_file_filtered_count += len(pre_filter) - len(final_findings_map[path])
+            if cross_file_filtered_count:
+                logger.info(
+                    "orphan_cross_file_filter_applied",
+                    removed=cross_file_filtered_count,
+                    file_count=len(code_files),
+                )
 
         # 2.5. Enrich with LSP dead symbols (if available)
         # NOTE: Mutation applied to final_findings_map (post-filter) to avoid
@@ -468,6 +595,21 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAwar
                     "ast_findings": len(orphan_findings),
                     "filtered_findings": len(filtered_findings),
                 }
+
+            # Cross-file reference filter (single-file mode).
+            # Uses sibling files injected via set_sibling_files(), if available.
+            sibling_files: list[CodeFile] = getattr(self, "_sibling_files", [])
+            if sibling_files and filtered_findings:
+                corpus = self._build_cross_file_corpus(sibling_files, exclude_path=code_file.path)
+                pre_cross = len(filtered_findings)
+                filtered_findings = self._filter_cross_file_orphans(filtered_findings, corpus)
+                cross_removed = pre_cross - len(filtered_findings)
+                if cross_removed:
+                    logger.info(
+                        "orphan_cross_file_filter_applied_single",
+                        removed=cross_removed,
+                        file=code_file.path,
+                    )
 
             # Convert to Frame findings
             findings = self._convert_to_findings(filtered_findings, code_file)

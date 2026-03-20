@@ -801,3 +801,187 @@ def handler():
         result = frame._convert_taint_paths_to_findings(paths, "test.py")
         assert result is not None
         assert result.findings[0].is_blocker is True  # 0.9 >= 0.8 default
+
+
+class TestSemiTrustedSourceSeverityDowngrade:
+    """Env-var taint sources must be capped at MEDIUM and never flagged as blocker.
+
+    Environment variables are server-controlled, not user-controlled.  Even when
+    confidence exceeds the HIGH threshold, flows from os.environ / os.getenv /
+    process.env should produce MEDIUM findings so that config-reading code in
+    real projects does not generate high-severity noise.
+    """
+
+    _PYTHON_ENV_VAR_SOURCES = [
+        "os.environ",
+        "os.getenv",
+        "os.environ.get",
+    ]
+
+    _JS_ENV_VAR_SOURCES = ["process.env"]
+
+    def _make_path(self, source_name: str, sink_name: str = "open", sink_type: str = "FILE-path") -> object:
+        from warden.validation.frames.security._internal.taint_analyzer import TaintPath, TaintSink, TaintSource
+
+        return TaintPath(
+            source=TaintSource(name=source_name, node_type="call", line=2, confidence=0.95),
+            sink=TaintSink(name=sink_name, sink_type=sink_type, line=3),
+            confidence=0.95,
+        )
+
+    def test_os_environ_downgraded_to_medium(self):
+        """os.environ source -> MEDIUM severity, not HIGH."""
+        from warden.validation.frames.security.frame import SecurityFrame
+
+        frame = SecurityFrame(config={})
+        path = self._make_path("os.environ")
+        result = frame._convert_taint_paths_to_findings([path], "test.py")
+
+        assert result is not None
+        finding = result.findings[0]
+        assert finding.severity.value == "medium", (
+            f"Expected medium for os.environ source, got {finding.severity.value}"
+        )
+        assert finding.is_blocker is False, "os.environ source must never be a blocker"
+
+    def test_os_getenv_downgraded_to_medium(self):
+        """os.getenv source -> MEDIUM severity, not HIGH."""
+        from warden.validation.frames.security.frame import SecurityFrame
+
+        frame = SecurityFrame(config={})
+        path = self._make_path("os.getenv")
+        result = frame._convert_taint_paths_to_findings([path], "test.py")
+
+        assert result is not None
+        finding = result.findings[0]
+        assert finding.severity.value == "medium"
+        assert finding.is_blocker is False
+
+    def test_os_environ_get_downgraded_to_medium(self):
+        """os.environ.get source -> MEDIUM severity, not HIGH."""
+        from warden.validation.frames.security.frame import SecurityFrame
+
+        frame = SecurityFrame(config={})
+        path = self._make_path("os.environ.get")
+        result = frame._convert_taint_paths_to_findings([path], "test.py")
+
+        assert result is not None
+        finding = result.findings[0]
+        assert finding.severity.value == "medium"
+        assert finding.is_blocker is False
+
+    def test_process_env_js_downgraded_to_medium(self):
+        """process.env (JavaScript) source -> MEDIUM severity, not HIGH."""
+        from warden.validation.frames.security.frame import SecurityFrame
+
+        frame = SecurityFrame(config={})
+        path = self._make_path("process.env", sink_name="fs.readFile", sink_type="FILE-path")
+        result = frame._convert_taint_paths_to_findings([path], "test.js")
+
+        assert result is not None
+        finding = result.findings[0]
+        assert finding.severity.value == "medium"
+        assert finding.is_blocker is False
+
+    def test_env_var_downgrade_independent_of_confidence(self):
+        """Env-var downgrade applies even at maximum confidence (1.0)."""
+        from warden.validation.frames.security._internal.taint_analyzer import TaintPath, TaintSink, TaintSource
+        from warden.validation.frames.security.frame import SecurityFrame
+
+        frame = SecurityFrame(config={})
+        path = TaintPath(
+            source=TaintSource(name="os.environ", node_type="subscript", line=1, confidence=1.0),
+            sink=TaintSink(name="subprocess.run", sink_type="CMD-argument", line=2),
+            confidence=1.0,
+        )
+        result = frame._convert_taint_paths_to_findings([path], "test.py")
+
+        assert result is not None
+        finding = result.findings[0]
+        assert finding.severity.value == "medium"
+        assert finding.is_blocker is False
+
+    def test_env_var_downgrade_does_not_affect_request_args(self):
+        """request.args remains HIGH at confidence >= threshold — downgrade is env-var only."""
+        from warden.validation.frames.security.frame import SecurityFrame
+
+        frame = SecurityFrame(config={})
+        path = self._make_path("request.args", sink_name="cursor.execute", sink_type="SQL-value")
+        result = frame._convert_taint_paths_to_findings([path], "test.py")
+
+        assert result is not None
+        finding = result.findings[0]
+        assert finding.severity.value == "high", (
+            "request.args should still produce HIGH findings (fully untrusted)"
+        )
+        assert finding.is_blocker is True
+
+    def test_env_var_downgrade_does_not_affect_stdin(self):
+        """sys.stdin remains HIGH — only os.environ-family sources are semi-trusted."""
+        from warden.validation.frames.security.frame import SecurityFrame
+
+        frame = SecurityFrame(config={})
+        path = self._make_path("sys.stdin", sink_name="eval", sink_type="CODE-execution")
+        result = frame._convert_taint_paths_to_findings([path], "test.py")
+
+        assert result is not None
+        finding = result.findings[0]
+        assert finding.severity.value == "high"
+        assert finding.is_blocker is True
+
+    def test_mixed_paths_env_and_user_controlled(self):
+        """When a file has both env-var and request-arg taint paths, each is classified correctly."""
+        from warden.validation.frames.security._internal.taint_analyzer import TaintPath, TaintSink, TaintSource
+        from warden.validation.frames.security.frame import SecurityFrame
+
+        frame = SecurityFrame(config={})
+        env_path = TaintPath(
+            source=TaintSource(name="os.environ.get", node_type="call", line=5, confidence=0.95),
+            sink=TaintSink(name="open", sink_type="FILE-path", line=6),
+            confidence=0.95,
+        )
+        user_path = TaintPath(
+            source=TaintSource(name="request.args", node_type="call", line=10, confidence=0.95),
+            sink=TaintSink(name="cursor.execute", sink_type="SQL-value", line=11),
+            confidence=0.95,
+        )
+        result = frame._convert_taint_paths_to_findings([env_path, user_path], "test.py")
+
+        assert result is not None
+        assert len(result.findings) == 2
+
+        env_finding = next(f for f in result.findings if "os.environ" in f.message)
+        user_finding = next(f for f in result.findings if "request.args" in f.message)
+
+        assert env_finding.severity.value == "medium"
+        assert env_finding.is_blocker is False
+
+        assert user_finding.severity.value == "high"
+        assert user_finding.is_blocker is True
+
+    def test_taint_catalog_loads_semi_trusted_sources(self):
+        """TaintCatalog.get_default() populates semi_trusted_sources with env-var patterns."""
+        from warden.validation.frames.security._internal.taint_catalog import TaintCatalog
+
+        catalog = TaintCatalog.get_default()
+
+        assert "python" in catalog.semi_trusted_sources, (
+            "semi_trusted_sources should have a 'python' key"
+        )
+        python_semi = catalog.semi_trusted_sources["python"]
+        assert "os.environ" in python_semi
+        assert "os.getenv" in python_semi
+        assert "os.environ.get" in python_semi
+
+        assert "javascript" in catalog.semi_trusted_sources
+        assert "process.env" in catalog.semi_trusted_sources["javascript"]
+
+    def test_hardcoded_fallback_catalog_has_semi_trusted(self):
+        """_build_from_hardcoded() includes the semi_trusted_sources fallback."""
+        from warden.validation.frames.security._internal.taint_catalog import TaintCatalog
+
+        catalog = TaintCatalog._build_from_hardcoded()
+
+        assert "os.environ" in catalog.semi_trusted_sources.get("python", set())
+        assert "os.getenv" in catalog.semi_trusted_sources.get("python", set())
+        assert "process.env" in catalog.semi_trusted_sources.get("javascript", set())

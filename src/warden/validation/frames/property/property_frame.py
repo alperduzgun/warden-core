@@ -98,6 +98,9 @@ Focus on:
 4. State machine transitions (illegal states, race conditions).
 5. Mathematical properties (division by zero, overflow, precision loss).
 
+KNOWN SAFE PATTERNS — do NOT flag these as issues:
+- Python's `contextvars.ContextVar` (PEP 567): This is the official async-safe per-task state mechanism since Python 3.7. It is designed specifically for use in asyncio, FastAPI, Starlette, and other async frameworks. Never flag ContextVar usage as an async safety concern, thread safety issue, or race condition.
+
 Output must be a valid JSON object with the following structure:
 {
     "score": <0-10 integer, 10 is verified>,
@@ -123,6 +126,9 @@ Output must be a valid JSON object with the following structure:
 
     BATCH_SYSTEM_PROMPT = """You are an expert Formal Verification and Property Testing analyst. Analyze the provided code files for logical errors, invariant violations, and precondition failures.
 
+KNOWN SAFE PATTERNS — do NOT flag these as issues:
+- Python's `contextvars.ContextVar` (PEP 567): This is the official async-safe per-task state mechanism since Python 3.7. It is designed specifically for use in asyncio, FastAPI, Starlette, and other async frameworks. Never flag ContextVar usage as an async safety concern, thread safety issue, or race condition.
+
 For EACH file, output a JSON object. Return a JSON array where each element corresponds to a file:
 [
   {
@@ -143,6 +149,21 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
     ]
   }
 ]"""
+
+    # Guard patterns that indicate a division is already protected.
+    # Evaluated against the division line itself and up to 2 preceding lines.
+    _DIVISION_GUARD_PATTERNS: list[re.Pattern] = [
+        # Ternary / inline guard: `… / x if x else …`  or  `result if x else 0`
+        re.compile(r"\bif\b.+\belse\b"),
+        # Explicit zero-inequality guards: `if x != 0`, `if x > 0`, `if x >= 1`
+        re.compile(r"if\s+\w[\w.\[\]()]*\s*(?:!=|>|>=)\s*0"),
+        # Truthy guard: `if x:` / `if len(x):` / `if len(x) > 0`
+        re.compile(r"if\s+(?:len\s*\()?[\w.\[\]()]+\s*\)?(?:\s*(?:>|>=)\s*\d+)?\s*:"),
+        # try/except ZeroDivisionError in surrounding context
+        re.compile(r"except\s+ZeroDivisionError"),
+        # or-fallback: `x or 1`, `denominator or default`
+        re.compile(r"\w[\w.\[\]()]*\s+or\s+\w"),
+    ]
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize PropertyFrame."""
@@ -209,6 +230,10 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
                 + assertion_findings_map.get(code_file.path, [])
                 + llm_findings_map.get(code_file.path, [])
             )
+            # Drop known false-positive patterns (e.g. ContextVar flagged as async-unsafe)
+            all_findings = self._filter_known_false_positives(all_findings)
+            # Drop low-value architectural noise from LLM (cache TTL, transport fallback, …)
+            all_findings = self._filter_llm_noise(all_findings)
             status = self._determine_status(all_findings)
             results.append(
                 FrameResult(
@@ -345,6 +370,20 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
             try:
                 result = AnalysisResult.from_json(item)
                 for issue in result.issues:
+                    if not self._validate_llm_line_reference(
+                        finding_message=issue.title,
+                        finding_title=issue.description,
+                        code_content=code_file.content,
+                        reported_line=issue.line,
+                    ):
+                        logger.debug(
+                            "property_batch_llm_line_hallucination_dropped",
+                            file=code_file.path,
+                            file_idx=file_idx,
+                            reported_line=issue.line,
+                            title=issue.title,
+                        )
+                        continue
                     findings_map[code_file.path].append(
                         Finding(
                             id=f"{self.frame_id}-llm-batch-{file_idx}-{issue.line}",
@@ -446,6 +485,11 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
         assertion_findings = self._check_assertions(code_file)
         findings.extend(assertion_findings)
 
+        # Drop known false-positive patterns (e.g. ContextVar flagged as async-unsafe)
+        findings = self._filter_known_false_positives(findings)
+        # Drop low-value architectural noise from LLM (cache TTL, transport fallback, …)
+        findings = self._filter_llm_noise(findings)
+
         # Determine status
         status = self._determine_status(findings)
 
@@ -501,6 +545,13 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
 
                 matches = compiled_pattern.finditer(line)
                 for _ in matches:
+                    # For division checks, skip findings where a guard already exists
+                    # in the surrounding context (same line or up to 2 lines before).
+                    if check_id == "division_no_zero_check" and self._has_division_guard(
+                        lines, line_num
+                    ):
+                        continue
+
                     finding = Finding(
                         id=f"{self.frame_id}-{check_id}-{line_num}",
                         severity=severity,
@@ -520,15 +571,69 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
 
         return findings
 
+    def _has_division_guard(self, lines: list[str], line_num: int) -> bool:
+        """Return True when a division on *line_num* is already guarded.
+
+        Inspects the division line itself and up to 2 lines before it for any
+        of the patterns defined in ``_DIVISION_GUARD_PATTERNS``.  This catches:
+
+        * Inline ternary guards: ``sum(x) / len(x) if x else 0.0``
+        * Preceding if-checks:  ``if denominator != 0:``
+        * Truthy guards:        ``if values:``
+        * try/except blocks:    ``except ZeroDivisionError``
+        * or-fallbacks:         ``divisor or 1``
+        """
+        # lines is 0-indexed; line_num is 1-indexed
+        start = max(0, line_num - 3)  # up to 2 lines before (inclusive)
+        end = line_num  # line_num - 1 is the match line (0-indexed)
+        context = " ".join(lines[start:end])
+        return any(p.search(context) for p in self._DIVISION_GUARD_PATTERNS)
+
+    @staticmethod
+    def _is_test_file(file_path: str) -> bool:
+        """Return True if the file path looks like a test file.
+
+        Covers Python, JavaScript/TypeScript, Go, Ruby, and Java conventions.
+        """
+        path_lower = file_path.lower().replace("\\", "/")
+        parts = path_lower.split("/")
+        filename = parts[-1]
+
+        # Directory-level indicators
+        test_dir_names = {"tests", "test", "__tests__", "spec", "specs", "e2e", "integration"}
+        if any(part in test_dir_names for part in parts[:-1]):
+            return True
+
+        # Filename-level indicators
+        test_filename_patterns = (
+            "test_",    # Python: test_foo.py
+            "_test.",   # Python/Go: foo_test.py, foo_test.go
+            ".test.",   # JS/TS: foo.test.ts
+            ".spec.",   # JS/TS: foo.spec.ts
+            "_spec.",   # Ruby: foo_spec.rb
+            "spec_",    # Less common prefix
+        )
+        return any(pat in filename for pat in test_filename_patterns)
+
     def _check_assertions(self, code_file: CodeFile) -> list[Finding]:
-        """Check for missing assertions in critical code."""
+        """Check for missing assertions in test code.
+
+        Assertions belong in test files. Flagging their absence in production
+        code generates low-value noise on every real-world project, so this
+        check is skipped entirely for non-test files.
+        """
         findings: list[Finding] = []
+
+        # Only meaningful for test files — production code is not expected to
+        # use assert statements for contract validation.
+        if not self._is_test_file(code_file.path):
+            return findings
 
         # Count assertions vs functions using pre-compiled patterns
         assertion_count = len(self._assertion_pattern.findall(code_file.content))
         function_count = len(self._function_pattern.findall(code_file.content))
 
-        # If many functions but no assertions, warn
+        # If many test functions but no assertions, warn
         if function_count > 10 and assertion_count == 0:
             finding = Finding(
                 id=f"{self.frame_id}-no-assertions",
@@ -541,6 +646,163 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
             findings.append(finding)
 
         return findings
+
+    # Patterns whose titles/descriptions indicate a known false-positive category.
+    # Each entry is (title_fragment, description_fragment) — both are checked
+    # case-insensitively. A finding is suppressed when ANY entry matches.
+    _KNOWN_FP_PATTERNS: list[tuple[str, str]] = [
+        # ContextVar is the official Python async-safe state mechanism (PEP 567).
+        ("contextvar", "async"),
+        ("contextvar", "thread"),
+        ("contextvar", "race"),
+        ("contextvar", "safety"),
+        ("contextvar", "safe"),
+    ]
+
+    # Keywords that, when present in a LOW-severity LLM finding's combined
+    # title+description text, indicate architectural style noise rather than an
+    # actionable defect.  A finding is suppressed when ANY noise keyword matches
+    # AND no security-sensitive keyword is also present.
+    _NOISE_KEYWORDS: frozenset[str] = frozenset(
+        {
+            "hardcoded constant",
+            "hardcoded cache",
+            "hardcoded ttl",
+            "cache ttl",
+            "transport fallback",
+            "fallback without validation",
+            "magic number",
+            "configuration constant",
+            "missing configuration",
+            "without configuration",
+            "not configurable",
+            "not externalized",
+            "externalize",
+            "should be configurable",
+        }
+    )
+
+    # If any of these security-sensitive terms appear in the same finding,
+    # the finding is NOT suppressed regardless of noise-keyword matches.
+    _SECURITY_EXEMPT_KEYWORDS: frozenset[str] = frozenset(
+        {
+            "password",
+            "passwd",
+            "secret",
+            "api key",
+            "apikey",
+            "token",
+            "credential",
+            "private key",
+            "encryption key",
+            "auth",
+            "bearer",
+            "jwt",
+            "oauth",
+        }
+    )
+
+    def _filter_known_false_positives(self, findings: list[Finding]) -> list[Finding]:
+        """Drop findings that match known false-positive patterns.
+
+        This is a defense-in-depth layer: the LLM prompts already instruct the
+        model not to flag these patterns, but this filter catches any residual
+        cases where the model ignores that guidance.
+        """
+        filtered: list[Finding] = []
+        for finding in findings:
+            title_lower = (finding.message or "").lower()
+            desc_lower = (finding.detail or "").lower()
+            combined = title_lower + " " + desc_lower
+
+            suppressed = False
+            for title_frag, desc_frag in self._KNOWN_FP_PATTERNS:
+                if title_frag in combined and desc_frag in combined:
+                    logger.debug(
+                        "property_fp_suppressed",
+                        finding_id=finding.id,
+                        message=finding.message,
+                        reason=f"matches known-safe pattern: {title_frag!r}+{desc_frag!r}",
+                    )
+                    suppressed = True
+                    break
+
+            if not suppressed:
+                filtered.append(finding)
+
+        return filtered
+
+    def _filter_llm_noise(self, findings: list[Finding]) -> list[Finding]:
+        """Drop low-value architectural noise from LLM-generated findings.
+
+        Keeps any finding that is:
+          - severity medium, high, or critical (always kept), OR
+          - severity low/info but contains security-sensitive keywords
+            (password, secret, token, credential, key, auth, jwt, …).
+
+        Drops severity low/info findings whose combined title+description
+        contain a known architectural-noise keyword (hardcoded constant,
+        cache TTL, transport fallback, magic number, configuration …) AND
+        no security-sensitive keyword.
+        """
+        filtered: list[Finding] = []
+        for finding in findings:
+            severity = (finding.severity or "low").lower()
+
+            # Always keep medium+ findings — they are actionable.
+            if severity not in ("low", "info"):
+                filtered.append(finding)
+                continue
+
+            combined = ((finding.message or "") + " " + (finding.detail or "")).lower()
+
+            # Exempt from suppression if any security-sensitive term is present.
+            if any(sec in combined for sec in self._SECURITY_EXEMPT_KEYWORDS):
+                filtered.append(finding)
+                continue
+
+            # Suppress if a noise keyword matches.
+            matched_noise = next((kw for kw in self._NOISE_KEYWORDS if kw in combined), None)
+            if matched_noise:
+                logger.debug(
+                    "property_llm_noise_suppressed",
+                    finding_id=finding.id,
+                    message=finding.message,
+                    noise_keyword=matched_noise,
+                )
+                continue
+
+            filtered.append(finding)
+
+        return filtered
+
+    # ------------------------------------------------------------------
+    # LLM line-reference validation
+    # (implementation lives in warden.shared.utils.finding_utils)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_llm_line_reference(
+        finding_message: str,
+        finding_title: str,
+        code_content: str,
+        reported_line: int,
+        window: int = 3,
+    ) -> bool:
+        """Delegate to the shared line-reference validator.
+
+        See ``warden.shared.utils.finding_utils.validate_llm_line_reference``
+        for full documentation.
+        """
+        from warden.shared.utils.finding_utils import validate_llm_line_reference
+
+        return validate_llm_line_reference(
+            finding_message=finding_message,
+            finding_title=finding_title,
+            code_content=code_content,
+            reported_line=reported_line,
+            window=window,
+        )
 
     def _determine_status(self, findings: list[Finding]) -> str:
         """Determine frame status based on findings."""
@@ -605,7 +867,24 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
                     data = json.loads(content)
                     result = AnalysisResult.from_json(data)
 
+                    raw_count = 0
+                    dropped_count = 0
                     for issue in result.issues:
+                        raw_count += 1
+                        if not self._validate_llm_line_reference(
+                            finding_message=issue.title,
+                            finding_title=issue.description,
+                            code_content=code_file.content,
+                            reported_line=issue.line,
+                        ):
+                            logger.debug(
+                                "property_llm_line_hallucination_dropped",
+                                file=code_file.path,
+                                reported_line=issue.line,
+                                title=issue.title,
+                            )
+                            dropped_count += 1
+                            continue
                         findings.append(
                             Finding(
                                 id=f"{self.frame_id}-llm-{issue.line}",
@@ -617,7 +896,13 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
                             )
                         )
 
-                    logger.info("property_llm_analysis_completed", findings=len(findings), confidence=result.confidence)
+                    logger.info(
+                        "property_llm_analysis_completed",
+                        findings=len(findings),
+                        confidence=result.confidence,
+                        raw_issues=raw_count,
+                        line_hallucinations_dropped=dropped_count,
+                    )
 
                 except Exception as e:
                     logger.warning("property_llm_parsing_failed", error=str(e), content_preview=content[:100])

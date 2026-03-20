@@ -290,8 +290,13 @@ class StaleAPICheck(ValidationCheck):
             #   base[key] = value      (key/k/name/attr/field as the subscript index)
             # Anchoring on common loop-variable names keeps the signal tight while
             # still catching the dominant real-world spelling of this pattern.
-            # Final confirmation is left to the LLM batch verifier.
+            #
+            # TAINT-AWARE: this pattern is only reported when a taint source
+            # (request.json, request.form, request.args, etc.) appears within
+            # ±10 lines of the match.  Internal dict iteration over hardcoded
+            # data is safe and must not be flagged.  See _is_taint_context().
             "pattern": r"^\s*\w+\[(?:key|k|name|attr|field)\]\s*=\s*\w",
+            "id": "dunder-subscript-assign",
             "replacement": (
                 "Add a dunder-key guard before assigning: "
                 "if isinstance(key, str) and key.startswith('__') and key.endswith('__'): continue"
@@ -306,6 +311,27 @@ class StaleAPICheck(ValidationCheck):
             ),
         },
     ]
+
+    # Regex that matches known user-input taint sources in Python code.
+    # Used by _is_taint_context() to decide whether the dunder-subscript
+    # pattern fires in a given context window.
+    _TAINT_SOURCE_RE = re.compile(
+        r"""
+        request\s*\.\s*(?:json|form|args|data|values|get_json|files|cookies)
+        | flask\.request
+        | django\.http
+        | cherrypy\.request
+        | bottle\.request
+        | fastapi\s*\.\s*Request
+        | request\.POST
+        | request\.GET
+        | request\.body
+        | environ\.get\s*\(
+        | input\s*\(           # bare input() call
+        | sys\.argv
+        """,
+        re.VERBOSE,
+    )
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize stale API check and pre-compile patterns."""
@@ -323,6 +349,45 @@ class StaleAPICheck(ValidationCheck):
             return ""
         normalized = language.lower().strip()
         return _LANGUAGE_ALIASES.get(normalized, normalized)
+
+    def _is_taint_context(
+        self,
+        lines: list[str],
+        match_line_index: int,
+        window: int = 10,
+    ) -> bool:
+        """Return True when a user-input taint source appears near the match.
+
+        Scans ``window`` lines above and below ``match_line_index`` (0-based)
+        for any pattern in ``_TAINT_SOURCE_RE``.  Only lines that could
+        plausibly introduce taint are considered; pure comment lines are
+        excluded.
+
+        This heuristic lets the dunder-subscript pattern skip safe internal
+        dict iteration (e.g. ``for key, col in field_map.items()``) while
+        still firing on user-controlled merges like
+        ``for key, val in request.json.items()``.
+
+        Args:
+            lines: All source lines of the file (0-based list).
+            match_line_index: 0-based index of the line that matched.
+            window: Number of lines to scan above and below the match.
+
+        Returns:
+            True if at least one taint source is found in the context window.
+        """
+        start = max(0, match_line_index - window)
+        end = min(len(lines), match_line_index + window + 1)
+
+        for i in range(start, end):
+            candidate = lines[i]
+            # Skip pure comment lines — they cannot be taint sources
+            if candidate.lstrip().startswith("#"):
+                continue
+            if self._TAINT_SOURCE_RE.search(candidate):
+                return True
+
+        return False
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """
@@ -354,6 +419,22 @@ class StaleAPICheck(ValidationCheck):
 
                 if not compiled_pattern.search(line):
                     continue
+
+                # Taint-context guard for the dunder-subscript pattern.
+                # Because `^\s*\w+[key] = \w` matches ANY dict assignment with
+                # those variable names (including safe internal iteration), we
+                # only report it when a user-input taint source appears within
+                # ±10 lines.  If no taint source is nearby the code is
+                # considered safe and we skip the finding.
+                if entry.get("id") == "dunder-subscript-assign":
+                    line_index = line_num - 1  # convert to 0-based
+                    if not self._is_taint_context(lines, line_index):
+                        logger.debug(
+                            "dunder_subscript_suppressed_no_taint",
+                            line=line_num,
+                            file=code_file.path,
+                        )
+                        continue
 
                 # Respect inline suppressions
                 suppression_matcher = self._get_suppression_matcher(code_file.path)

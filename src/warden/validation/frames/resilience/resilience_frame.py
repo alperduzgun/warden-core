@@ -972,7 +972,7 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
             response = await asyncio.wait_for(self.llm_service.send_with_tools_async(request), timeout=self._timeout)
 
             if response.success and response.content:
-                findings = self._parse_llm_response(response.content, code_file.path)
+                findings = self._parse_llm_response(response.content, code_file.path, code_file.content)
                 logger.info("chaos_llm_analysis_complete", findings=len(findings))
                 # Success - reset failure count
                 ResilienceFrame._llm_failure_count = 0
@@ -1000,8 +1000,17 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                 reset_seconds=self.CIRCUIT_BREAKER_RESET_SECONDS,
             )
 
-    def _parse_llm_response(self, content: str, file_path: str) -> list[Finding]:
-        """Parse LLM JSON response into findings."""
+    def _parse_llm_response(self, content: str, file_path: str, source_code: str = "") -> list[Finding]:
+        """Parse LLM JSON response into findings.
+
+        Args:
+            content:     Raw LLM response string.
+            file_path:   Path of the file being analysed (used in Finding.location).
+            source_code: Full source text of the file.  When provided each
+                         issue's line number is validated against the actual
+                         code to reject hallucinated references.
+        """
+        from warden.shared.utils.finding_utils import validate_llm_line_reference
         from warden.shared.utils.json_parser import parse_json_from_llm
 
         findings: list[Finding] = []
@@ -1012,13 +1021,32 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                 return findings
 
             for issue in data.get("issues", []):
+                reported_line = issue.get("line", 1)
+                title = issue.get("title", "Resilience issue")
+                description = issue.get("description", "")
+
+                # Validate that the reported line actually points at relevant code.
+                if source_code and not validate_llm_line_reference(
+                    finding_message=title,
+                    finding_title=description,
+                    code_content=source_code,
+                    reported_line=reported_line,
+                ):
+                    logger.debug(
+                        "resilience_llm_line_hallucination_dropped",
+                        file=file_path,
+                        reported_line=reported_line,
+                        title=title,
+                    )
+                    continue
+
                 findings.append(
                     Finding(
-                        id=f"{self.frame_id}-{issue.get('line', 0)}",
+                        id=f"{self.frame_id}-{reported_line}",
                         severity=issue.get("severity", "medium"),
-                        message=issue.get("title", "Resilience issue"),
-                        location=f"{file_path}:{issue.get('line', 1)}",
-                        detail=f"{issue.get('description', '')}\n\nSuggestion: {issue.get('suggestion', '')}",
+                        message=title,
+                        location=f"{file_path}:{reported_line}",
+                        detail=f"{description}\n\nSuggestion: {issue.get('suggestion', '')}",
                         code=None,
                     )
                 )

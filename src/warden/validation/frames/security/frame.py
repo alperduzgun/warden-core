@@ -945,20 +945,65 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         Reads ``confidence_threshold`` from ``self.config["taint"]`` with validated
         defaults from ``TAINT_DEFAULTS``.  Findings whose confidence >= threshold
         get HIGH severity **and** ``is_blocker=True``.
+
+        Semi-trusted sources (e.g. ``os.environ``, ``os.getenv``, ``process.env``)
+        are server-controlled and therefore carry lower risk than sources directly
+        controlled by end users (e.g. ``request.args``).  Findings from semi-trusted
+        sources are capped at MEDIUM severity and are never marked as blockers,
+        regardless of confidence.
         """
         from warden.validation.domain.check import CheckFinding, CheckSeverity
 
         from ._internal.taint_analyzer import validate_taint_config
+        from ._internal.taint_catalog import TaintCatalog
 
         taint_config = validate_taint_config(self.config.get("taint"))
         threshold = taint_config["confidence_threshold"]
+
+        # Build the flat set of semi-trusted source patterns from the catalog so
+        # we only compute it once per call rather than inside the loop.
+        try:
+            from pathlib import Path as _Path
+
+            project_root = _Path(file_path).parent
+            while project_root != project_root.parent:
+                if (project_root / ".warden").exists():
+                    break
+                project_root = project_root.parent
+            catalog = TaintCatalog.load(project_root)
+        except Exception:
+            catalog = TaintCatalog.get_default()
+
+        semi_trusted_patterns: set[str] = set()
+        for patterns in catalog.semi_trusted_sources.values():
+            semi_trusted_patterns.update(patterns)
 
         taint_findings: list[CheckFinding] = []
         for tp in taint_paths:
             if tp.is_sanitized:
                 continue
+
             is_high_conf = tp.confidence >= threshold
-            severity = CheckSeverity.HIGH if is_high_conf else CheckSeverity.MEDIUM
+
+            # Downgrade severity for server-controlled (semi-trusted) sources.
+            # A source is semi-trusted when its name starts with or contains any
+            # of the registered semi-trusted patterns (e.g. "os.environ.get" starts
+            # with the pattern "os.environ").
+            source_name = tp.source.name
+            is_semi_trusted = any(
+                source_name == pattern
+                or source_name.startswith(pattern + ".")
+                or source_name.startswith(pattern + "[")
+                for pattern in semi_trusted_patterns
+            )
+
+            if is_semi_trusted:
+                severity = CheckSeverity.MEDIUM
+                is_blocker = False
+            else:
+                severity = CheckSeverity.HIGH if is_high_conf else CheckSeverity.MEDIUM
+                is_blocker = is_high_conf
+
             taint_findings.append(
                 CheckFinding(
                     check_id="taint-analysis",
@@ -971,7 +1016,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     location=f"{file_path}:{tp.sink.line}",
                     suggestion=self._build_taint_suggestion(tp),
                     code_snippet=None,
-                    is_blocker=is_high_conf,
+                    is_blocker=is_blocker,
                 )
             )
         if not taint_findings:

@@ -67,6 +67,30 @@ sources:
     # WebSocket / events
     - event.data
 
+# ── Semi-trusted sources (server-controlled, not directly user-controlled) ───
+#
+# Taint flows originating from these sources are capped at MEDIUM severity
+# and never marked as blockers.  They are still tracked because misconfigured
+# environment variables can be a vector, but they pose significantly lower risk
+# than sources directly controlled by end users (e.g. request.args).
+#
+# Users can extend this list in .warden/taint_catalog.yaml using the same
+# format:
+#   semi_trusted_sources:
+#     python:
+#       - my_config_reader
+#     javascript:
+#       - myApp.config
+
+semi_trusted_sources:
+  python:
+    - os.environ
+    - os.getenv
+    - os.environ.get
+
+  javascript:
+    - process.env
+
 # ── Sinks (dangerous functions that should not receive tainted data) ────────
 # All languages combined in a flat mapping. For keys that appear in both
 # Python and JS with different types, the JS type is used (matching the
@@ -297,3 +321,26 @@ sanitizers:
 assign_sinks:
   - innerHTML
   - outerHTML
+
+# ── Semi-trusted sources (server-controlled, not directly user-controlled) ───
+#
+# Taint flows originating from these sources are capped at MEDIUM severity
+# and never marked as blockers.  They are still tracked because misconfigured
+# environment variables can be a vector, but they pose significantly lower risk
+# than sources directly controlled by end users (e.g. request.args).
+#
+# Users can extend this list in .warden/taint_catalog.yaml:
+#   semi_trusted_sources:
+#     python:
+#       - my_config_reader
+#     javascript:
+#       - myApp.config
+
+semi_trusted_sources:
+  python:
+    - os.environ
+    - os.getenv
+    - os.environ.get
+
+  javascript:
+    - process.env

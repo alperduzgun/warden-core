@@ -407,7 +407,26 @@ Output must be a valid JSON object with the following structure:
                         raise ValueError("JSON repair failed — no parseable structure found")
                     result = AnalysisResult.from_json(parsed)
 
+                    from warden.shared.utils.finding_utils import validate_llm_line_reference
+
+                    raw_count = 0
+                    dropped_count = 0
                     for issue in result.issues:
+                        raw_count += 1
+                        if not validate_llm_line_reference(
+                            finding_message=issue.title,
+                            finding_title=issue.description,
+                            code_content=code_file.content,
+                            reported_line=issue.line,
+                        ):
+                            logger.debug(
+                                "fuzz_llm_line_hallucination_dropped",
+                                file=code_file.path,
+                                reported_line=issue.line,
+                                title=issue.title,
+                            )
+                            dropped_count += 1
+                            continue
                         findings.append(
                             Finding(
                                 id=f"{self.frame_id}-llm-{issue.line}",
@@ -419,7 +438,13 @@ Output must be a valid JSON object with the following structure:
                             )
                         )
 
-                    logger.info("fuzz_llm_analysis_completed", findings=len(findings), confidence=result.confidence)
+                    logger.info(
+                        "fuzz_llm_analysis_completed",
+                        findings=len(findings),
+                        confidence=result.confidence,
+                        raw_issues=raw_count,
+                        line_hallucinations_dropped=dropped_count,
+                    )
 
                 except Exception as e:
                     logger.warning("fuzz_llm_parsing_failed", error=str(e), content_preview=content[:100])

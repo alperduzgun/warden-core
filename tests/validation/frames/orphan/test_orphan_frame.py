@@ -522,3 +522,269 @@ _ = MyClass()
     # Should pass - special functions are ignored
     assert result.status == "passed"
     assert result.issues_found == 0
+
+
+# ---------------------------------------------------------------------------
+# Cross-file reference tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_cross_file_reference_suppresses_orphan_in_execute_async(OrphanFrame):
+    """
+    Function defined in service.py and called from server.py must NOT be
+    flagged as an orphan when sibling files are injected via set_sibling_files.
+
+    Reproduces: appnova-appstore-mcp service.py:get_active_app() false positive.
+    """
+    service_code = '''
+def get_active_app():
+    """Return the currently active app."""
+    return {"name": "MyApp", "version": "1.0"}
+'''
+
+    server_code = '''
+import service
+
+def handle_request():
+    app = service.get_active_app()
+    return app
+'''
+
+    service_file = CodeFile(path="service.py", content=service_code, language="python")
+    server_file = CodeFile(path="server.py", content=server_code, language="python")
+
+    frame = OrphanFrame()
+    # Inject sibling so the frame can resolve cross-file references
+    frame.set_sibling_files([server_file])
+
+    result = await frame.execute_async(service_file)
+
+    # get_active_app is referenced from server.py — must NOT be flagged
+    orphan_findings = [f for f in result.findings if "get_active_app" in f.message]
+    assert len(orphan_findings) == 0, (
+        "get_active_app is called from server.py but was incorrectly flagged as an orphan"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cross_file_reference_suppresses_orphan_in_batch(OrphanFrame):
+    """
+    Batch execution (execute_batch_async) must also resolve cross-file references
+    so that a function called from file B is not flagged as an orphan in file A.
+    """
+    service_code = '''
+def get_active_app():
+    """Return the currently active app."""
+    return {"name": "MyApp", "version": "1.0"}
+'''
+
+    server_code = '''
+import service
+
+def handle_request():
+    app = service.get_active_app()
+    return app
+'''
+
+    service_file = CodeFile(path="service.py", content=service_code, language="python")
+    server_file = CodeFile(path="server.py", content=server_code, language="python")
+
+    frame = OrphanFrame()
+    results = await frame.execute_batch_async([service_file, server_file])
+
+    # Collect all findings across both results
+    all_findings = []
+    for r in results:
+        all_findings.extend(r.findings)
+
+    orphan_findings = [f for f in all_findings if "get_active_app" in f.message]
+    assert len(orphan_findings) == 0, (
+        "get_active_app is called from server.py but was incorrectly flagged as an orphan in batch mode"
+    )
+
+
+@pytest.mark.asyncio
+async def test_truly_unreferenced_function_still_flagged_in_batch(OrphanFrame):
+    """
+    Functions that are genuinely unreferenced across ALL project files must
+    still be reported.  The cross-file filter must not suppress real orphans.
+    """
+    service_code = '''
+def get_active_app():
+    return {"name": "MyApp"}
+
+def legacy_unused_function():
+    """This function is truly unused across the whole project."""
+    return "nobody calls me"
+'''
+
+    server_code = '''
+import service
+
+def handle_request():
+    app = service.get_active_app()
+    return app
+'''
+
+    service_file = CodeFile(path="service.py", content=service_code, language="python")
+    server_file = CodeFile(path="server.py", content=server_code, language="python")
+
+    frame = OrphanFrame()
+    results = await frame.execute_batch_async([service_file, server_file])
+
+    all_findings = []
+    for r in results:
+        all_findings.extend(r.findings)
+
+    # get_active_app is used in server.py — must NOT appear
+    get_active_findings = [f for f in all_findings if "get_active_app" in f.message]
+    assert len(get_active_findings) == 0, "get_active_app is cross-referenced but was still flagged"
+
+    # legacy_unused_function is NOT referenced anywhere — must still appear
+    legacy_findings = [f for f in all_findings if "legacy_unused_function" in f.message]
+    assert len(legacy_findings) > 0, (
+        "legacy_unused_function is genuinely unreferenced but was not flagged"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cross_file_class_reference_suppressed_in_batch(OrphanFrame):
+    """
+    A class defined in models.py but instantiated in views.py must not be
+    flagged as an orphan when both files are analysed together.
+    """
+    models_code = '''
+class UserModel:
+    def __init__(self, name: str) -> None:
+        self.name = name
+'''
+
+    views_code = '''
+from models import UserModel
+
+def create_user(name: str):
+    return UserModel(name=name)
+'''
+
+    models_file = CodeFile(path="models.py", content=models_code, language="python")
+    views_file = CodeFile(path="views.py", content=views_code, language="python")
+
+    frame = OrphanFrame()
+    results = await frame.execute_batch_async([models_file, views_file])
+
+    all_findings = []
+    for r in results:
+        all_findings.extend(r.findings)
+
+    user_model_findings = [f for f in all_findings if "UserModel" in f.message]
+    assert len(user_model_findings) == 0, (
+        "UserModel is instantiated in views.py but was incorrectly flagged as an orphan"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cross_file_unused_import_not_suppressed(OrphanFrame):
+    """
+    The cross-file filter must NOT suppress unused_import findings — they are
+    always file-local and unaffected by cross-file calls.
+    """
+    service_code = '''
+import json  # unused — should still be flagged
+
+def get_active_app():
+    return {"name": "MyApp"}
+'''
+
+    server_code = '''
+import service
+
+def handle_request():
+    return service.get_active_app()
+'''
+
+    service_file = CodeFile(path="service.py", content=service_code, language="python")
+    server_file = CodeFile(path="server.py", content=server_code, language="python")
+
+    frame = OrphanFrame()
+    results = await frame.execute_batch_async([service_file, server_file])
+
+    all_findings = []
+    for r in results:
+        all_findings.extend(r.findings)
+
+    # json import is unused in service.py — must still be reported
+    json_findings = [f for f in all_findings if "json" in f.message]
+    assert len(json_findings) > 0, "Unused import 'json' should still be flagged despite cross-file filter"
+
+
+def test_build_cross_file_corpus_excludes_target(OrphanFrame):
+    """
+    _build_cross_file_corpus must exclude the file being analysed so its own
+    definition lines don't accidentally count as cross-file references.
+    """
+    frame_cls = OrphanFrame
+    frame = frame_cls()
+
+    file_a = CodeFile(path="a.py", content="def foo(): pass", language="python")
+    file_b = CodeFile(path="b.py", content="foo()", language="python")
+    file_c = CodeFile(path="c.py", content="bar()", language="python")
+
+    corpus = frame._build_cross_file_corpus([file_a, file_b, file_c], exclude_path="a.py")
+
+    # a.py itself must not be in the corpus (its definition would be a false self-reference)
+    assert "def foo" not in corpus
+    # Other files are included
+    assert "foo()" in corpus
+    assert "bar()" in corpus
+
+
+def test_is_cross_file_referenced_whole_word(OrphanFrame):
+    """
+    _is_cross_file_referenced must match whole identifiers only.
+    'get_app' must not match inside 'get_application'.
+    """
+    frame = OrphanFrame()
+
+    corpus = "result = get_application()\nother = get_app_list()"
+    assert not frame._is_cross_file_referenced("get_app", corpus), (
+        "'get_app' must not match substring inside 'get_application' or 'get_app_list'"
+    )
+
+    corpus_with_exact = "result = get_app()\n"
+    assert frame._is_cross_file_referenced("get_app", corpus_with_exact), (
+        "'get_app' must match when it appears as an exact whole-word call"
+    )
+
+
+def test_filter_cross_file_orphans_leaves_dead_code_untouched(OrphanFrame):
+    """
+    _filter_cross_file_orphans must not remove dead_code or unused_import
+    findings even when the name appears in sibling files.
+    """
+    from warden.validation.frames.orphan.orphan_detector import OrphanFinding
+
+    frame = OrphanFrame()
+
+    findings = [
+        OrphanFinding(
+            orphan_type="dead_code",
+            name="some_var",
+            line_number=5,
+            code_snippet="some_var = 1",
+            reason="Unreachable statement",
+        ),
+        OrphanFinding(
+            orphan_type="unused_import",
+            name="json",
+            line_number=1,
+            code_snippet="import json",
+            reason="Import 'json' is never used",
+        ),
+    ]
+
+    # Both names appear in sibling files
+    corpus = "some_var = external_use()\nimport json\nfoo = json.dumps({})"
+    result = frame._filter_cross_file_orphans(findings, corpus)
+
+    # Neither finding should be removed — they are not cross-file suppressible
+    assert len(result) == 2

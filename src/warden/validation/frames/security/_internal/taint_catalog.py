@@ -47,21 +47,26 @@ _DEFAULT_CATALOG_PATH = Path(__file__).with_suffix(".yaml")
 @dataclass
 class TaintCatalog:
     """
-    Taint analysis catalog: sources, sinks, sanitizers.
+    Taint analysis catalog: sources, sinks, sanitizers, semi_trusted_sources.
 
-    sources:      lang -> set of source patterns
-                  {"python": {"request.args", ...}, "javascript": {"req.body", ...}}
-    sinks:        sink_name -> sink_type (Python + JS combined)
-                  {"cursor.execute": "SQL-value", "eval": "CODE-execution", ...}
-    assign_sinks: JS DOM property assignment sinks (innerHTML, outerHTML)
-    sanitizers:   sink_type -> set of sanitizer functions
-                  {"SQL-value": {"parameterized_query", ...}, ...}
+    sources:              lang -> set of source patterns
+                          {"python": {"request.args", ...}, "javascript": {"req.body", ...}}
+    sinks:                sink_name -> sink_type (Python + JS combined)
+                          {"cursor.execute": "SQL-value", "eval": "CODE-execution", ...}
+    assign_sinks:         JS DOM property assignment sinks (innerHTML, outerHTML)
+    sanitizers:           sink_type -> set of sanitizer functions
+                          {"SQL-value": {"parameterized_query", ...}, ...}
+    semi_trusted_sources: lang -> set of server-controlled source patterns
+                          Taint flows from these sources are capped at MEDIUM severity
+                          and are never marked as blockers.
+                          {"python": {"os.environ", "os.getenv", ...}, ...}
     """
 
     sources: dict[str, set[str]] = field(default_factory=dict)
     sinks: dict[str, str] = field(default_factory=dict)
     assign_sinks: set[str] = field(default_factory=set)
     sanitizers: dict[str, set[str]] = field(default_factory=dict)
+    semi_trusted_sources: dict[str, set[str]] = field(default_factory=dict)
 
     # ── Default YAML loading ─────────────────────────────────────────────
 
@@ -139,11 +144,22 @@ class TaintCatalog:
         if isinstance(raw_assign, list):
             assign_sinks = {e for e in raw_assign if isinstance(e, str) and e.strip()}
 
+        # ── Semi-trusted sources ──────────────────────────────────────────
+        semi_trusted_sources: dict[str, set[str]] = {}
+        raw_semi = data.get("semi_trusted_sources") or {}
+        if isinstance(raw_semi, dict):
+            for lang, entries in raw_semi.items():
+                if isinstance(entries, list):
+                    valid = {e for e in entries if isinstance(e, str) and e.strip()}
+                    if valid:
+                        semi_trusted_sources[lang] = valid
+
         return cls(
             sources=sources,
             sinks=sinks,
             assign_sinks=assign_sinks,
             sanitizers=sanitizers,
+            semi_trusted_sources=semi_trusted_sources,
         )
 
     # ── Hardcoded fallback ───────────────────────────────────────────────
@@ -183,11 +199,19 @@ class TaintCatalog:
         }
         combined_assign_sinks: set[str] = set(_JS_ASSIGN_SINKS)
 
+        # Semi-trusted sources: env-var sources that are server-controlled.
+        # Hardcoded fallback mirrors taint_catalog.yaml semi_trusted_sources.
+        hardcoded_semi_trusted: dict[str, set[str]] = {
+            "python": {"os.environ", "os.getenv", "os.environ.get"},
+            "javascript": {"process.env"},
+        }
+
         return cls(
             sources=combined_sources,
             sinks=combined_sinks,
             assign_sinks=combined_assign_sinks,
             sanitizers=combined_sanitizers,
+            semi_trusted_sources=hardcoded_semi_trusted,
         )
 
     # ── Public API ───────────────────────────────────────────────────────
@@ -306,5 +330,15 @@ class TaintCatalog:
             for sink_type, entries in user_sanitizers.items():
                 if isinstance(entries, list):
                     catalog.sanitizers.setdefault(sink_type, set()).update(
+                        e for e in entries if isinstance(e, str) and e.strip()
+                    )
+
+        # ── Semi-trusted sources ──────────────────────────────────────────────
+        # Format: semi_trusted_sources: {lang: [pattern, ...]}
+        user_semi = data.get("semi_trusted_sources") or {}
+        if isinstance(user_semi, dict):
+            for lang, entries in user_semi.items():
+                if isinstance(entries, list):
+                    catalog.semi_trusted_sources.setdefault(lang, set()).update(
                         e for e in entries if isinstance(e, str) and e.strip()
                     )

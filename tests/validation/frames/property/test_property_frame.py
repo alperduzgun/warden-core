@@ -130,8 +130,9 @@ def func10(): return 10
 def func11(): return 11
 '''
 
+    # The assertion check only applies to test files; use a test-file path.
     code_file = CodeFile(
-        path="no_assertions.py",
+        path="tests/test_no_assertions.py",
         content=code,
         language="python",
     )
@@ -409,3 +410,542 @@ async def test_property_frame_batch_has_batch_size(PropertyFrame):
     assert hasattr(PropertyFrame, "BATCH_SIZE")
     assert PropertyFrame.BATCH_SIZE > 0
     assert PropertyFrame.BATCH_SIZE <= 10  # Conservative limit
+
+
+# =============================================================================
+# LINE-REFERENCE VALIDATION TESTS
+# =============================================================================
+
+# Source with disable_bundle_id_capability near the top; the hallucination test
+# uses a reported line that is far away (> window=3) from any occurrence of
+# the function name so the validator correctly flags it as hallucinated.
+_SAMPLE_SOURCE = """\
+def disable_bundle_id_capability(bundle_id, capability):
+    if not bundle_id:
+        return {"error": "bundle_id required"}
+    return {"bundle_id": bundle_id, "disabled": capability}
+"""
+
+# Build a multi-function file where the target function is at line 1 and
+# the erroneously-reported line is at the bottom, well beyond the ±3 window.
+_LINES_FAR_AWAY = ["def disable_bundle_id_capability(bundle_id, capability): pass"]
+_LINES_FAR_AWAY += [""] * 15
+_LINES_FAR_AWAY += ["def unrelated_function(): return 42"]  # line 17
+_LINES_FAR_AWAY += ["", "x = unrelated_function()"]         # line 19
+_SOURCE_FAR_AWAY = "\n".join(_LINES_FAR_AWAY)
+_HALLUCINATION_LINE = 19  # far from line 1 (> window=3)
+
+
+def test_property_frame_has_validate_llm_line_reference(PropertyFrame):
+    """PropertyFrame must expose _validate_llm_line_reference."""
+    assert hasattr(PropertyFrame, "_validate_llm_line_reference")
+
+
+def test_property_frame_line_ref_valid_match(PropertyFrame):
+    """Line 1 contains 'disable_bundle_id_capability' — finding about it is valid."""
+    result = PropertyFrame._validate_llm_line_reference(
+        finding_message="Incomplete Input Validation in disable_bundle_id_capability",
+        finding_title="Incomplete Input Validation in disable_bundle_id_capability",
+        code_content=_SAMPLE_SOURCE,
+        reported_line=1,
+    )
+    assert result is True
+
+
+def test_property_frame_line_ref_hallucination(PropertyFrame):
+    """Reported line is 19 but disable_bundle_id_capability is at line 1 (far away)."""
+    result = PropertyFrame._validate_llm_line_reference(
+        finding_message="Incomplete Input Validation in disable_bundle_id_capability",
+        finding_title="Incomplete Input Validation in disable_bundle_id_capability",
+        code_content=_SOURCE_FAR_AWAY,
+        reported_line=_HALLUCINATION_LINE,
+    )
+    assert result is False
+
+
+def test_property_frame_line_ref_out_of_range_passes(PropertyFrame):
+    """Out-of-range line returns True (fail-open)."""
+    result = PropertyFrame._validate_llm_line_reference(
+        finding_message="some issue",
+        finding_title="Some Issue",
+        code_content=_SAMPLE_SOURCE,
+        reported_line=9999,
+    )
+    assert result is True
+
+
+def test_property_frame_line_ref_empty_code_passes(PropertyFrame):
+    """Empty source code cannot be validated — keep finding."""
+    result = PropertyFrame._validate_llm_line_reference(
+        finding_message="some issue",
+        finding_title="Some Issue",
+        code_content="",
+        reported_line=1,
+    )
+    assert result is True
+
+
+def test_property_frame_line_ref_delegates_to_shared_util(PropertyFrame):
+    """_validate_llm_line_reference result must match the shared utility output."""
+    from warden.shared.utils.finding_utils import validate_llm_line_reference
+
+    kwargs = {
+        "finding_message": "disable_bundle_id_capability check",
+        "finding_title": "Capability Check",
+        "code_content": _SAMPLE_SOURCE,
+        "reported_line": 7,
+    }
+    assert PropertyFrame._validate_llm_line_reference(**kwargs) == validate_llm_line_reference(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# _is_test_file
+# ---------------------------------------------------------------------------
+
+def test_is_test_file_detects_python_test_prefix(PropertyFrame):
+    """test_foo.py matches."""
+    assert PropertyFrame._is_test_file("src/auth/test_auth.py") is True
+
+
+def test_is_test_file_detects_python_test_suffix(PropertyFrame):
+    """foo_test.py matches."""
+    assert PropertyFrame._is_test_file("src/auth/auth_test.py") is True
+
+
+def test_is_test_file_detects_go_test_suffix(PropertyFrame):
+    """foo_test.go matches."""
+    assert PropertyFrame._is_test_file("pkg/auth/auth_test.go") is True
+
+
+def test_is_test_file_detects_js_test_dot(PropertyFrame):
+    """foo.test.ts matches."""
+    assert PropertyFrame._is_test_file("src/components/auth.test.ts") is True
+
+
+def test_is_test_file_detects_js_spec_dot(PropertyFrame):
+    """foo.spec.ts matches."""
+    assert PropertyFrame._is_test_file("src/components/auth.spec.ts") is True
+
+
+def test_is_test_file_detects_tests_directory(PropertyFrame):
+    """File inside tests/ directory matches."""
+    assert PropertyFrame._is_test_file("tests/auth/test_login.py") is True
+
+
+def test_is_test_file_detects_underscored_test_dir(PropertyFrame):
+    """File inside __tests__/ directory matches."""
+    assert PropertyFrame._is_test_file("src/__tests__/auth.js") is True
+
+
+def test_is_test_file_rejects_production_file(PropertyFrame):
+    """Normal production path does NOT match."""
+    assert PropertyFrame._is_test_file("src/services/auth_service.py") is False
+
+
+def test_is_test_file_rejects_cache_service(PropertyFrame):
+    """cache_service.py must not be flagged as a test file."""
+    assert PropertyFrame._is_test_file("src/cache/cache_service.py") is False
+
+
+def test_is_test_file_rejects_property_frame_itself(PropertyFrame):
+    """The production frame file must not match."""
+    assert PropertyFrame._is_test_file("src/warden/validation/frames/property/property_frame.py") is False
+
+
+# ---------------------------------------------------------------------------
+# _check_assertions — production files must be skipped
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_check_assertions_skips_production_files(PropertyFrame):
+    """_check_assertions must return no findings for non-test files."""
+    many_funcs = "\n".join(f"def func_{i}(): return {i}" for i in range(20))
+    code_file = CodeFile(
+        path="src/services/auth_service.py",
+        content=many_funcs,
+        language="python",
+    )
+    frame = PropertyFrame()
+    findings = frame._check_assertions(code_file)
+    assert findings == [], "Production files must not trigger no-assertions finding"
+
+
+@pytest.mark.asyncio
+async def test_check_assertions_fires_for_test_files(PropertyFrame):
+    """_check_assertions must fire when a test file has many functions but no assertions."""
+    many_funcs = "\n".join(f"def func_{i}(): return {i}" for i in range(15))
+    code_file = CodeFile(
+        path="tests/test_auth.py",
+        content=many_funcs,
+        language="python",
+    )
+    frame = PropertyFrame()
+    findings = frame._check_assertions(code_file)
+    assert len(findings) == 1
+    assert "functions" in findings[0].message
+
+
+# ---------------------------------------------------------------------------
+# _filter_llm_noise
+# ---------------------------------------------------------------------------
+
+def test_filter_llm_noise_drops_cache_ttl(PropertyFrame):
+    """Low-severity 'Hardcoded Cache TTL' finding must be suppressed."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    noise = Finding(
+        id="p-1",
+        severity="low",
+        message="Hardcoded Cache TTL Without Configuration",
+        location="f:1",
+        detail="The cache TTL is a magic number",
+    )
+    assert frame._filter_llm_noise([noise]) == []
+
+
+def test_filter_llm_noise_drops_transport_fallback(PropertyFrame):
+    """Low-severity 'Transport Fallback Without Validation' must be suppressed."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    noise = Finding(
+        id="p-2",
+        severity="low",
+        message="Transport Fallback Without Validation",
+        location="f:2",
+        detail="transport fallback path lacks validation",
+    )
+    assert frame._filter_llm_noise([noise]) == []
+
+
+def test_filter_llm_noise_drops_magic_number(PropertyFrame):
+    """Low-severity magic number finding without security context must be suppressed."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    noise = Finding(
+        id="p-3",
+        severity="low",
+        message="Magic Number In Configuration",
+        location="f:3",
+        detail="Value should be configurable via environment variable",
+    )
+    assert frame._filter_llm_noise([noise]) == []
+
+
+def test_filter_llm_noise_keeps_security_low_finding(PropertyFrame):
+    """Low-severity finding that mentions a token/secret must NOT be suppressed."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    sec = Finding(
+        id="p-4",
+        severity="low",
+        message="Hardcoded token constant",
+        location="f:4",
+        detail="API token is a hardcoded constant in configuration",
+    )
+    result = frame._filter_llm_noise([sec])
+    assert len(result) == 1
+
+
+def test_filter_llm_noise_keeps_medium_regardless(PropertyFrame):
+    """Medium-severity noise finding must always be kept."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    med = Finding(
+        id="p-5",
+        severity="medium",
+        message="Hardcoded Cache TTL Without Configuration",
+        location="f:5",
+        detail="magic number not configurable",
+    )
+    result = frame._filter_llm_noise([med])
+    assert len(result) == 1
+
+
+def test_filter_llm_noise_keeps_high_regardless(PropertyFrame):
+    """High-severity finding must always be kept even if it mentions cache TTL."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    high = Finding(
+        id="p-6",
+        severity="high",
+        message="Cache TTL Without Configuration Leads To Stale Data",
+        location="f:6",
+        detail="hardcoded constant",
+    )
+    result = frame._filter_llm_noise([high])
+    assert len(result) == 1
+
+
+def test_filter_llm_noise_passes_through_unrelated_low(PropertyFrame):
+    """A low-severity finding with no noise keyword must pass through."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    unrelated = Finding(
+        id="p-7",
+        severity="low",
+        message="Division without zero check in fallback path",
+        location="f:7",
+        detail="Potential ZeroDivisionError if divisor is zero",
+    )
+    result = frame._filter_llm_noise([unrelated])
+    assert len(result) == 1
+
+
+# =============================================================================
+# KNOWN FALSE-POSITIVE FILTER TESTS
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_property_frame_suppresses_contextvar_async_fp(PropertyFrame):
+    """ContextVar findings mentioning async safety must be suppressed.
+
+    ContextVar (PEP 567) is the official Python async-safe state mechanism.
+    Flagging it as an async safety concern is a false positive.
+    """
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    findings = [
+        Finding(
+            id="prop-llm-10",
+            severity="high",
+            message="ContextVar Async Safety Concern",
+            location="app.py:10",
+            detail="Using ContextVar in async code may cause race conditions.",
+            code="request_id: ContextVar[str] = ContextVar('request_id')",
+        ),
+        # Real finding that must be preserved
+        Finding(
+            id="prop-pattern-20",
+            severity="medium",
+            message="Division operation without zero check",
+            location="app.py:20",
+            detail="Check divisor is not zero before division",
+            code="return a / b",
+        ),
+    ]
+
+    filtered = frame._filter_known_false_positives(findings)
+
+    assert len(filtered) == 1
+    assert filtered[0].id == "prop-pattern-20"
+
+
+@pytest.mark.asyncio
+async def test_property_frame_suppresses_contextvar_thread_fp(PropertyFrame):
+    """ContextVar findings mentioning thread safety must also be suppressed."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    findings = [
+        Finding(
+            id="prop-llm-5",
+            severity="medium",
+            message="ContextVar thread safety issue",
+            location="middleware.py:5",
+            detail="ContextVar may not be thread-safe across concurrent requests.",
+            code="_ctx_var: ContextVar[dict] = ContextVar('ctx')",
+        ),
+    ]
+
+    filtered = frame._filter_known_false_positives(findings)
+
+    assert len(filtered) == 0
+
+
+@pytest.mark.asyncio
+async def test_property_frame_preserves_legitimate_async_findings(PropertyFrame):
+    """Non-ContextVar async findings must not be suppressed."""
+    from warden.validation.domain.frame import Finding
+
+    frame = PropertyFrame()
+    findings = [
+        Finding(
+            id="prop-llm-30",
+            severity="high",
+            message="Shared mutable state in async handler",
+            location="handler.py:30",
+            detail="Global dict modified in async context without a lock — race condition.",
+            code="shared_cache[key] = value",
+        ),
+    ]
+
+    filtered = frame._filter_known_false_positives(findings)
+
+    assert len(filtered) == 1
+
+
+@pytest.mark.asyncio
+async def test_property_frame_contextvar_code_does_not_trigger_fp(PropertyFrame):
+    """Scanning a file that uses ContextVar should not produce async-safety findings."""
+    code = '''
+from contextvars import ContextVar
+
+request_id: ContextVar[str] = ContextVar("request_id", default="")
+user_context: ContextVar[dict] = ContextVar("user_context", default={})
+
+async def set_request_context(req_id: str) -> None:
+    request_id.set(req_id)
+
+async def get_request_id() -> str:
+    return request_id.get()
+'''
+
+    code_file = CodeFile(
+        path="context.py",
+        content=code,
+        language="python",
+    )
+
+    frame = PropertyFrame()
+    result = await frame.execute_async(code_file)
+
+    # No finding should mention ContextVar as an async/thread safety concern
+    fp_findings = [
+        f for f in result.findings
+        if "contextvar" in (f.message or "").lower()
+        and any(
+            kw in (f.message or "").lower() + (f.detail or "").lower()
+            for kw in ("async", "thread", "race", "safe")
+        )
+    ]
+    assert fp_findings == [], f"Unexpected ContextVar FP findings: {fp_findings}"
+
+
+# =============================================================================
+# DIVISION GUARD DETECTION TESTS
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_division_with_inline_ternary_guard_not_flagged(PropertyFrame):
+    """Inline ternary guard suppresses the division finding.
+
+    ``sum(ratings) / len(ratings) if ratings else 0.0`` is safe — the
+    ternary ensures len(ratings) is never zero when the division runs.
+    """
+    code = "avg = sum(ratings) / len(ratings) if ratings else 0.0\n"
+    code_file = CodeFile(path="avg.py", content=code, language="python")
+
+    frame = PropertyFrame()
+    result = await frame.execute_async(code_file)
+
+    division_findings = [
+        f for f in result.findings
+        if "division" in f.message.lower() or "zero" in f.message.lower()
+    ]
+    assert division_findings == [], (
+        f"Guarded division was falsely flagged: {[f.message for f in division_findings]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_division_with_preceding_if_check_not_flagged(PropertyFrame):
+    """Preceding if-block guard suppresses the division finding."""
+    code = (
+        "if denominator != 0:\n"
+        "    result = numerator / denominator\n"
+    )
+    code_file = CodeFile(path="safe_div.py", content=code, language="python")
+
+    frame = PropertyFrame()
+    result = await frame.execute_async(code_file)
+
+    division_findings = [
+        f for f in result.findings
+        if "division" in f.message.lower() or "zero" in f.message.lower()
+    ]
+    assert division_findings == [], (
+        f"Guarded division (if != 0) was falsely flagged: {[f.message for f in division_findings]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_division_with_truthy_if_guard_not_flagged(PropertyFrame):
+    """Truthy if-guard (`if values:`) suppresses the division finding."""
+    code = (
+        "if values:\n"
+        "    mean = sum(values) / len(values)\n"
+    )
+    code_file = CodeFile(path="mean.py", content=code, language="python")
+
+    frame = PropertyFrame()
+    result = await frame.execute_async(code_file)
+
+    division_findings = [
+        f for f in result.findings
+        if "division" in f.message.lower() or "zero" in f.message.lower()
+    ]
+    assert division_findings == [], (
+        f"Guarded division (truthy if) was falsely flagged: {[f.message for f in division_findings]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_division_without_guard_still_flagged(PropertyFrame):
+    """Unguarded division continues to be reported."""
+    code = "def calc(a, b):\n    return a / b\n"
+    code_file = CodeFile(path="unguarded.py", content=code, language="python")
+
+    frame = PropertyFrame()
+    result = await frame.execute_async(code_file)
+
+    division_findings = [
+        f for f in result.findings
+        if "division" in f.message.lower() or "zero" in f.message.lower()
+    ]
+    assert len(division_findings) > 0, "Unguarded division should still be flagged"
+
+
+@pytest.mark.asyncio
+async def test_division_with_or_fallback_not_flagged(PropertyFrame):
+    """``or``-fallback guard suppresses the division finding."""
+    code = "rate = total / (count or 1)\n"
+    code_file = CodeFile(path="rate.py", content=code, language="python")
+
+    frame = PropertyFrame()
+    result = await frame.execute_async(code_file)
+
+    division_findings = [
+        f for f in result.findings
+        if "division" in f.message.lower() or "zero" in f.message.lower()
+    ]
+    assert division_findings == [], (
+        f"or-guarded division was falsely flagged: {[f.message for f in division_findings]}"
+    )
+
+
+def test_has_division_guard_direct_ternary(PropertyFrame):
+    """Unit-test _has_division_guard directly for ternary guard on same line."""
+    frame = PropertyFrame()
+    lines = ["avg = sum(x) / len(x) if x else 0.0"]
+    assert frame._has_division_guard(lines, 1) is True
+
+
+def test_has_division_guard_direct_preceding_if(PropertyFrame):
+    """Unit-test _has_division_guard for guard on a preceding line."""
+    frame = PropertyFrame()
+    lines = [
+        "if n > 0:",
+        "    result = total / n",
+    ]
+    # line_num=2 refers to `result = total / n`
+    assert frame._has_division_guard(lines, 2) is True
+
+
+def test_has_division_guard_returns_false_when_no_guard(PropertyFrame):
+    """Unit-test _has_division_guard returns False when no guard is present."""
+    frame = PropertyFrame()
+    lines = [
+        "def calc(a, b):",
+        "    return a / b",
+    ]
+    assert frame._has_division_guard(lines, 2) is False
