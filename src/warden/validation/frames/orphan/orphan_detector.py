@@ -316,6 +316,12 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                     self.refs.add(node.id)
                 self.generic_visit(node)
 
+            def visit_Attribute(self, node: ast.Attribute) -> None:
+                # Capture self.method_name() / cls.method_name() calls
+                # Without this, methods called via self/cls are missed
+                self.refs.add(node.attr)
+                self.generic_visit(node)
+
         collector = ReferenceCollector()
         collector.visit(self.tree)
         references = collector.refs
@@ -325,6 +331,11 @@ class PythonOrphanDetector(AbstractOrphanDetector):
             if def_name not in references:
                 # Check if it's a special method/function (skip those)
                 if def_name in ["main", "__init__", "__str__", "__repr__"]:
+                    continue
+
+                # Skip convention-dispatch methods (called by frameworks via name, not direct call)
+                # e.g., ast.NodeVisitor.visit_*, unittest.setUp/tearDown, pytest fixtures
+                if self._is_convention_dispatch_method(def_name, node):
                     continue
 
                 # Skip framework entry points (decorated functions)
@@ -345,6 +356,36 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 )
 
         return findings
+
+    @staticmethod
+    def _is_convention_dispatch_method(name: str, node: ast.AST) -> bool:
+        """Check if method is called by a framework via name convention (not direct call).
+
+        Covers:
+        - ast.NodeVisitor: visit_FunctionDef, visit_ClassDef, visit_Name, etc.
+        - unittest: setUp, tearDown, setUpClass, tearDownClass
+        - Django: get_queryset, get_context_data, form_valid, etc.
+        - Pydantic: model_post_init, model_validate, __get_validators__
+        - dataclass: __post_init__
+        """
+        # AST visitor dispatch: visit_* and generic_visit
+        if name.startswith("visit_") or name == "generic_visit":
+            return True
+        # unittest lifecycle
+        if name in ("setUp", "tearDown", "setUpClass", "tearDownClass", "setUpModule", "tearDownModule"):
+            return True
+        # Django CBV dispatch
+        if name in ("get_queryset", "get_context_data", "get_object", "form_valid",
+                     "form_invalid", "get_form_class", "get_success_url", "dispatch"):
+            return True
+        # Pydantic / dataclass hooks
+        if name in ("model_post_init", "__post_init__", "__get_validators__",
+                     "__get_pydantic_core_schema__", "__modify_schema__"):
+            return True
+        # Dunder protocol methods (called by Python runtime, never directly)
+        if name.startswith("__") and name.endswith("__") and name not in ("__init__", "__str__", "__repr__"):
+            return True
+        return False
 
     @staticmethod
     def _has_framework_decorator(node: ast.AST) -> bool:

@@ -89,10 +89,20 @@ class FuzzFrame(ValidationFrame, TaintAware, ChunkingAware):
             "suggestion": "Check if string is empty before operations",
         },
         "array_access_no_bounds": {
-            "pattern": r"\w+\[\w+\](?!\s*(?:if|&&|\|\|))",
+            # Matches real subscript access (var[idx]) but NOT:
+            #   - Type annotations: list[str], dict[str, int], Optional[X]
+            #   - Dict literals/assignments where key is a string: d["key"]
+            #   - Decorator lines, import lines, class/def signatures
+            "pattern": r"(?<![\w\]\)])(\w+)\[(\w+)\]",
             "severity": "medium",
             "message": "Array/list access without bounds checking",
             "suggestion": "Validate index is within bounds before access",
+            "skip_line_patterns": [
+                r"^\s*(?:def |class |import |from |@)",  # signatures, imports, decorators
+                r":\s*(?:list|dict|set|tuple|Optional|Union|Callable|Sequence|Mapping)\[",  # type annotations
+                r"\w+\[['\"]",  # dict access with string literal key: d["key"]
+                r"->\s*\w*\[",  # return type annotations
+            ],
         },
         "type_conversion_no_validation": {
             "pattern": r"(int\(|float\(|parseInt\(|parseFloat\()",
@@ -166,7 +176,7 @@ Output must be a valid JSON object with the following structure:
 
         findings = []
 
-        # Run pattern-based checks
+        # Run pattern-based checks (pre-compile skip patterns once per file)
         for check_id, check_config in self.PATTERNS.items():
             pattern_findings = self._check_pattern(
                 code_file=code_file,
@@ -175,6 +185,7 @@ Output must be a valid JSON object with the following structure:
                 severity=check_config["severity"],
                 message=check_config["message"],
                 suggestion=check_config.get("suggestion"),
+                skip_line_patterns=check_config.get("skip_line_patterns"),
             )
             findings.extend(pattern_findings)
 
@@ -249,6 +260,7 @@ Output must be a valid JSON object with the following structure:
         severity: str,
         message: str,
         suggestion: str | None = None,
+        skip_line_patterns: list[str] | None = None,
     ) -> list[Finding]:
         """
         Check for pattern matches in code.
@@ -260,18 +272,26 @@ Output must be a valid JSON object with the following structure:
             severity: Finding severity
             message: Finding message
             suggestion: Optional suggestion
+            skip_line_patterns: Regex patterns — skip the line if ANY matches
 
         Returns:
             List of findings
         """
         findings: list[Finding] = []
+        compiled_skips = [re.compile(p) for p in (skip_line_patterns or [])]
 
         try:
             lines = code_file.content.split("\n")
 
             for line_num, line in enumerate(lines, start=1):
-                # Skip comments (basic - language-agnostic)
-                if line.strip().startswith(("#", "//", "/*", "*")):
+                stripped = line.strip()
+
+                # Skip comments (basic — language-agnostic)
+                if stripped.startswith(("#", "//", "/*", "*")):
+                    continue
+
+                # Skip lines matching exclusion patterns (e.g., type annotations, imports)
+                if compiled_skips and any(sp.search(line) for sp in compiled_skips):
                     continue
 
                 matches = re.finditer(pattern, line)
@@ -282,7 +302,7 @@ Output must be a valid JSON object with the following structure:
                         message=message,
                         location=f"{code_file.path}:{line_num}",
                         detail=suggestion,
-                        code=line.strip(),
+                        code=stripped,
                     )
                     findings.append(finding)
 
