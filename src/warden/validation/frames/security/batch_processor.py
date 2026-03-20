@@ -215,7 +215,16 @@ Return JSON array with verification results:
                     content = content[: last_brace + 1] + "]"
                     logger.debug("security_llm_json_recovery", action="truncated_array_closed")
 
-            parsed = json.loads(content)
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                # Fallback: try shared JSON parser with repair
+                try:
+                    from warden.shared.utils.json_parser import parse_json_from_llm
+                    parsed = parse_json_from_llm(content)
+                    logger.debug("security_llm_json_repaired", method="shared_parser")
+                except Exception:
+                    raise json.JSONDecodeError("All parse attempts failed", content, 0)
 
             if isinstance(parsed, list):
                 # Build set of invalid finding IDs (1-based indexing from prompt)

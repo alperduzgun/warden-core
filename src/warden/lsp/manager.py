@@ -177,10 +177,11 @@ class LSPManager:
     _instance: Optional["LSPManager"] = None
     _lock: threading.Lock = threading.Lock()
 
-    def __init__(self) -> None:
+    def __init__(self, auto_install: bool = True) -> None:
         self._clients: dict[str, LanguageServerClient] = {}
         self._binaries: dict[str, str] = {}
         self._root_path: str | None = None
+        self._auto_install_enabled = auto_install
         self._discover_binaries()
 
     @classmethod
@@ -235,6 +236,50 @@ class LSPManager:
                 missing.append(language)
 
         logger.info("lsp_binaries_discovered", available=available, missing=missing, total=len(LSP_SERVER_CONFIG))
+
+        # Auto-install critical LSP servers for detected project languages
+        if missing and self._auto_install_enabled:
+            self._auto_install_lsp_servers(missing)
+
+    def _auto_install_lsp_servers(self, missing_languages: list[str]) -> None:
+        """Auto-install LSP servers for project-critical languages."""
+        import subprocess as _sp
+
+        # Only auto-install for languages that have pip/npm packages
+        _INSTALL_COMMANDS: dict[str, list[list[str]]] = {
+            "python": [
+                ["pip", "install", "-q", "python-lsp-server"],
+            ],
+            "typescript": [
+                ["npm", "install", "-g", "typescript-language-server", "typescript"],
+            ],
+            "javascript": [
+                ["npm", "install", "-g", "typescript-language-server", "typescript"],
+            ],
+        }
+
+        for lang in missing_languages:
+            cmds = _INSTALL_COMMANDS.get(lang)
+            if not cmds:
+                continue
+            for cmd in cmds:
+                if not shutil.which(cmd[0]):
+                    continue
+                try:
+                    result = _sp.run(cmd, capture_output=True, text=True, timeout=120)
+                    if result.returncode == 0:
+                        # Re-discover after install
+                        for binary_name in LSP_SERVER_CONFIG.get(lang, {}).get("binaries", []):
+                            binary_path = shutil.which(binary_name)
+                            if binary_path:
+                                self._binaries[lang] = binary_path
+                                logger.info("lsp_auto_installed", language=lang, binary=binary_name)
+                                break
+                        break
+                    else:
+                        logger.debug("lsp_auto_install_failed", language=lang, error=result.stderr[:200])
+                except Exception as e:
+                    logger.debug("lsp_auto_install_error", language=lang, error=str(e))
 
     def is_available(self, language: str) -> bool:
         """Check if LSP is available for a language."""
