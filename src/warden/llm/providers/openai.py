@@ -460,9 +460,17 @@ class OpenAIClient(ILlmClient):
 
         prompt = f"""
         You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
-        Target vulnerabilities: SQL Injection, XSS, Hardcoded Secrets/Credentials, SSRF, CSRF, XXE, Insecure Deserialization, Path Traversal, and Command Injection.
+        Target vulnerabilities: SQL Injection, XSS, Hardcoded Secrets/Credentials, SSRF, CSRF, XXE, Insecure Deserialization, Path Traversal, Command Injection, and IDOR (Insecure Direct Object Reference).
 
         Ignore stylistic issues. Focus only on exploitable security flaws.
+
+        IDOR DETECTION GUIDANCE:
+        An IDOR vulnerability exists when an endpoint accepts a user-controlled identifier (e.g., a URL path
+        parameter like <doc_id>, <user_id>, <order_id>) and retrieves or modifies a resource using that
+        identifier WITHOUT verifying that the currently authenticated user owns or is authorized to access
+        that resource. A parameterized query (e.g., WHERE id = ?) does NOT prevent IDOR — it only prevents
+        SQL injection. Look for database queries that filter ONLY by the user-supplied ID and do NOT include
+        an additional ownership check such as: WHERE id = ? AND user_id = current_user.id
 
         Return a JSON object in this exact format:
         {{

@@ -192,12 +192,68 @@ class ResultAggregator:
             },
         )
 
+    # Vulnerability class normalization for cross-frame dedup.
+    # Maps rule_type keywords to canonical vulnerability classes so that
+    # e.g. security-sql-001 and property-llm-42 (about SQL) dedup correctly.
+    _VULN_CLASS_MAP: dict[str, str] = {
+        "sql": "SQL_INJECTION",
+        "sqli": "SQL_INJECTION",
+        "injection": "INJECTION",
+        "xss": "XSS",
+        "cmd": "COMMAND_INJECTION",
+        "command": "COMMAND_INJECTION",
+        "path": "PATH_TRAVERSAL",
+        "traversal": "PATH_TRAVERSAL",
+        "ssrf": "SSRF",
+        "deserialization": "DESERIALIZATION",
+        "pickle": "DESERIALIZATION",
+        "yaml": "DESERIALIZATION",
+        "eval": "CODE_EXECUTION",
+        "exec": "CODE_EXECUTION",
+        "rce": "CODE_EXECUTION",
+        "ssti": "TEMPLATE_INJECTION",
+        "template": "TEMPLATE_INJECTION",
+        "hardcoded": "HARDCODED_SECRET",
+        "secret": "HARDCODED_SECRET",
+        "password": "HARDCODED_SECRET",
+        "credential": "HARDCODED_SECRET",
+        "taint": "TAINT_FLOW",
+        "division": "DIVISION_BY_ZERO",
+        "zero": "DIVISION_BY_ZERO",
+    }
+
+    def _normalize_vuln_class(self, rule_type: str, message: str = "") -> str:
+        """Normalize rule type to a canonical vulnerability class for cross-frame dedup."""
+        lower = rule_type.lower()
+        for keyword, vuln_class in self._VULN_CLASS_MAP.items():
+            if keyword in lower:
+                return vuln_class
+        # Also check message for keyword matches
+        msg_lower = message.lower()
+        for keyword, vuln_class in self._VULN_CLASS_MAP.items():
+            if keyword in msg_lower:
+                return vuln_class
+        return rule_type
+
+    @staticmethod
+    def _extract_file_line(location: str) -> tuple[str, int]:
+        """Extract (file_path, line_number) from location string."""
+        if ":" in location:
+            parts = location.rsplit(":", 1)
+            try:
+                return parts[0], int(parts[1])
+            except (ValueError, IndexError):
+                pass
+        return location, 0
+
     def _deduplicate_findings(self, findings: list[Finding]) -> list[Finding]:
         """
         Deduplicate findings across frames.
 
         Multiple frames may report the same issue at the same location.
         Keep the finding with highest confidence/severity.
+        Also performs cross-frame semantic dedup using vulnerability class
+        normalization and line-window proximity (±3 lines).
 
         Args:
             findings: List of findings from all frames
@@ -215,9 +271,14 @@ class ResultAggregator:
             "invalid_severity": 0,
             "collision_count": 0,
             "severity_upgraded": 0,
+            "semantic_dedup": 0,
         }
 
         seen: dict[tuple[str, str], Finding] = {}
+        # Secondary index for cross-frame semantic dedup: (file, vuln_class) -> [(line, key)]
+        semantic_index: dict[tuple[str, str], list[tuple[int, tuple[str, str]]]] = {}
+
+        severity_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
         for finding in findings:
             # Extract location for deduplication key (CRITICAL FIX: ensure non-empty)
@@ -238,75 +299,73 @@ class ResultAggregator:
                 continue
 
             # Extract vulnerability type from ID
-            # Examples:
-            #   "security-sql-001" -> "sql" (vulnerability type from middle part)
-            #   "antipattern-sql-002" -> "sql" (same vulnerability)
-            #   "sql-injection" -> "sql-injection" (treat full ID as type)
-            #   "RUST-001", "RUST-002" -> "RUST-001", "RUST-002" (different issues, use full ID)
-            #   "F1", "F2" -> use message for grouping
             finding_id = get_finding_attribute(finding, "id", "")
+            message = get_finding_attribute(finding, "message", "")
             parts = finding_id.split("-")
 
             if len(parts) >= 3:
-                # Three or more parts: assume format "frame-type-number"
-                # "security-sql-001" -> "sql", "antipattern-sql-002" -> "sql"
                 rule_type = parts[1]
             elif len(parts) == 2:
-                # Two parts: could be "RUST-001" or "sql-injection"
-                # If second part is numeric, use full ID (different issues)
-                # If second part is text, use full ID as type
                 if parts[1].isdigit():
-                    # "RUST-001" -> "RUST-001" (use full ID, these are different issues)
                     rule_type = finding_id
                 else:
-                    # "sql-injection" -> "sql-injection" (use full ID as type)
                     rule_type = finding_id
             else:
-                # Simple ID without structure (e.g. "F1", "R1", "G1")
-                # Use message as dedup key — same location + same message = duplicate
-                message = get_finding_attribute(finding, "message", "")
-                if message:
-                    rule_type = message
-                else:
-                    rule_type = finding_id
+                rule_type = message if message else finding_id
 
             # Create deduplication key: (location, rule_type)
             key = (location, rule_type)
 
             if key not in seen:
-                seen[key] = finding
+                # Before inserting, check cross-frame semantic dedup:
+                # Same file, same vulnerability class, within ±3 lines = duplicate
+                vuln_class = self._normalize_vuln_class(rule_type, message)
+                file_path, line_num = self._extract_file_line(location)
+                sem_key = (file_path, vuln_class)
+
+                existing_match = None
+                if sem_key in semantic_index:
+                    for existing_line, existing_key in semantic_index[sem_key]:
+                        if abs(existing_line - line_num) <= 3:
+                            existing_match = existing_key
+                            break
+
+                if existing_match and existing_match in seen:
+                    # Semantic duplicate — keep higher severity
+                    metrics["semantic_dedup"] += 1
+                    metrics["collision_count"] += 1
+                    existing = seen[existing_match]
+                    existing_sev = (get_finding_attribute(existing, "severity", "low") or "low").lower()
+                    new_sev = (get_finding_attribute(finding, "severity", "low") or "low").lower()
+                    if severity_rank.get(new_sev, 1) > severity_rank.get(existing_sev, 1):
+                        del seen[existing_match]
+                        seen[key] = finding
+                        # Update semantic index
+                        semantic_index[sem_key] = [
+                            (l, k) for l, k in semantic_index[sem_key] if k != existing_match
+                        ]
+                        semantic_index[sem_key].append((line_num, key))
+                        metrics["severity_upgraded"] += 1
+                    # else: keep existing, discard new
+                else:
+                    seen[key] = finding
+                    semantic_index.setdefault(sem_key, []).append((line_num, key))
             else:
                 # BATCH 3: Track collision
                 metrics["collision_count"] += 1
 
                 # Keep finding with higher severity
                 existing = seen[key]
-                # CRITICAL FIX: Normalize severity to lowercase (prevent case sensitivity bugs)
                 existing_severity = (get_finding_attribute(existing, "severity", "low") or "low").lower()
                 new_severity = (get_finding_attribute(finding, "severity", "low") or "low").lower()
 
-                # Severity ranking: critical > high > medium > low
-                severity_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
-
-                # Validate severity values (prevent unknown severity from getting rank 0)
+                # Validate severity values
                 if new_severity not in severity_rank:
                     metrics["invalid_severity"] += 1
-                    logger.warning(
-                        "invalid_severity_normalized",
-                        finding_id=get_finding_attribute(finding, "id", "unknown"),
-                        severity=new_severity,
-                        normalized_to="low",
-                    )
                     new_severity = "low"
 
                 if existing_severity not in severity_rank:
                     metrics["invalid_severity"] += 1
-                    logger.warning(
-                        "invalid_severity_normalized",
-                        finding_id=get_finding_attribute(existing, "id", "unknown"),
-                        severity=existing_severity,
-                        normalized_to="low",
-                    )
                     existing_severity = "low"
 
                 if severity_rank.get(new_severity, 1) > severity_rank.get(existing_severity, 1):
@@ -329,6 +388,7 @@ class ResultAggregator:
             input_count=metrics["total_findings"],
             output_count=len(deduplicated),
             collision_count=metrics["collision_count"],
+            semantic_dedup=metrics["semantic_dedup"],
             empty_locations=metrics["empty_locations"],
             invalid_severity=metrics["invalid_severity"],
             severity_upgraded=metrics["severity_upgraded"],

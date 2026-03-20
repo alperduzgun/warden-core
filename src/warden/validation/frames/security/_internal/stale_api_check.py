@@ -55,6 +55,7 @@ class StaleAPICheck(ValidationCheck):
     - pickle.loads on untrusted data (RCE risk)
     - yaml.load without SafeLoader (code execution risk)
     - eval() on untrusted input (code execution risk)
+    - requests verify=False / ssl.CERT_NONE / check_hostname=False (TLS bypass)
 
     Patterns detected (JavaScript/Node.js):
     - new Buffer() (deprecated since Node.js 6.0)
@@ -192,6 +193,30 @@ class StaleAPICheck(ValidationCheck):
             "reason": "random module is not cryptographically secure (CWE-330)",
         },
         # ----------------------------------------------------------------
+        # TLS / Certificate Validation (Python)
+        # ----------------------------------------------------------------
+        {
+            "pattern": r"verify\s*=\s*False",
+            "replacement": "verify=True (default) or verify='/path/to/ca-bundle.crt'",
+            "language": "python",
+            "severity": "high",
+            "reason": "TLS certificate verification disabled — susceptible to MITM attacks (CWE-295)",
+        },
+        {
+            "pattern": r"ssl\.CERT_NONE",
+            "replacement": "ssl.CERT_REQUIRED",
+            "language": "python",
+            "severity": "high",
+            "reason": "SSL context accepts any certificate — MITM attacks possible (CWE-295)",
+        },
+        {
+            "pattern": r"check_hostname\s*=\s*False",
+            "replacement": "ctx.check_hostname = True",
+            "language": "python",
+            "severity": "high",
+            "reason": "Hostname verification disabled — server identity not validated (CWE-297)",
+        },
+        # ----------------------------------------------------------------
         # JavaScript / Node.js
         # ----------------------------------------------------------------
         {
@@ -228,6 +253,57 @@ class StaleAPICheck(ValidationCheck):
             "language": "javascript",
             "severity": "low",
             "reason": "querystring deprecated since Node.js 14.0",
+        },
+        # ----------------------------------------------------------------
+        # Python — Dunder / Prototype-style Injection via dict iteration
+        #
+        # In JavaScript, "prototype pollution" mutates Object.prototype via
+        # __proto__.  Python has no prototype chain, but the equivalent
+        # attack targets Python's dunder attributes (__class__, __init__,
+        # __globals__, __subclasses__) on objects that get merged from
+        # user-controlled dicts.  Both patterns below fire on the
+        # deep_merge / dict-update anti-pattern.
+        # ----------------------------------------------------------------
+        {
+            # Pattern 1 — JS-style __proto__-only guard.
+            # Filtering "__proto__" is meaningless in Python; the dangerous
+            # names are __class__, __init__, __globals__, __subclasses__, etc.
+            # A __proto__ check is the tell-tale sign of an incomplete port
+            # from JavaScript and signals that Python dunders are unguarded.
+            "pattern": r'key\s*==\s*["\']__proto__["\']',
+            "replacement": (
+                "Replace the JS-style __proto__ guard with a Python dunder blocklist: "
+                "if isinstance(key, str) and key.startswith('__') and key.endswith('__'): continue"
+            ),
+            "language": "python",
+            "severity": "high",
+            "reason": (
+                "JS-style __proto__ guard is ineffective in Python. "
+                "Python dunder-injection uses __class__, __init__, __globals__, "
+                "and __subclasses__ — none of which are blocked by this check. "
+                "Use a dunder-key blocklist (CWE-915)."
+            ),
+        },
+        {
+            # Pattern 2 — unguarded subscript assignment using a typical loop-key variable.
+            # Matches the canonical deep-merge write line:
+            #   base[key] = value      (key/k/name/attr/field as the subscript index)
+            # Anchoring on common loop-variable names keeps the signal tight while
+            # still catching the dominant real-world spelling of this pattern.
+            # Final confirmation is left to the LLM batch verifier.
+            "pattern": r"^\s*\w+\[(?:key|k|name|attr|field)\]\s*=\s*\w",
+            "replacement": (
+                "Add a dunder-key guard before assigning: "
+                "if isinstance(key, str) and key.startswith('__') and key.endswith('__'): continue"
+            ),
+            "language": "python",
+            "severity": "high",
+            "reason": (
+                "Unguarded dict-key assignment inside a loop may allow Python "
+                "dunder-attribute injection (__class__, __init__, __globals__, "
+                "__subclasses__) leading to attribute pollution or RCE (CWE-915). "
+                "Validate or blocklist dunder keys before merging user-controlled dicts."
+            ),
         },
     ]
 
@@ -271,6 +347,11 @@ class StaleAPICheck(ValidationCheck):
                 continue
 
             for line_num, line in enumerate(lines, start=1):
+                # Skip pure comment lines to avoid false positives on
+                # documentation that mentions an insecure API by name.
+                if line.lstrip().startswith("#"):
+                    continue
+
                 if not compiled_pattern.search(line):
                     continue
 

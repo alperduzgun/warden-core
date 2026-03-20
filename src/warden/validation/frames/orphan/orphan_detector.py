@@ -51,6 +51,35 @@ class OrphanFinding:
     reason: str
 
 
+# Framework decorators that mark functions as entry points (not orphans).
+# These are registered by web frameworks, task queues, CLI tools, etc.
+_FRAMEWORK_ENTRY_DECORATORS: set[str] = {
+    # Flask / Quart
+    "route", "get", "post", "put", "delete", "patch",
+    "before_request", "after_request", "teardown_request",
+    "errorhandler", "before_app_request", "after_app_request",
+    "app_errorhandler", "teardown_appcontext",
+    # FastAPI / Starlette
+    "api_route", "websocket", "on_event", "middleware",
+    # Django
+    "login_required", "permission_required", "csrf_exempt",
+    "require_http_methods", "staff_member_required",
+    # Celery / task queues
+    "task", "shared_task", "periodic_task",
+    # Click / Typer CLI
+    "command", "group", "callback",
+    "click.command", "click.group",
+    # pytest
+    "fixture", "mark", "parametrize",
+    # General
+    "abstractmethod", "staticmethod", "classmethod",
+    "property", "cached_property",
+    "overload", "override",
+    "app.route", "bp.route", "blueprint.route",
+    "router.get", "router.post", "router.put", "router.delete",
+}
+
+
 class AbstractOrphanDetector(abc.ABC):
     """
     Abstract base class for orphan code detectors.
@@ -298,6 +327,10 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 if def_name in ["main", "__init__", "__str__", "__repr__"]:
                     continue
 
+                # Skip framework entry points (decorated functions)
+                if self._has_framework_decorator(node):
+                    continue
+
                 # Get accurate snippet including decorators
                 code_snippet = self._get_definition_snippet(node)
 
@@ -312,6 +345,27 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 )
 
         return findings
+
+    @staticmethod
+    def _has_framework_decorator(node: ast.AST) -> bool:
+        """Check if node has a decorator that marks it as a framework entry point."""
+        if not hasattr(node, "decorator_list"):
+            return False
+        for dec in node.decorator_list:
+            dec_name = ""
+            if isinstance(dec, ast.Name):
+                dec_name = dec.id
+            elif isinstance(dec, ast.Attribute):
+                dec_name = dec.attr
+            elif isinstance(dec, ast.Call):
+                func = dec.func
+                if isinstance(func, ast.Name):
+                    dec_name = func.id
+                elif isinstance(func, ast.Attribute):
+                    dec_name = func.attr
+            if dec_name.lower() in _FRAMEWORK_ENTRY_DECORATORS:
+                return True
+        return False
 
     def _get_definition_snippet(self, node: ast.AST) -> str:
         """
@@ -519,7 +573,7 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
 
     def _should_skip(self, name: str, node: ASTNode) -> bool:
         """
-        Check if definition should be skipped (e.g., main, exported).
+        Check if definition should be skipped (e.g., main, exported, framework entry point).
         """
         skip_names = {"main", "init", "setup", "teardown", "constructor"}
         if name.lower() in skip_names:
@@ -528,7 +582,24 @@ class UniversalOrphanDetector(AbstractOrphanDetector):
         # In many languages (TS, Go), anything exported is effectively "used"
         # We check metadata if available (use getattr for safety)
         metadata = getattr(node, "metadata", None) or {}
-        return bool(isinstance(metadata, dict) and metadata.get("is_exported"))
+        if isinstance(metadata, dict) and metadata.get("is_exported"):
+            return True
+
+        # Check for framework entry point decorators in source lines
+        if node.location:
+            import re
+            _DEC_RE = re.compile(r"^\s*@(\w+(?:\.\w+)*)")
+            start = max(0, node.location.start_line - 6)
+            end = max(0, node.location.start_line - 1)
+            for i in range(start, end):
+                if i < len(self.lines):
+                    m = _DEC_RE.match(self.lines[i])
+                    if m:
+                        dec_parts = m.group(1).split(".")
+                        if dec_parts[-1].lower() in _FRAMEWORK_ENTRY_DECORATORS:
+                            return True
+
+        return False
 
     def _get_node_snippet(self, node: ASTNode) -> str:
         """
@@ -589,6 +660,9 @@ class RustOrphanDetector(AbstractOrphanDetector):
                     # Double check specific suppression (e.g. main)
                     if self._should_skip(func.name):
                         continue
+                    # Skip framework entry points (decorated functions)
+                    if self._has_framework_decorator_source(func.line_number):
+                        continue
 
                     findings.append(
                         OrphanFinding(
@@ -648,6 +722,23 @@ class RustOrphanDetector(AbstractOrphanDetector):
 
     def _should_skip(self, name: str) -> bool:
         return name in ["main", "__init__", "__str__", "__repr__", "setup", "teardown"]
+
+    def _has_framework_decorator_source(self, line_number: int) -> bool:
+        """Check preceding lines for framework decorator patterns."""
+        import re
+        _DEC_RE = re.compile(r"^\s*@(\w+(?:\.\w+)*)")
+        # Check up to 5 lines above the definition for decorators
+        start = max(0, line_number - 6)
+        end = max(0, line_number - 1)
+        for i in range(start, end):
+            if i < len(self.lines):
+                m = _DEC_RE.match(self.lines[i])
+                if m:
+                    dec_parts = m.group(1).split(".")
+                    # Check last part (e.g., "route" from "app.route")
+                    if dec_parts[-1].lower() in _FRAMEWORK_ENTRY_DECORATORS:
+                        return True
+        return False
 
 
 class LSPOrphanDetector(AbstractOrphanDetector):
