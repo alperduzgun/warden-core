@@ -293,14 +293,14 @@ class PhaseOrchestrator:
             self.config.enable_cleaning = True
             self.config.enable_issue_validation = True
             self.config.frame_timeout = 180  # Extended per-frame timeout for thorough analysis
-            self.config.timeout = 600  # Extended total pipeline timeout
+            self.config.timeout = 900  # Extended total pipeline timeout (was 600 — verification on large projects needs headroom)
             logger.info(
                 "deep_level_overrides_applied",
                 use_llm=True,
                 fortification=True,
                 cleaning=True,
                 frame_timeout=180,
-                pipeline_timeout=600,
+                pipeline_timeout=900,
             )
 
         # Initialize shared context

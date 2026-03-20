@@ -478,7 +478,7 @@ class LanguageServerClient:
         except asyncio.CancelledError:
             _cancelled = True
         except EOFError:
-            logger.warning("lsp_process_eof")
+            logger.debug("lsp_process_eof")  # Downgrade to debug — repeated EOF is noise, not actionable
         except Exception as e:
             logger.error("lsp_read_loop_error", error=str(e))
         finally:

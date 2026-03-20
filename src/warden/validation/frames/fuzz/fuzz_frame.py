@@ -398,15 +398,13 @@ Output must be a valid JSON object with the following structure:
 
             if response.success and response.content:
                 content = response.content
-                if "```json" in content:
-                    content = content.split("```json")[1].split("```")[0].strip()
-                elif "```" in content:
-                    content = content.split("```")[0].strip()
 
                 try:
-                    import json as _json
+                    from warden.shared.utils.json_parser import parse_json_from_llm
 
-                    parsed = _json.loads(content) if isinstance(content, str) else content
+                    parsed = parse_json_from_llm(content) if isinstance(content, str) else content
+                    if parsed is None:
+                        raise ValueError("JSON repair failed — no parseable structure found")
                     result = AnalysisResult.from_json(parsed)
 
                     for issue in result.issues:

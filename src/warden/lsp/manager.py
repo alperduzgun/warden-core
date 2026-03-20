@@ -339,6 +339,8 @@ class LSPManager:
             return None
         except Exception as e:
             logger.error("lsp_spawn_failed", language=language, binary=binary, error=str(e))
+            # Remove from binaries to prevent repeated spawn attempts
+            self._binaries.pop(language, None)
             return None
 
     async def shutdown_all_async(self) -> None:
