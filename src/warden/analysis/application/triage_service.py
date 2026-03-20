@@ -270,7 +270,7 @@ FILES:
             system_prompt=self.BATCH_SYSTEM_PROMPT,
             user_message=prompt,
             use_fast_tier=True,
-            temperature=0.01,
+            temperature=0.0,
             max_tokens=min(2000, 300 * len(code_files)),
             timeout_seconds=45.0,  # Triage is simple classification; 45s is ample.
         )
@@ -329,7 +329,7 @@ FILES:
             system_prompt=self.SYSTEM_PROMPT,
             user_message=prompt,
             use_fast_tier=True,
-            temperature=0.1,
+            temperature=0.0,
             max_tokens=250,
             timeout_seconds=45.0,  # Triage is simple classification; 45s is ample.
         )
