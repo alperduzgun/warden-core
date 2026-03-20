@@ -76,7 +76,8 @@ class PropertyFrame(ValidationFrame, BatchExecutable):
             "suggestion": "Check divisor is not zero before division",
         },
         "comparison_always_true": {
-            "pattern": r"if\s+true|if\s+True|while\s+true|while\s+True",
+            # Match if-true only. while-true is intentional (event loops, retry loops).
+            "pattern": r"\bif\s+(?:true|True)\b(?!\s*(?:and|or|\||\&))",
             "severity": "low",
             "message": "Always-true condition detected",
             "suggestion": "Review logic - condition always evaluates to true",
@@ -545,12 +546,13 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
 
                 matches = compiled_pattern.finditer(line)
                 for _ in matches:
-                    # For division checks, skip findings where a guard already exists
-                    # in the surrounding context (same line or up to 2 lines before).
-                    if check_id == "division_no_zero_check" and self._has_division_guard(
-                        lines, line_num
-                    ):
-                        continue
+                    # For division checks: skip guarded divisions AND pathlib / operator
+                    if check_id == "division_no_zero_check":
+                        if self._has_division_guard(lines, line_num):
+                            continue
+                        # Pathlib Path / operator is concatenation, not arithmetic
+                        if "Path" in line or "path" in line or "__file__" in line:
+                            continue
 
                     finding = Finding(
                         id=f"{self.frame_id}-{check_id}-{line_num}",

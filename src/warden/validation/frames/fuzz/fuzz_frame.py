@@ -87,6 +87,12 @@ class FuzzFrame(ValidationFrame, TaintAware, ChunkingAware):
             "severity": "low",
             "message": "String operation without empty string check",
             "suggestion": "Check if string is empty before operations",
+            "skip_line_patterns": [
+                r"^\s*(?:def |class |import |from |@|#)",  # non-code lines
+                r"\bif\b.*\b(?:len|strip|not)\b",  # guarded: if len(s), if s.strip(), if not s
+                r"\bif\s+\w+\s*:",  # truthy guard: if s:
+                r"\bif\s+\w+\s+(?:is not None|!=\s*None|!=\s*\"\")",  # explicit None/empty guard
+            ],
         },
         "array_access_no_bounds": {
             # Only match numeric-index access on list/array/tuple-like variables.
@@ -113,6 +119,16 @@ class FuzzFrame(ValidationFrame, TaintAware, ChunkingAware):
             "severity": "medium",
             "message": "Type conversion without validation",
             "suggestion": "Wrap conversion in try-catch or validate input",
+            "skip_line_patterns": [
+                r"^\s*(?:def |class |import |from |@|#)",  # non-code lines
+                r"\btry\b",  # inside try block
+                r"\bexcept\b",  # exception handler context
+                # Safe numeric sources that never produce ValueError:
+                r"int\(\s*(?:time\.|os\.|len\(|round\(|math\.|random\.|float\(|self\.\w+|True|False|None)",
+                r"float\(\s*(?:time\.|os\.|len\(|round\(|math\.|random\.|int\(|self\.\w+)",
+                r"int\(\s*\w+\s*[+\-\*/%]",  # arithmetic expression: int(a + b)
+                r"int\(\s*\"[0-9]+\"\s*\)",  # literal string digit: int("42")
+            ],
         },
     }
 
