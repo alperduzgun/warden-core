@@ -174,6 +174,9 @@ class PipelineContext:
     # Phase 0: TAINT Results (populated after PRE-ANALYSIS, consumed by TaintAware frames)
     taint_paths: dict[str, list[Any]] = field(default_factory=dict)  # file_path -> list[TaintPath]
 
+    # Phase 0: Cross-file analysis (import graph + value propagation)
+    cross_file_context: Any = None  # CrossFileContext object
+
     # Diff-mode line filtering: maps relative file path → set of changed line numbers.
     # Populated by the scan command when --diff is used. Empty means full-scan mode.
     changed_lines: dict[str, set[int]] = field(default_factory=dict)

@@ -346,8 +346,18 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                                 semantic_context += f"- {method} {endpoint}: {desc}\n"
                             logger.debug("spec_analysis_added_to_prompt", file=code_file.path, contracts=len(relevant))
 
-                # 1b. File dependency context (import graph)
-                if context and hasattr(context, "dependency_graph_forward"):
+                # 1b. Cross-file context (import graph + value propagation)
+                cross_ctx = getattr(context, "cross_file_context", None)
+                if cross_ctx:
+                    from warden.analysis.services.cross_file_analyzer import CrossFileAnalyzer
+
+                    xf_prompt = CrossFileAnalyzer(
+                        context.project_root or Path.cwd()
+                    ).format_cross_file_prompt(code_file.path, cross_ctx, max_tokens=400)
+                    if xf_prompt:
+                        semantic_context += xf_prompt + "\n"
+                elif context and hasattr(context, "dependency_graph_forward"):
+                    # Fallback: simple dependency names
                     rel_path = code_file.path
                     try:
                         from pathlib import Path as _P

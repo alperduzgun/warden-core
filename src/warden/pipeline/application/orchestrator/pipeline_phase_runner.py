@@ -212,6 +212,9 @@ class PipelinePhaseRunner:
             # Populate taint analysis (zero LLM cost, per-file static analysis)
             await self._populate_taint_paths_async(context, code_files)
 
+            # Populate cross-file analysis (import graph + value propagation)
+            self._populate_cross_file_context(context, code_files)
+
             # Populate Data Dependency Graph when contract mode is enabled
             if getattr(context, "contract_mode", False):
                 self._populate_data_dependency_graph(context, code_files)
@@ -697,6 +700,22 @@ class PipelinePhaseRunner:
             context.taint_paths = await service.analyze_all_async(code_files)
         except Exception as e:
             logger.warning("taint_population_failed", error=str(e))
+
+    def _populate_cross_file_context(self, context: PipelineContext, code_files: list[CodeFile]) -> None:
+        """Build cross-file import graph and value propagation context."""
+        try:
+            from warden.analysis.services.cross_file_analyzer import CrossFileAnalyzer
+
+            project_root = self.project_root or context.project_root
+            if not project_root:
+                return
+
+            from pathlib import Path as _Path
+
+            analyzer = CrossFileAnalyzer(_Path(str(project_root)))
+            context.cross_file_context = analyzer.analyze(code_files)
+        except Exception as e:
+            logger.warning("cross_file_analysis_failed", error=str(e))
 
     async def _populate_lsp_audit_async(self, context: PipelineContext) -> None:
         """Phase 0.8: Validate CodeGraph edges via LSP (optional, zero LLM cost).

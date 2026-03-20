@@ -119,6 +119,14 @@ sinks:
   setTimeout: CODE-execution
   setInterval: CODE-execution
 
+  # Template injection sinks (SSTI)
+  from_string: TEMPLATE-injection
+  Environment.from_string: TEMPLATE-injection
+  Template: TEMPLATE-injection
+
+  # Attribute injection sinks
+  setattr: ATTRIBUTE-injection
+
   # File sinks (Python + JS)
   open: FILE-path
   pathlib.Path: FILE-path
@@ -277,6 +285,12 @@ sanitizers:
     - sanitize_output
   CACHE-write: []
   CACHE-read: []
+  TEMPLATE-injection:
+    - jinja2.sandbox.SandboxedEnvironment
+    - markupsafe.escape
+  ATTRIBUTE-injection:
+    - allowlist_check
+    - hasattr
 
 # ── JS DOM property-assignment sinks ────────────────────────────────────────
 
