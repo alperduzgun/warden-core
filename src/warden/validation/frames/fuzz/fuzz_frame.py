@@ -89,19 +89,23 @@ class FuzzFrame(ValidationFrame, TaintAware, ChunkingAware):
             "suggestion": "Check if string is empty before operations",
         },
         "array_access_no_bounds": {
-            # Matches real subscript access (var[idx]) but NOT:
-            #   - Type annotations: list[str], dict[str, int], Optional[X]
-            #   - Dict literals/assignments where key is a string: d["key"]
-            #   - Decorator lines, import lines, class/def signatures
-            "pattern": r"(?<![\w\]\)])(\w+)\[(\w+)\]",
+            # Only match numeric-index access on list/array/tuple-like variables.
+            # Pattern: var[i] or var[idx] or var[index] or var[0] — where index
+            # is a common numeric variable name or integer literal.
+            # Excludes ALL dict access (dict[key] never raises IndexError).
+            "pattern": r"\w+\[(?:[0-9]+|[ijn]|idx|index|offset|pos|count)\]",
             "severity": "medium",
             "message": "Array/list access without bounds checking",
             "suggestion": "Validate index is within bounds before access",
             "skip_line_patterns": [
                 r"^\s*(?:def |class |import |from |@)",  # signatures, imports, decorators
                 r":\s*(?:list|dict|set|tuple|Optional|Union|Callable|Sequence|Mapping)\[",  # type annotations
-                r"\w+\[['\"]",  # dict access with string literal key: d["key"]
                 r"->\s*\w*\[",  # return type annotations
+                r"^\s*#",  # comments
+                r"\blen\(\w+\)\s*[><=]",  # line already has len() guard
+                r"\bif\b.*\blen\(",  # if-guarded with len check
+                r"\btry\b",  # inside try block (has except handler)
+                r"\bexcept\b.*\b(?:Index|Key)Error\b",  # exception handler for index
             ],
         },
         "type_conversion_no_validation": {
