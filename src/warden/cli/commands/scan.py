@@ -189,7 +189,7 @@ def scan_command(
     level: str | None = typer.Option(None, "--level", help="Analysis level: basic, standard, deep"),
     no_ai: bool = typer.Option(False, "--disable-ai", help="Shorthand for --level basic"),
     quick_start: bool = typer.Option(
-        False, "--quick-start", help="Fast deterministic scan: no LLM, no setup required"
+        False, "--quick-start", "--fast", help="Fast deterministic scan: no LLM, no setup required (<10s)"
     ),
     memory_profile: bool = typer.Option(False, "--memory-profile", help="Enable memory profiling and leak detection"),
     ci: bool = typer.Option(False, "--ci", help="CI mode: read-only, optimized for CI/CD pipelines"),
