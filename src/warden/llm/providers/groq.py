@@ -123,7 +123,7 @@ class GroqClient(ILlmClient):
                 else self._default_model
             )
 
-            payload = {
+            payload: dict = {
                 "model": model,
                 "messages": [
                     {"role": "system", "content": request.system_prompt},
@@ -132,6 +132,12 @@ class GroqClient(ILlmClient):
                 "temperature": request.temperature,
                 "max_tokens": request.max_tokens,
             }
+
+            # Enforce JSON output when prompt requests it (Groq supports response_format)
+            _sys = (request.system_prompt or "").lower()
+            _msg = (request.user_message or "").lower()
+            if "json" in _sys or "json" in _msg[:200] or "json" in _msg[-400:]:
+                payload["response_format"] = {"type": "json_object"}
 
             async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
                 response = await client.post(f"{self._base_url}/chat/completions", headers=headers, json=payload)
