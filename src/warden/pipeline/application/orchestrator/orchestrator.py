@@ -281,7 +281,19 @@ class PhaseOrchestrator:
             self.config.enable_fortification = False
             self.config.enable_cleaning = False
             self.config.enable_issue_validation = False
-            logger.info("basic_level_overrides_applied", use_llm=False, fortification=False, cleaning=False)
+            self.config.frame_timeout = 30  # Tight timeout — deterministic checks are fast
+            self.config.timeout = 120  # Basic should finish well under 2 minutes
+            self.config.enable_lsp_audit = False  # LSP wastes 30s on retry/timeout in basic
+            # Restrict to deterministic-only frames (skip LLM-heavy frames)
+            self.config.basic_frames_only = True
+            logger.info(
+                "basic_level_overrides_applied",
+                use_llm=False,
+                fortification=False,
+                cleaning=False,
+                frame_timeout=30,
+                pipeline_timeout=120,
+            )
         elif self.config.analysis_level == AnalysisLevel.STANDARD:
             self.config.use_llm = True
             self.config.enable_issue_validation = True

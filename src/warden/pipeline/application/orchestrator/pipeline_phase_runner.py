@@ -283,6 +283,20 @@ class PipelinePhaseRunner:
 
         if frames_to_execute:
             self._apply_manual_frame_override(context, frames_to_execute)
+        elif getattr(self.config, "basic_frames_only", False):
+            # Basic/fast mode: skip classification LLM, use only deterministic frames.
+            # cli_frame_override prevents frame_matcher from adding user-enforced frames.
+            _DETERMINISTIC_FRAMES = {"security", "orphan"}
+            context.classified_files = {
+                cf.path: list(_DETERMINISTIC_FRAMES) for cf in code_files
+            }
+            context.selected_frames = list(_DETERMINISTIC_FRAMES)
+            context.cli_frame_override = True  # Lock frame set — no extras from rules.yaml
+            logger.info(
+                "basic_frames_only_applied",
+                frames=list(_DETERMINISTIC_FRAMES),
+                reason="basic_mode_deterministic_only",
+            )
         else:
             logger.info("phase_enabled", phase="CLASSIFICATION", enabled=True, enforced=True)
             await self.phase_executor.execute_classification_async(context, code_files)

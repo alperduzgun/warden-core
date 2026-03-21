@@ -85,6 +85,9 @@ class PipelineConfig(BaseDomainModel):
     enable_suppression: bool = True  # Apply suppression filtering after validation
     enable_issue_validation: bool = True  # Apply confidence-based false positive detection
 
+    # Basic/fast mode: restrict to deterministic-only frames
+    basic_frames_only: bool = False
+
     # Filtering
     min_severity: str = "low"  # Minimum severity threshold for reporting (low/medium/high/critical)
 

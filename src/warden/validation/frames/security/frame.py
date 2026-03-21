@@ -854,8 +854,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                 findings_map[code_file.path] = []
                 check_results_map[code_file.path] = []
 
-        # PHASE 2: Batch LLM Verification (if LLM available)
-        if hasattr(self, "llm_service") and self.llm_service:
+        # PHASE 2: Batch LLM Verification (if LLM enabled AND available)
+        _use_llm = getattr(self, "_use_llm", True)  # Set by pipeline config
+        if _use_llm and hasattr(self, "llm_service") and self.llm_service:
             batch_ctx = self._build_batch_context()
             findings_map = await batch_verify_security_findings(
                 findings_map, code_files, self.llm_service, semantic_context=batch_ctx
