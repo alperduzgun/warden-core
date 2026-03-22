@@ -293,6 +293,7 @@ class FrameRunner:
             return skip_result
 
         use_llm = getattr(self.config, "use_llm", True) if self.config else True
+        frame._use_llm = use_llm  # Propagate to frame for taint/dataflow skip in basic mode
         if self.llm_service and use_llm:
             frame.llm_service = self.llm_service
             # Enable agentic loop with project context

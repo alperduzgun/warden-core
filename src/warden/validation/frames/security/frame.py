@@ -804,11 +804,17 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                 ast_context_map[code_file.path] = ast_context
 
                 # STEP 2.5: Taint analysis (prefer shared, fallback to inline)
+                # In basic/fast mode: only use pre-computed taint paths (zero cost).
+                # Inline taint analysis is expensive (~0.5s/file) — skip in fast mode.
                 file_taint_paths: list = []
                 if code_file.language in _TAINT_SUPPORTED_LANGUAGES:
                     file_taint_paths = []
                     if self._taint_paths and code_file.path in self._taint_paths:
+                        # Pre-computed by pipeline (zero cost here)
                         file_taint_paths = self._taint_paths[code_file.path]
+                    elif not getattr(self, "_use_llm", True):
+                        # Fast/basic mode: skip expensive inline taint analysis
+                        pass
                     else:
                         try:
                             from pathlib import Path as _Path
@@ -831,8 +837,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                 taint_paths_map[code_file.path] = file_taint_paths
 
                 # STEP 3: Data Flow Analysis (taint tracking via LSP)
+                # Skip in basic/fast mode — LSP is disabled and data flow is LLM-enrichment
                 data_flow_context: dict[str, Any] = {}
-                if check_results:
+                if check_results and getattr(self, "_use_llm", True):
                     try:
                         data_flow_context = await analyze_data_flow(code_file, check_results)
                     except Exception as e:
