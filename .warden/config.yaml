@@ -11,16 +11,6 @@ advanced:
     path: .warden/reports/warden-report.json
   - format: sarif
     path: .warden/reports/warden-report.sarif
-frames:
-- config
-- security
-- resilience
-- fuzz
-- orphan
-- property
-- antipattern
-- spec
-- architecture
 frames_config:
   architecture:
     enabled: true
@@ -111,28 +101,43 @@ llm:
     enabled: true
     base_url: http://localhost:11434
   fast_tier_providers:
-  - ollama
+  - qwencode
   max_retries: 0
   tpm_limit: 10000
   rpm_limit: 60
-  provider: ollama
-  model: qwen2.5-coder:3b
+  provider: qwencode
+  model: qwen-code-default
   timeout: 300
-  smart_model: qwen2.5-coder:3b
-  fast_model: qwen2.5-coder:0.5b
+  smart_model: qwen-code-default
+  fast_model: claude-code-default
   token_budgets:
-    # Two-tier (OASIS approach):
-    #   fast tier  → 0.5b @ ~30 tok/s CPU → generous budget, quick turnaround
-    #   smart tier → 3b   @ ~5  tok/s CPU → conservative, only for deep analysis
-    security: {deep: 400, fast: 300}
-    resilience: {deep: 400, fast: 300}
-    property: {deep: 300, fast: 200}
-    fuzz: {deep: 300, fast: 200}
-    orphan: {deep: 500, fast: 400}
-    fortification: {deep: 400, fast: 300}
-    triage: {deep: 400, fast: 400}
-    classification: {deep: 400, fast: 400}
-    analysis: {deep: 200, fast: 200}
+    security:
+      deep: 2400
+      fast: 900
+    resilience:
+      deep: 3000
+      fast: 1200
+    property:
+      deep: 2000
+      fast: 700
+    fuzz:
+      deep: 2000
+      fast: 700
+    orphan:
+      deep: 3000
+      fast: 1000
+    fortification:
+      deep: 3000
+      fast: 900
+    triage:
+      deep: 1500
+      fast: 1200
+    classification:
+      deep: 2000
+      fast: 1000
+    analysis:
+      deep: 1500
+      fast: 800
   ci:
     provider: ollama
     smart_model: qwen2.5-coder:3b
@@ -179,7 +184,7 @@ settings:
     enabled: true
     model: qwen2.5-coder:0.5b
     batch_size: 1
-  timeout: 3600
+  timeout: '3600'
 custom_rules:
 - .warden/rules/my_custom_rules.yaml
 - .warden/rules/warden_core_rules.yaml
@@ -188,3 +193,13 @@ baseline:
   enabled: true
   path: .warden/baseline.json
   auto_fetch: false
+frames:
+- config
+- security
+- resilience
+- fuzz
+- orphan
+- property
+- antipattern
+- spec
+- architecture
