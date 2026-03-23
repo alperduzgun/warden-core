@@ -70,6 +70,10 @@ class TokenBucketLimiter:
             self.last = now
             if self.tokens < n:
                 wait = (n - self.tokens) * 60 / self.tpm
+                # Cap wait to prevent pipeline timeout. If rate limit requires
+                # >10s wait, proceed anyway — better to risk a 429 (retryable)
+                # than block the entire pipeline.
+                wait = min(wait, 10.0)
                 self.tokens = 0
                 self._lock.release()
                 await asyncio.sleep(wait)

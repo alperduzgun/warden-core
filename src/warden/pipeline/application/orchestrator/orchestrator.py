@@ -324,8 +324,8 @@ class PhaseOrchestrator:
             # Deep scan has ~6 LLM phases, each touching files proportionally.
             _file_count = len(code_files) if code_files else 1
             _is_local_llm = self._detect_local_llm()
-            _per_file = 15 if _is_local_llm else 5  # seconds per file budget
-            _base = 300  # minimum 5 minutes
+            _per_file = 20 if _is_local_llm else 10  # seconds per file budget
+            _base = 600  # minimum 10 minutes (deep scan has 6+ LLM phases)
             self.config.timeout = max(_base, _file_count * _per_file)
             logger.info(
                 "deep_level_overrides_applied",
