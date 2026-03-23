@@ -639,6 +639,11 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         if "fast_model" in config_override and not env_provider:
             config.fast_model = config_override["fast_model"]
 
+        # Smart tier provider routing from config.yaml
+        if "smart_tier_provider" in config_override:
+            with contextlib.suppress(ValueError):
+                config.smart_tier_provider = LlmProvider(config_override["smart_tier_provider"].strip().lower())
+
         # Rate limits from config.yaml
         if "tpm_limit" in config_override:
             with contextlib.suppress(ValueError, TypeError):
