@@ -210,10 +210,21 @@ class ILlmClient(ABC):
         truncated_code = prepare_code_for_llm(code_content, token_budget=budget)
 
         prompt = f"""
-        You are a senior security researcher. Analyze this {language} code for critical vulnerabilities.
-        Target vulnerabilities: SQL Injection, XSS, Hardcoded Secrets, SSRF, CSRF, XXE, Insecure Deserialization, Path Traversal, Command Injection, and IDOR (Insecure Direct Object Reference).
+        You are a senior security researcher. Analyze this {language} code for ALL security vulnerabilities — both obvious and subtle.
+        Target vulnerabilities: SQL Injection, XSS, Hardcoded Secrets, SSRF, CSRF, XXE, Insecure Deserialization, Path Traversal, Command Injection, IDOR, and LOGIC-LEVEL FLAWS.
 
         Ignore stylistic issues. Focus only on exploitable security flaws.
+
+        LOGIC-LEVEL VULNERABILITY CHECKLIST (check ALL):
+        - Is == used to compare hashes or secrets? (timing attack — use hmac.compare_digest)
+        - Does JWT decode allow "none" algorithm? (authentication bypass)
+        - Is JWT expiry unreasonably long (>7 days)? (token theft risk)
+        - Is role/permission read from JWT payload without server-side validation? (privilege escalation)
+        - Is password hashing using MD5/SHA1 with static/hardcoded salt? (weak crypto)
+        - Does format() or format_map() receive user-controlled input? (attribute leak via __class__)
+        - Is random module used instead of secrets for security tokens/file paths? (predictable values)
+        - Does an HTML sanitizer use string replace() on a blocklist instead of a proper library? (bypassable)
+        - Does a validation regex use .* or other trivially bypassable patterns? (input validation bypass)
 
         IDOR DETECTION GUIDANCE:
         An IDOR vulnerability exists when an endpoint accepts a user-controlled identifier (e.g., a URL path

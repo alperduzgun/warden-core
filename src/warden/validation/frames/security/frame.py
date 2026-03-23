@@ -861,8 +861,39 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                 findings_map[code_file.path] = []
                 check_results_map[code_file.path] = []
 
+        # PHASE 1.5: Independent LLM scan for files with NO deterministic findings.
+        # These files are invisible to batch verification (PHASE 2) because it only
+        # verifies existing findings. This catches logic-level vulns (JWT misconfig,
+        # timing attacks, auth bypass) that have no regex/AST pattern.
+        _use_llm = getattr(self, "_use_llm", True)
+        if _use_llm and hasattr(self, "llm_service") and self.llm_service:
+            clean_files = [
+                cf for cf in code_files
+                if cf.path not in error_files and not findings_map.get(cf.path)
+            ]
+            if clean_files:
+                logger.info("llm_independent_scan_start", file_count=len(clean_files))
+                for cf in clean_files:
+                    try:
+                        # Reuse execute_async's LLM path — it already does independent scanning
+                        single_result = await self.execute_async(cf)
+                        if single_result.findings:
+                            # Tag as LLM-independent and cap severity
+                            for f in single_result.findings:
+                                f.detection_source = "llm_independent"
+                                f.is_blocker = False
+                                if getattr(f, "severity", "") == "critical":
+                                    f.severity = "high"
+                            findings_map[cf.path] = single_result.findings
+                            logger.info(
+                                "llm_independent_scan_found",
+                                file=cf.path,
+                                findings=len(single_result.findings),
+                            )
+                    except Exception as e:
+                        logger.debug("llm_independent_scan_failed", file=cf.path, error=str(e))
+
         # PHASE 2: Batch LLM Verification (if LLM enabled AND available)
-        _use_llm = getattr(self, "_use_llm", True)  # Set by pipeline config
         if _use_llm and hasattr(self, "llm_service") and self.llm_service:
             batch_ctx = self._build_batch_context()
             findings_map = await batch_verify_security_findings(
