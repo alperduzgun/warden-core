@@ -74,18 +74,29 @@ def _recover_truncated_json(json_str: str) -> str:
     - Array cut mid-object: '[{"a":1},{"b":2' → '[{"a":1}]'
     - Object cut mid-value: '{"a":1,"b":"trunc' → '{"a":1}'
     - Nested structure: '[{"a":[1,2' → '[{"a":[1,2]}]'
+    - Corrupt tail: valid JSON + garbage at end
     """
     s = json_str.strip()
     if not s:
         return s
 
-    # Already valid structure — no recovery needed
+    # Already valid structure — try parse first
     if (s.startswith("[") and s.endswith("]")) or (s.startswith("{") and s.endswith("}")):
-        return s
+        try:
+            json.loads(s)
+            return s
+        except json.JSONDecodeError:
+            pass  # Fall through to recovery
+
+    # Strategy: for {"findings": [...]} pattern, find the last complete
+    # object in the array and close the structure.
+    if s.startswith("{"):
+        recovered = _recover_findings_array(s)
+        if recovered:
+            return recovered
 
     # Truncated array: starts with [ but no closing ]
     if s.startswith("[") and not s.endswith("]"):
-        # Find last complete object boundary
         last_brace = s.rfind("}")
         if last_brace > 0:
             s = s[: last_brace + 1] + "]"
@@ -94,7 +105,6 @@ def _recover_truncated_json(json_str: str) -> str:
 
     # Truncated object: starts with { but no closing }
     if s.startswith("{") and not s.endswith("}"):
-        # Find last complete key-value boundary (after a comma or colon+value)
         last_comma = s.rfind(",")
         if last_comma > 0:
             s = s[:last_comma] + "}"
@@ -102,6 +112,42 @@ def _recover_truncated_json(json_str: str) -> str:
             return s
 
     return json_str
+
+
+def _recover_findings_array(json_str: str) -> str | None:
+    """Recover a truncated {"findings": [...]} structure by progressively
+    removing trailing objects until parsing succeeds."""
+    # Quick check: does this look like a findings response?
+    if '"findings"' not in json_str[:100]:
+        return None
+
+    # Find the start of the findings array
+    arr_start = json_str.find("[")
+    if arr_start < 0:
+        return None
+
+    # Strategy: find each complete "},{" boundary working backwards
+    # and try closing the structure there.
+    pos = len(json_str)
+    for _ in range(50):  # Max 50 attempts
+        # Find last "},\n" or "}, " or "},{"  boundary before pos
+        candidate = json_str.rfind("}", 0, pos)
+        if candidate <= arr_start:
+            break
+
+        # Try closing the JSON here: trim to this }, close array + object
+        attempt = json_str[: candidate + 1] + "]}"
+        try:
+            parsed = json.loads(attempt)
+            if isinstance(parsed, dict) and "findings" in parsed:
+                count = len(parsed["findings"])
+                logger.info("json_truncation_recovered_findings", recovered_count=count)
+                return attempt
+        except json.JSONDecodeError:
+            pass
+        pos = candidate  # Move backwards
+
+    return None
 
 
 def _repair_json(json_str: str) -> str:

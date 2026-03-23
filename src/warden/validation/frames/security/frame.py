@@ -889,7 +889,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                             response = await self.llm_service.analyze_security_async(
                                 code_for_llm, cf.language, use_fast_tier=False,
                             )
+                            logger.info("llm_independent_scan_response", file=cf.path, response_type=type(response).__name__, findings_count=len(response.get("findings", [])) if isinstance(response, dict) else -1)
                             if not response or not isinstance(response, dict):
+                                logger.warning("llm_independent_scan_empty", file=cf.path, response=str(response)[:200])
                                 return (cf.path, [])
                             findings = []
                             for item in response.get("findings", []):
@@ -929,6 +931,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         for path, indep_findings in _independent_findings.items():
             existing = findings_map.get(path, [])
             findings_map[path] = existing + indep_findings
+            logger.info("llm_independent_merge", file=path, independent=len(indep_findings), total=len(findings_map[path]))
 
         # PHASE 3: Build Results
         results = []

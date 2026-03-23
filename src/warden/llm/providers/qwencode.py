@@ -44,6 +44,11 @@ class QwenCodeClient(ILlmClient):
 
             headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
+            # Auto-detect JSON mode from prompt content
+            _sys_lower = (request.system_prompt or "").lower()
+            _msg_lower = (request.user_message or "").lower()
+            _wants_json = "json" in _sys_lower or "json" in _msg_lower[:200] or "json" in _msg_lower[-400:]
+
             payload = {
                 "model": request.model or self._default_model,
                 "input": {
@@ -54,6 +59,10 @@ class QwenCodeClient(ILlmClient):
                 },
                 "parameters": {"temperature": request.temperature, "max_tokens": request.max_tokens},
             }
+            if _wants_json:
+                payload["parameters"]["result_format"] = "message"
+                # Add response_format for OpenAI-compatible endpoints
+                payload["parameters"]["response_format"] = {"type": "json_object"}
 
             async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
                 response = await client.post(
