@@ -862,10 +862,10 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                 check_results_map[code_file.path] = []
 
         # PHASE 1.5: Independent LLM scan for files with NO deterministic findings.
-        # These files are invisible to batch verification (PHASE 2) because it only
-        # verifies existing findings. This catches logic-level vulns (JWT misconfig,
-        # timing attacks, auth bypass) that have no regex/AST pattern.
+        # Only calls the LLM analysis — skips re-running deterministic checks (already done in PHASE 1).
+        # Findings are stored SEPARATELY to avoid PHASE 2 re-verification (which would reject LLM findings).
         _use_llm = getattr(self, "_use_llm", True)
+        _independent_findings: dict[str, list[Finding]] = {}
         if _use_llm and hasattr(self, "llm_service") and self.llm_service:
             clean_files = [
                 cf for cf in code_files
@@ -873,32 +873,62 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             ]
             if clean_files:
                 logger.info("llm_independent_scan_start", file_count=len(clean_files))
-                for cf in clean_files:
-                    try:
-                        # Reuse execute_async's LLM path — it already does independent scanning
-                        single_result = await self.execute_async(cf)
-                        if single_result.findings:
-                            # Tag as LLM-independent and cap severity
-                            for f in single_result.findings:
-                                f.detection_source = "llm_independent"
-                                f.is_blocker = False
-                                if getattr(f, "severity", "") == "critical":
-                                    f.severity = "high"
-                            findings_map[cf.path] = single_result.findings
-                            logger.info(
-                                "llm_independent_scan_found",
-                                file=cf.path,
-                                findings=len(single_result.findings),
-                            )
-                    except Exception as e:
-                        logger.debug("llm_independent_scan_failed", file=cf.path, error=str(e))
 
-        # PHASE 2: Batch LLM Verification (if LLM enabled AND available)
+                import asyncio as _aio
+
+                _sem = _aio.Semaphore(3)  # Max 3 concurrent LLM calls
+
+                async def _scan_one(cf: CodeFile) -> tuple[str, list[Finding]]:
+                    async with _sem:
+                        try:
+                            # Direct LLM call — no deterministic re-run
+                            from warden.shared.utils.llm_context import BUDGET_SECURITY, prepare_code_for_llm, resolve_token_budget
+
+                            budget = resolve_token_budget(BUDGET_SECURITY, context=None, code_file_metadata=cf.metadata)
+                            code_for_llm = prepare_code_for_llm(cf.content, token_budget=budget, file_path=cf.path)
+                            response = await self.llm_service.analyze_security_async(
+                                code_for_llm, cf.language, use_fast_tier=False,
+                            )
+                            if not response or not isinstance(response, dict):
+                                return (cf.path, [])
+                            findings = []
+                            for item in response.get("findings", []):
+                                f = Finding(
+                                    id=f"security-llm-independent-{len(findings)}",
+                                    severity=min_severity(item.get("severity", "medium"), "high"),  # Cap at HIGH
+                                    message=item.get("message", ""),
+                                    location=f"{cf.path}:{item.get('line_number', 1)}",
+                                    detail=item.get("detail", ""),
+                                    detection_source="llm_independent",
+                                    is_blocker=False,
+                                )
+                                findings.append(f)
+                            return (cf.path, findings)
+                        except Exception as e:
+                            logger.debug("llm_independent_scan_failed", file=cf.path, error=str(e))
+                            return (cf.path, [])
+
+                def min_severity(sev: str, cap: str) -> str:
+                    _rank = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+                    return sev if _rank.get(sev, 1) <= _rank.get(cap, 2) else cap
+
+                results = await _aio.gather(*[_scan_one(cf) for cf in clean_files])
+                for path, findings in results:
+                    if findings:
+                        _independent_findings[path] = findings
+                        logger.info("llm_independent_scan_found", file=path, findings=len(findings))
+
+        # PHASE 2: Batch LLM Verification (deterministic findings ONLY — independent findings skip this)
         if _use_llm and hasattr(self, "llm_service") and self.llm_service:
             batch_ctx = self._build_batch_context()
             findings_map = await batch_verify_security_findings(
                 findings_map, code_files, self.llm_service, semantic_context=batch_ctx
             )
+
+        # Merge independent LLM findings AFTER PHASE 2 (they bypass verification)
+        for path, indep_findings in _independent_findings.items():
+            existing = findings_map.get(path, [])
+            findings_map[path] = existing + indep_findings
 
         # PHASE 3: Build Results
         results = []
