@@ -368,9 +368,11 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     if env_provider:
         with contextlib.suppress(ValueError):
             explicit_provider_override = LlmProvider(env_provider)
-    elif config_override and "provider" in config_override:
-        with contextlib.suppress(ValueError):
-            explicit_provider_override = LlmProvider(config_override["provider"])
+    elif config_override and ("provider" in config_override or "default_provider" in config_override):
+        _provider_val = config_override.get("provider") or config_override.get("default_provider")
+        if _provider_val:
+            with contextlib.suppress(ValueError):
+                explicit_provider_override = LlmProvider(str(_provider_val).strip().lower())
 
     # Create base configuration
     config = LlmConfiguration(default_provider=LlmProvider.AZURE_OPENAI, fallback_providers=[])
