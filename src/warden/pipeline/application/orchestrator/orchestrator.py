@@ -221,6 +221,17 @@ class PhaseOrchestrator:
 
         return result, context
 
+    def _detect_local_llm(self) -> bool:
+        """Check if the active LLM provider is local (slow) vs cloud (fast)."""
+        _LOCAL_PROVIDERS = {"ollama", "claude_code", "codex", "qwencode"}
+        provider = getattr(self.config, "analysis_level", None)
+        # Check llm_service provider if available
+        if self.llm_service:
+            svc_provider = getattr(self.llm_service, "provider", None)
+            if svc_provider:
+                return str(svc_provider.value if hasattr(svc_provider, "value") else svc_provider).lower() in _LOCAL_PROVIDERS
+        return True  # Default: assume local (conservative — gives more headroom)
+
     async def execute_pipeline_async(
         self,
         code_files: list[CodeFile],
@@ -305,14 +316,26 @@ class PhaseOrchestrator:
             self.config.enable_cleaning = True
             self.config.enable_issue_validation = True
             self.config.frame_timeout = 180  # Extended per-frame timeout for thorough analysis
-            self.config.timeout = 900  # Extended total pipeline timeout (was 600 — verification on large projects needs headroom)
+
+            # Dynamic pipeline timeout: scales with project size + LLM provider speed.
+            # Local LLM (Ollama): ~80s/call → needs more headroom
+            # Cloud LLM (Groq): ~3s/call → fast
+            # Formula: base + (files × per_file_budget)
+            # Deep scan has ~6 LLM phases, each touching files proportionally.
+            _file_count = len(code_files) if code_files else 1
+            _is_local_llm = self._detect_local_llm()
+            _per_file = 15 if _is_local_llm else 5  # seconds per file budget
+            _base = 300  # minimum 5 minutes
+            self.config.timeout = max(_base, _file_count * _per_file)
             logger.info(
                 "deep_level_overrides_applied",
                 use_llm=True,
                 fortification=True,
                 cleaning=True,
                 frame_timeout=180,
-                pipeline_timeout=900,
+                pipeline_timeout=self.config.timeout,
+                file_count=_file_count,
+                local_llm=_is_local_llm,
             )
 
         # Initialize shared context
