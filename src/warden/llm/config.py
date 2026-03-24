@@ -37,7 +37,7 @@ class ProviderConfig:
             List of validation errors (empty if valid)
         """
         errors = []
-        local_providers = {"ollama", "claude_code", "codex", "qwencode"}
+        local_providers = {"ollama", "claude_code", "codex", "qwencode", "qwen_cli"}
 
         if not self.api_key:
             if provider_name.lower() not in local_providers:
@@ -139,6 +139,7 @@ class LlmConfiguration:
         mapping = {
             LlmProvider.DEEPSEEK: self.deepseek,
             LlmProvider.QWENCODE: self.qwencode,
+            LlmProvider.QWEN_CLI: self.qwencode,  # CLI shares DashScope config
             LlmProvider.ANTHROPIC: self.anthropic,
             LlmProvider.OPENAI: self.openai,
             LlmProvider.AZURE_OPENAI: self.azure_openai,
@@ -538,7 +539,7 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
     if _shutil.which("qwen"):
         config.qwencode.enabled = True
         config.qwencode.endpoint = "cli"
-        configured_providers.append(LlmProvider.QWENCODE)
+        configured_providers.append(LlmProvider.QWEN_CLI)
 
     # --- AUTO-PILOT LOGIC ---
     # Only runs when NO explicit provider was configured (no config.yaml provider: / no env var).
