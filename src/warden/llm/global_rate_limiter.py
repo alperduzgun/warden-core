@@ -47,6 +47,7 @@ class GlobalRateLimiter:
             "qwen": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
             "ollama": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
             # Smart tier providers (conservative limits)
+            "groq": RateLimiter(RateLimitConfig(rpm=30, tpm=6000)),
             "openai": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
             "azure": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
             "anthropic": RateLimiter(RateLimitConfig(rpm=10, tpm=40000)),
@@ -101,14 +102,8 @@ class GlobalRateLimiter:
         # 1. Acquire Token/RPM Rate Limit
         await limiter.acquire(tokens=tokens)
 
-        # 2. Acquire Concurrency Slot (for local providers)
-        # Prevents CPU thrashing in CI when multiple batches try to run.
-        if "ollama" in provider_key or "qwen" in provider_key:
-            sem = self._get_semaphore(provider_key, limit=1)  # Strictly serial for local LLM
-            # We don't 'await sem.acquire()' here because send_async needs to release it.
-            # Instead, we just ensure the caller knows they are subject to it.
-            # Actual enforcement is handled in the client or via a wrapper.
-            pass
+        # Concurrency enforcement for local providers is handled by callers
+        # via `concurrency_limit()` + `async with sem:` pattern (see OllamaClient).
 
     def _get_semaphore(self, provider: str, limit: int = 1) -> asyncio.Semaphore:
         """Get or create an asyncio semaphore for a provider."""

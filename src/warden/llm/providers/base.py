@@ -215,13 +215,13 @@ class ILlmClient(ABC):
         prompt = f"""Analyze this {language} code for security vulnerabilities. Focus on exploitable flaws only.
 
 CHECK THESE FIRST (report each one found):
-1. == comparing hashes/secrets instead of hmac.compare_digest (timing attack)
+1. == comparing password/hash/token/secret byte values (NOT role names or status strings) — timing attack, use hmac.compare_digest
 2. JWT decode accepting "none" algorithm (auth bypass)
 3. JWT expiry >7 days (token theft)
 4. Role/permission from JWT payload without server-side check (privilege escalation)
 5. MD5/SHA1 with static/hardcoded salt (weak crypto)
 6. format()/format_map() with user input (attribute leak via __class__)
-7. random module for tokens/paths instead of secrets (predictable)
+7. random module generating security tokens, session IDs, reset codes, or unpredictable paths (NOT for shuffle/sample/simulation)
 8. HTML sanitizer using string replace() blocklist (bypassable)
 9. Validation regex using .* or trivially bypassable patterns
 

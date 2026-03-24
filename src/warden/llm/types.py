@@ -21,6 +21,7 @@ class LlmProvider(str, Enum):
 
     DEEPSEEK = "deepseek"
     QWENCODE = "qwencode"
+    QWEN_CLI = "qwen_cli"  # Local Qwen CLI subprocess integration
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     AZURE_OPENAI = "azure_openai"

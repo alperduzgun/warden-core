@@ -80,10 +80,18 @@ async def batch_verify_security_findings(
     logger.info("security_batch_llm_verification", total_findings=len(all_findings_with_context), batches=len(batches))
 
     # Process all batches in parallel — each batch is an independent LLM call (closes #304)
+    _BATCH_TIMEOUT_S = 320.0  # complete_async(300s) + rate limiter headroom(10s) + buffer
+
     async def _run_batch(i: int, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         try:
             logger.debug("processing_security_batch", index=i + 1, total=len(batches))
-            return await _verify_security_batch(batch, code_files, llm_service, semantic_context)
+            return await asyncio.wait_for(
+                _verify_security_batch(batch, code_files, llm_service, semantic_context),
+                timeout=_BATCH_TIMEOUT_S,
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            logger.warning("security_batch_verification_timeout", batch=i)
+            return batch  # conservative fallback: keep original items
         except Exception as e:
             logger.error("security_batch_verification_failed", batch=i, error=str(e))
             return batch  # conservative fallback: keep original items

@@ -61,8 +61,6 @@ class QwenCodeClient(ILlmClient):
             }
             if _wants_json:
                 payload["parameters"]["result_format"] = "message"
-                # Add response_format for OpenAI-compatible endpoints
-                payload["parameters"]["response_format"] = {"type": "json_object"}
 
             async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
                 response = await client.post(
@@ -73,13 +71,23 @@ class QwenCodeClient(ILlmClient):
 
             duration_ms = LlmResponse.elapsed_ms(start_time)
 
-            if not result.get("output") or not result["output"].get("text"):
+            # DashScope returns different shapes depending on result_format:
+            # - text format (default): output.text
+            # - message format: output.choices[0].message.content
+            output = result.get("output", {})
+            content_text = output.get("text")
+            if not content_text and "choices" in output:
+                choices = output["choices"]
+                if choices and isinstance(choices, list):
+                    content_text = choices[0].get("message", {}).get("content")
+
+            if not content_text:
                 return LlmResponse.error("No response from QwenCode", provider=self.provider, duration_ms=duration_ms)
 
             usage = result.get("usage", {})
 
             return LlmResponse(
-                content=result["output"]["text"],
+                content=content_text,
                 success=True,
                 provider=self.provider,
                 model=request.model or self._default_model,

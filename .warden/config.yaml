@@ -109,7 +109,7 @@ llm:
   model: qwen-code-default
   timeout: 300
   smart_model: qwen-code-default
-  fast_model: claude-code-default
+  fast_model: qwen-code-default
   token_budgets:
     security:
       deep: 2400

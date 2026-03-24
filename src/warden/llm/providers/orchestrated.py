@@ -57,6 +57,9 @@ class OrchestratedLlmClient(ILlmClient):
         self.fast_clients = fast_clients or []
         self.smart_model = smart_model
         self.fast_model = fast_model
+        self._fast_fallback_logged = False
+        self._circuit_open_logged = False
+        self._smart_fallback_logged = False
 
         # Provider-level circuit breaker (issue #127)
         # Local providers (Ollama) recover quickly — use 30s window instead of 5min.
@@ -347,6 +350,10 @@ class OrchestratedLlmClient(ILlmClient):
         # Record circuit breaker state for smart tier
         if response.success:
             cb.record_success(self.smart_client.provider)
+            # Reset log suppression flags on recovery
+            self._fast_fallback_logged = False
+            self._circuit_open_logged = False
+            self._smart_fallback_logged = False
         else:
             cb.record_failure(self.smart_client.provider)
 
