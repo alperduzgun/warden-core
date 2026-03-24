@@ -867,9 +867,18 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         _use_llm = getattr(self, "_use_llm", True)
         _independent_findings: dict[str, list[Finding]] = {}
         if _use_llm and hasattr(self, "llm_service") and self.llm_service:
+            def _has_significant_findings(path: str) -> bool:
+                """True if file has medium+ severity findings (skip LLM for those)."""
+                _SIGNIFICANT = {"medium", "high", "critical"}
+                for f in findings_map.get(path, []):
+                    sev = f.severity if hasattr(f, "severity") else (f.get("severity") if isinstance(f, dict) else "")
+                    if str(sev).lower() in _SIGNIFICANT:
+                        return True
+                return False
+
             clean_files = [
                 cf for cf in code_files
-                if cf.path not in error_files and not findings_map.get(cf.path)
+                if cf.path not in error_files and not _has_significant_findings(cf.path)
             ]
             if clean_files:
                 logger.info("llm_independent_scan_start", file_count=len(clean_files))
@@ -889,23 +898,33 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                             response = await self.llm_service.analyze_security_async(
                                 code_for_llm, cf.language, use_fast_tier=False,
                             )
+                            logger.info("llm_independent_scan_response", file=cf.path, response_type=type(response).__name__, findings_count=len(response.get("findings", [])) if isinstance(response, dict) else -1)
                             if not response or not isinstance(response, dict):
+                                logger.warning("llm_independent_scan_empty", file=cf.path, response=str(response)[:200])
                                 return (cf.path, [])
                             findings = []
+                            _MAX_FINDINGS_PER_FILE = 15
+                            _path_hash = hex(hash(cf.path) & 0xFFFF)[2:]
                             for item in response.get("findings", []):
+                                if len(findings) >= _MAX_FINDINGS_PER_FILE:
+                                    logger.warning("llm_independent_cap_reached", file=cf.path, cap=_MAX_FINDINGS_PER_FILE)
+                                    break
+                                detail = item.get("detail", "")
+                                if len(detail) < 10:
+                                    continue  # Skip vague/hallucinated findings
                                 f = Finding(
-                                    id=f"security-llm-independent-{len(findings)}",
+                                    id=f"security-llm-independent-{_path_hash}-{len(findings)}",
                                     severity=min_severity(item.get("severity", "medium"), "high"),  # Cap at HIGH
                                     message=item.get("message", ""),
                                     location=f"{cf.path}:{item.get('line_number', 1)}",
-                                    detail=item.get("detail", ""),
+                                    detail=detail,
                                     detection_source="llm_independent",
                                     is_blocker=False,
                                 )
                                 findings.append(f)
                             return (cf.path, findings)
                         except Exception as e:
-                            logger.debug("llm_independent_scan_failed", file=cf.path, error=str(e))
+                            logger.warning("llm_independent_scan_failed", file=cf.path, error=str(e))
                             return (cf.path, [])
 
                 def min_severity(sev: str, cap: str) -> str:
@@ -929,6 +948,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         for path, indep_findings in _independent_findings.items():
             existing = findings_map.get(path, [])
             findings_map[path] = existing + indep_findings
+            logger.info("llm_independent_merge", file=path, independent=len(indep_findings), total=len(findings_map[path]))
 
         # PHASE 3: Build Results
         results = []

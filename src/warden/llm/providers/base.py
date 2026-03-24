@@ -13,8 +13,11 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from warden.shared.infrastructure.exceptions import ExternalServiceError
+from warden.shared.infrastructure.logging import get_logger
 
 from ..types import LlmProvider, LlmRequest, LlmResponse
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Shared provider-error detection (rate limits, quota exhaustion, etc.)
@@ -142,7 +145,7 @@ class ILlmClient(ABC):
         system_prompt: str = "You are a helpful coding assistant.",
         model: str | None = None,
         use_fast_tier: bool = False,
-        max_tokens: int = 2000,
+        max_tokens: int = 4000,
     ) -> LlmResponse:
         """
         Simple completion method for non-streaming requests.
@@ -169,7 +172,7 @@ class ILlmClient(ABC):
             model=model,
             temperature=0.0,
             max_tokens=max_tokens,
-            timeout_seconds=120.0,
+            timeout_seconds=300.0,
             use_fast_tier=use_fast_tier,
         )
 
@@ -209,54 +212,29 @@ class ILlmClient(ABC):
         budget = resolve_token_budget(BUDGET_SECURITY)
         truncated_code = prepare_code_for_llm(code_content, token_budget=budget)
 
-        prompt = f"""
-        You are a senior security researcher. Analyze this {language} code for ALL security vulnerabilities — both obvious and subtle.
-        Target vulnerabilities: SQL Injection, XSS, Hardcoded Secrets, SSRF, CSRF, XXE, Insecure Deserialization, Path Traversal, Command Injection, IDOR, and LOGIC-LEVEL FLAWS.
+        prompt = f"""Analyze this {language} code for security vulnerabilities. Focus on exploitable flaws only.
 
-        Ignore stylistic issues. Focus only on exploitable security flaws.
+CHECK THESE FIRST (report each one found):
+1. == comparing password/hash/token/secret byte values (NOT role names or status strings) — timing attack, use hmac.compare_digest
+2. JWT decode accepting "none" algorithm (auth bypass)
+3. JWT expiry >7 days (token theft)
+4. Role/permission from JWT payload without server-side check (privilege escalation)
+5. MD5/SHA1 with static/hardcoded salt (weak crypto)
+6. format()/format_map() with user input (attribute leak via __class__)
+7. random module generating security tokens, session IDs, reset codes, or unpredictable paths (NOT for shuffle/sample/simulation)
+8. HTML sanitizer using string replace() blocklist (bypassable)
+9. Validation regex using .* or trivially bypassable patterns
 
-        LOGIC-LEVEL VULNERABILITY CHECKLIST (check ALL):
-        - Is == used to compare hashes or secrets? (timing attack — use hmac.compare_digest)
-        - Does JWT decode allow "none" algorithm? (authentication bypass)
-        - Is JWT expiry unreasonably long (>7 days)? (token theft risk)
-        - Is role/permission read from JWT payload without server-side validation? (privilege escalation)
-        - Is password hashing using MD5/SHA1 with static/hardcoded salt? (weak crypto)
-        - Does format() or format_map() receive user-controlled input? (attribute leak via __class__)
-        - Is random module used instead of secrets for security tokens/file paths? (predictable values)
-        - Does an HTML sanitizer use string replace() on a blocklist instead of a proper library? (bypassable)
-        - Does a validation regex use .* or other trivially bypassable patterns? (input validation bypass)
+ALSO CHECK: SQL Injection, XSS, Hardcoded Secrets, SSRF, Command Injection, Path Traversal, IDOR.
+IDOR: endpoint uses user-controlled ID without ownership check (parameterized query alone is NOT enough).
 
-        IDOR DETECTION GUIDANCE:
-        An IDOR vulnerability exists when an endpoint accepts a user-controlled identifier (e.g., a URL path
-        parameter like <doc_id>, <user_id>, <order_id>) and retrieves or modifies a resource using that
-        identifier WITHOUT verifying that the currently authenticated user owns or is authorized to access
-        that resource. A parameterized query (e.g., WHERE id = ?) does NOT prevent IDOR — it only prevents
-        SQL injection. Look for database queries that filter ONLY by the user-supplied ID and do NOT include
-        an additional ownership check such as: WHERE id = ? AND user_id = current_user.id
+IMPORTANT: Output ONLY valid JSON. No markdown. Keep detail field brief (1 sentence).
+{{"findings":[{{"severity":"critical|high|medium","message":"Short description","line_number":1,"detail":"Brief exploit explanation"}}]}}
+If no issues: {{"findings":[]}}
 
-        Return a JSON object in this exact format:
-        {{
-            "findings": [
-                {{
-                    "severity": "critical|high|medium",
-                    "message": "Short description",
-                    "line_number": 1,
-                    "detail": "Detailed explanation of the exploit vector",
-                    "source": "Where tainted data enters, e.g. request.args['id'] (line 14)",
-                    "sink": "Where tainted data is consumed unsafely, e.g. cursor.execute() (line 45)",
-                    "data_flow": ["function_or_variable_names", "showing", "the path"]
-                }}
-            ]
-        }}
-
-        The source, sink, and data_flow fields are optional but highly valuable for triage.
-        If no issues found, return {{ "findings": [] }}.
-
-        Code:
-        ```{language}
-        {truncated_code}
-        ```
-        """
+```{language}
+{truncated_code}
+```"""
 
         from warden.llm.prompts.tool_instructions import (
             get_tool_enhanced_prompt,
@@ -271,17 +249,23 @@ class ILlmClient(ABC):
                 use_fast_tier=use_fast_tier,
             )
             if not response.success:
+                logger.warning("analyze_security_llm_failed", reason="response.success=False", content_preview=str(response.content)[:300] if response.content else "None")
                 return {"findings": []}
+
+            logger.debug("analyze_security_raw_response", content_length=len(response.content) if response.content else 0, content_preview=str(response.content)[:500] if response.content else "None")
 
             parsed = parse_json_from_llm(response.content)
             if not parsed:
+                logger.warning("analyze_security_parse_failed", content_preview=str(response.content)[:500] if response.content else "None")
                 return {"findings": []}
+
+            logger.debug("analyze_security_parsed", findings_count=len(parsed.get("findings", [])))
 
             # Enrich findings with MachineContext from structured LLM output
             self._enrich_findings_from_llm(parsed)
             return parsed
-        except (json.JSONDecodeError, ValueError, KeyError):
-            # Log but don't crash - return safe default
+        except (json.JSONDecodeError, ValueError, KeyError) as exc:
+            logger.warning("analyze_security_exception", error=str(exc), content_preview=str(response.content)[:500] if 'response' in dir() else "no_response")
             return {"findings": []}
 
     @staticmethod

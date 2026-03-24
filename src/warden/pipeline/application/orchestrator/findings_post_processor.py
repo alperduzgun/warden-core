@@ -104,7 +104,20 @@ class FindingsPostProcessor:
                             verified_count += len(result_obj.findings)
                             continue
 
-                        findings_to_verify = [f.to_dict() if hasattr(f, "to_dict") else f for f in result_obj.findings]
+                        # Split: LLM-independent findings bypass verification (already LLM-analysed).
+                        auto_verified = []
+                        needs_verify = []
+                        for f in result_obj.findings:
+                            ds = f.detection_source if hasattr(f, "detection_source") else (f.get("detection_source") if isinstance(f, dict) else None)
+                            if ds == "llm_independent":
+                                auto_verified.append(f)
+                            else:
+                                needs_verify.append(f)
+
+                        if auto_verified:
+                            logger.info("verification_auto_pass_llm_independent", frame_id=frame_id, count=len(auto_verified))
+
+                        findings_to_verify = [f.to_dict() if hasattr(f, "to_dict") else f for f in needs_verify]
                         total_findings = len(findings_to_verify)
 
                         logger.info(
@@ -122,10 +135,10 @@ class FindingsPostProcessor:
                                 {"increment": total_findings, "phase": f"Verified {frame_id}"},
                             )
 
-                        final_findings = []
+                        final_findings = list(auto_verified)  # LLM-independent auto-pass
                         cached_count = 0
 
-                        for f in result_obj.findings:
+                        for f in needs_verify:
                             fid = f.get("id") if isinstance(f, dict) else f.id
                             if fid in verified_ids:
                                 final_findings.append(f)
@@ -140,7 +153,7 @@ class FindingsPostProcessor:
                                 if hasattr(context, "false_positives"):
                                     context.false_positives.append(fid)
 
-                        dropped = len(result_obj.findings) - len(final_findings)
+                        dropped = len(needs_verify) - len([f for f in final_findings if f not in auto_verified])
                         dropped_count += dropped
                         verified_count += len(final_findings)
 

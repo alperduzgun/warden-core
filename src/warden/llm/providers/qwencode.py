@@ -44,6 +44,11 @@ class QwenCodeClient(ILlmClient):
 
             headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
+            # Auto-detect JSON mode from prompt content
+            _sys_lower = (request.system_prompt or "").lower()
+            _msg_lower = (request.user_message or "").lower()
+            _wants_json = "json" in _sys_lower or "json" in _msg_lower[:200] or "json" in _msg_lower[-400:]
+
             payload = {
                 "model": request.model or self._default_model,
                 "input": {
@@ -54,6 +59,8 @@ class QwenCodeClient(ILlmClient):
                 },
                 "parameters": {"temperature": request.temperature, "max_tokens": request.max_tokens},
             }
+            if _wants_json:
+                payload["parameters"]["result_format"] = "message"
 
             async with httpx.AsyncClient(timeout=request.timeout_seconds) as client:
                 response = await client.post(
@@ -64,13 +71,23 @@ class QwenCodeClient(ILlmClient):
 
             duration_ms = LlmResponse.elapsed_ms(start_time)
 
-            if not result.get("output") or not result["output"].get("text"):
+            # DashScope returns different shapes depending on result_format:
+            # - text format (default): output.text
+            # - message format: output.choices[0].message.content
+            output = result.get("output", {})
+            content_text = output.get("text")
+            if not content_text and "choices" in output:
+                choices = output["choices"]
+                if choices and isinstance(choices, list):
+                    content_text = choices[0].get("message", {}).get("content")
+
+            if not content_text:
                 return LlmResponse.error("No response from QwenCode", provider=self.provider, duration_ms=duration_ms)
 
             usage = result.get("usage", {})
 
             return LlmResponse(
-                content=result["output"]["text"],
+                content=content_text,
                 success=True,
                 provider=self.provider,
                 model=request.model or self._default_model,

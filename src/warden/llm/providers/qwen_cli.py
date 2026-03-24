@@ -79,7 +79,6 @@ class QwenCliClient(ILlmClient):
                 self._cli_path,
                 "--output-format", "json",
                 "--auth-type", "qwen-oauth",
-                "--yolo",
                 "-p", prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -172,4 +171,4 @@ class QwenCliClient(ILlmClient):
 
 
 # Self-register
-ProviderRegistry.register(LlmProvider.QWENCODE, QwenCliClient)
+ProviderRegistry.register(LlmProvider.QWEN_CLI, QwenCliClient)

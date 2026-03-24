@@ -73,7 +73,7 @@ class LLMPhaseConfig:
     batch_size: int = 10
     cache_enabled: bool = True
     max_retries: int = 3
-    timeout: int = 120  # Increased from 30s to 120s for LLM API calls
+    timeout: int = 320  # Must exceed complete_async(300s) + rate limiter headroom(10s)
     fallback_to_rules: bool = True
     temperature: float = 0.0  # Idempotency: fully deterministic
     max_tokens: int = 800  # Reduced to stay within context limits

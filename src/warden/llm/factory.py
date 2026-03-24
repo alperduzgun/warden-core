@@ -55,6 +55,7 @@ def _ensure_providers_registered() -> None:
             "warden.llm.providers.anthropic",
             "warden.llm.providers.deepseek",
             "warden.llm.providers.qwen_cli",
+            "warden.llm.providers.qwencode",
             "warden.llm.providers.openai",
             "warden.llm.providers.groq",
             "warden.llm.providers.ollama",

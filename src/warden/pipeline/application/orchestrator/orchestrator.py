@@ -309,7 +309,12 @@ class PhaseOrchestrator:
             self.config.use_llm = True
             self.config.enable_issue_validation = True
             # Fortification stays at config default (False) — only DEEP enables it
-            logger.info("standard_level_overrides_applied", use_llm=True, verification=True)
+            # Dynamic timeout: same formula as DEEP but shorter per-file budget
+            _file_count = len(code_files) if code_files else 1
+            _is_local_llm = self._detect_local_llm()
+            _per_file = 20 if _is_local_llm else 10
+            self.config.timeout = max(600, _file_count * _per_file)
+            logger.info("standard_level_overrides_applied", use_llm=True, verification=True, timeout=self.config.timeout)
         elif self.config.analysis_level == AnalysisLevel.DEEP:
             self.config.use_llm = True
             self.config.enable_fortification = True
