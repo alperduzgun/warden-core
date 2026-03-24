@@ -31,6 +31,7 @@ class LlmProvider(str, Enum):
     CLAUDE_CODE = "claude_code"  # Local Claude Code CLI/SDK integration
     CODEX = "codex"  # Local Codex CLI integration (file-based/CLI)
     UNKNOWN = "unknown"  # Fallback/offline mode
+    AUTO = "auto"  # Auto-detect best available provider (not a real provider)
 
 
 @dataclass(frozen=True)

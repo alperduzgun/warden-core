@@ -41,7 +41,7 @@ class QwenCliClient(ILlmClient):
 
     @property
     def provider(self) -> LlmProvider:
-        return LlmProvider.QWENCODE
+        return LlmProvider.QWEN_CLI
 
     async def send_async(self, request: LlmRequest) -> LlmResponse:
         """Send a request to Qwen Code CLI."""

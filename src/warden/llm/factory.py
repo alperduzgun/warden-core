@@ -23,6 +23,7 @@ SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset(
     {
         LlmProvider.CLAUDE_CODE,
         LlmProvider.CODEX,
+        LlmProvider.QWEN_CLI,
     }
 )
 

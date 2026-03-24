@@ -224,6 +224,23 @@ def create_default_config() -> LlmConfiguration:
     return config
 
 
+def _load_global_llm_config() -> dict | None:
+    """Load LLM config from ~/.warden/config.yaml if it exists."""
+    from pathlib import Path
+
+    import yaml
+
+    global_config_path = Path.home() / ".warden" / "config.yaml"
+    if not global_config_path.exists():
+        return None
+    try:
+        with open(global_config_path) as f:
+            config = yaml.safe_load(f)
+            return config.get("llm", {}) if config else None
+    except Exception:
+        return None
+
+
 def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
     """
     Load LLM configuration using SecretManager.
@@ -236,6 +253,9 @@ def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
 
     import yaml
 
+    # Load global config from ~/.warden/config.yaml as lowest-priority base
+    global_llm = _load_global_llm_config()
+
     # Auto-load from .warden/config.yaml if no override provided
     if config_override is None:
         config_yaml_path = Path.cwd() / ".warden" / "config.yaml"
@@ -246,6 +266,13 @@ def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
                     config_override = project_config.get("llm", {})
             except Exception:
                 pass  # Fall back to default behavior
+
+    # Merge: global is base, project overrides
+    if global_llm:
+        if config_override:
+            config_override = {**global_llm, **config_override}
+        else:
+            config_override = global_llm
 
     # Use async version internally
     try:
@@ -365,13 +392,16 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config_override = {**config_override, **ci_overrides}
 
     explicit_provider_override = None
+    _force_auto = False
     env_provider = os.environ.get("WARDEN_LLM_PROVIDER", "").strip().lower()
-    if env_provider:
+    if env_provider == "auto":
+        _force_auto = True  # Env "auto" overrides config explicit provider too
+    elif env_provider:
         with contextlib.suppress(ValueError):
             explicit_provider_override = LlmProvider(env_provider)
     elif config_override and ("provider" in config_override or "default_provider" in config_override):
         _provider_val = config_override.get("provider") or config_override.get("default_provider")
-        if _provider_val:
+        if _provider_val and str(_provider_val).strip().lower() != "auto":
             with contextlib.suppress(ValueError):
                 explicit_provider_override = LlmProvider(str(_provider_val).strip().lower())
 
@@ -541,45 +571,73 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.qwencode.endpoint = "cli"
         configured_providers.append(LlmProvider.QWEN_CLI)
 
-    # --- AUTO-PILOT LOGIC ---
-    # Only runs when NO explicit provider was configured (no config.yaml provider: / no env var).
-    # When the user explicitly set a provider, they chose their LLM — the system must not
-    # silently route requests to Claude Code, Codex, or any other detected tool.
-    if not explicit_provider_override:
-        detected_fast_tier: list[LlmProvider] = []
+    # --- AUTO-DETECT LOGIC ---
+    # Runs when NO explicit provider was configured (provider: auto or absent).
+    if not explicit_provider_override or _force_auto:
+        from warden.shared.utils.ci_detection import is_ci as _is_ci_check
 
-        # Priority 1: Groq (Cloud Speed)
+        _in_ci = _is_ci_check()
+        auto_provider: LlmProvider | None = None
+
+        # Priority 1: qwen_cli (local, free) — skip in CI
+        if not _in_ci and LlmProvider.QWEN_CLI in configured_providers:
+            auto_provider = LlmProvider.QWEN_CLI
+            logger.info("auto_detect_provider", provider="qwen_cli", reason="qwen binary found (non-CI)")
+
+        # Priority 2: Groq (fast cloud, free tier)
+        if not auto_provider and LlmProvider.GROQ in configured_providers:
+            auto_provider = LlmProvider.GROQ
+            logger.info("auto_detect_provider", provider="groq", reason="GROQ_API_KEY set")
+
+        # Priority 3: Ollama (local, free) — only if running
+        if not auto_provider and await _check_ollama_availability(ollama_endpoint):
+            auto_provider = LlmProvider.OLLAMA
+            logger.info("auto_detect_provider", provider="ollama", reason="ollama responding")
+
+        # Priority 4: QwenCode API
+        if not auto_provider and LlmProvider.QWENCODE in configured_providers:
+            auto_provider = LlmProvider.QWENCODE
+            logger.info("auto_detect_provider", provider="qwencode", reason="QWENCODE_API_KEY set")
+
+        # Priority 5: Anthropic
+        if not auto_provider and LlmProvider.ANTHROPIC in configured_providers:
+            auto_provider = LlmProvider.ANTHROPIC
+            logger.info("auto_detect_provider", provider="anthropic", reason="ANTHROPIC_API_KEY set")
+
+        # Priority 6: OpenAI
+        if not auto_provider and LlmProvider.OPENAI in configured_providers:
+            auto_provider = LlmProvider.OPENAI
+            logger.info("auto_detect_provider", provider="openai", reason="OPENAI_API_KEY set")
+
+        # Priority 7: Claude Code (last resort)
+        if not auto_provider and LlmProvider.CLAUDE_CODE in configured_providers:
+            auto_provider = LlmProvider.CLAUDE_CODE
+            logger.info("auto_detect_provider", provider="claude_code", reason="claude binary found")
+
+        # Promote detected provider to front
+        if auto_provider:
+            if auto_provider in configured_providers:
+                configured_providers.remove(auto_provider)
+            configured_providers.insert(0, auto_provider)
+
+        # Build fast tier
+        detected_fast_tier: list[LlmProvider] = []
         if LlmProvider.GROQ in configured_providers:
             detected_fast_tier.append(LlmProvider.GROQ)
-
-        # Priority 2: Ollama (Local/Free) - Only if service is actually running
-        # This fail-fast check prevents adding a dead service to the chain
         if await _check_ollama_availability(ollama_endpoint):
             detected_fast_tier.append(LlmProvider.OLLAMA)
-
-        # Priority 3: Claude Code (Local subscription) - fast for simple queries
         if LlmProvider.CLAUDE_CODE in configured_providers:
             detected_fast_tier.append(LlmProvider.CLAUDE_CODE)
 
-        # Priority 4: Codex (Local CLI) - read-only analysis via codex exec
-        if LlmProvider.CODEX in configured_providers:
-            detected_fast_tier.append(LlmProvider.CODEX)
-
-        # Apply Auto-Detected chain if still at default.
-        # Env var override (WARDEN_FAST_TIER_PRIORITY) is applied at the end — always wins.
         if not config.fast_tier_providers or config.fast_tier_providers == [LlmProvider.OLLAMA]:
             if detected_fast_tier:
                 config.fast_tier_providers = detected_fast_tier
+
+        if not auto_provider and _in_ci:
+            logger.warning("auto_detect_no_provider_ci", reason="No LLM available in CI, deterministic only")
     else:
-        # Explicit provider set: fast tier = primary provider only.
-        # The factory skips the primary from fast clients → effectively single-tier.
-        # Users can still add fast_tier_providers in config.yaml or WARDEN_FAST_TIER_PRIORITY
-        # to opt into hybrid mode explicitly.
         config.fast_tier_providers = [explicit_provider_override]
-        logger.debug(
-            "fast_tier_restricted_explicit_provider",
-            provider=explicit_provider_override.value,
-        )
+        logger.debug("fast_tier_restricted_explicit_provider", provider=explicit_provider_override.value)
 
     # Prioritize explicit provider override from config.yaml
     if explicit_provider_override:

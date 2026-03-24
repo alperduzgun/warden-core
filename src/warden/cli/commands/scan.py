@@ -213,10 +213,16 @@ def scan_command(
         "--resume",
         help="Resume a previously interrupted scan, skipping already-scanned files.",
     ),
+    provider: str | None = typer.Option(None, "--provider", help="LLM provider override (e.g., ollama, groq, qwen_cli, auto)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
     """
+    # Provider CLI override → env var (picked up by load_llm_config_async)
+    if provider:
+        import os as _os
+        _os.environ["WARDEN_LLM_PROVIDER"] = provider
+
     # We defer import to avoid slow startup for other commands
 
     # Start memory profiling if requested
