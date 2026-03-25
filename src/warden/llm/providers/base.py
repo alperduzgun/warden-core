@@ -206,7 +206,14 @@ CHECK THESE FIRST (report each one found):
 8. HTML sanitizer using string replace() blocklist (bypassable)
 9. Validation regex using .* or trivially bypassable patterns
 
-ALSO CHECK: SQL Injection, XSS, Hardcoded Secrets, SSRF, CSRF, XXE, Insecure Deserialization, Command Injection, Path Traversal, IDOR.
+10. Open redirect: redirect()/res.redirect()/HttpResponseRedirect() with user-controlled URL without allowlist
+11. Logging sensitive data: password/token/secret/key variable in log/print/console.log
+12. Race condition / TOCTOU: check-then-act without lock (e.g., if exists(f): open(f))
+13. Insecure deserialization: pickle.load/yaml.load/ObjectInputStream.readObject/node-serialize on untrusted data
+14. Mass assignment / prototype pollution: Object.assign(obj, req.body) or Model(**request.data) without field allowlist
+15. Unvalidated file upload: accepting files without type/size/extension check
+
+ALSO CHECK: SQL Injection, XSS, Hardcoded Secrets, SSRF, CSRF, XXE, Command Injection, Path Traversal, IDOR.
 IDOR: endpoint uses user-controlled ID without ownership check (parameterized query alone is NOT enough).
 ALSO CHECK these code quality security issues:
 - Unbounded in-memory cache/dict without eviction (memory exhaustion DoS)

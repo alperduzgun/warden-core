@@ -41,6 +41,63 @@ sources:
     - stdin
     - sys.stdin
 
+  go:
+    # net/http
+    - r.URL.Query
+    - r.FormValue
+    - r.PostFormValue
+    - r.Body
+    - r.Header
+    - r.Cookie
+    # Gin
+    - c.Query
+    - c.Param
+    - c.PostForm
+    - c.ShouldBind
+    # Echo
+    - ctx.QueryParam
+    - ctx.FormValue
+    - ctx.Bind
+    # Fiber
+    - c.Query
+    - c.Params
+    - c.Body
+    # Environment
+    - os.Getenv
+    - os.Args
+
+  java:
+    # Servlet
+    - request.getParameter
+    - request.getAttribute
+    - request.getHeader
+    - request.getCookies
+    - request.getInputStream
+    - request.getReader
+    - request.getQueryString
+    - request.getPart
+    - request.getParts
+    # Spring
+    - "@RequestBody"
+    - "@RequestParam"
+    - "@PathVariable"
+    - "@ModelAttribute"
+    # Environment
+    - System.getenv
+    - System.getProperty
+
+  dart:
+    # Flutter/Dart HTTP
+    - request.body
+    - request.uri
+    - request.headers
+    - request.queryParameters
+    # Shelf
+    - request.readAsString
+    - request.url
+    # Environment
+    - Platform.environment
+
   javascript:
     # Express / Node HTTP
     - req.body
@@ -87,9 +144,15 @@ semi_trusted_sources:
     - os.environ
     - os.getenv
     - os.environ.get
-
   javascript:
     - process.env
+  go:
+    - os.Getenv
+  java:
+    - System.getenv
+    - System.getProperty
+  dart:
+    - Platform.environment
 
 # ── Sinks (dangerous functions that should not receive tainted data) ────────
 # All languages combined in a flat mapping. For keys that appear in both
@@ -236,6 +299,81 @@ sinks:
   yaml.unsafe_load: DESERIALIZATION
   marshal.loads: DESERIALIZATION
 
+  # Deserialization sinks — Java
+  ObjectInputStream.readObject: DESERIALIZATION
+  XMLDecoder.readObject: DESERIALIZATION
+  XStream.fromXML: DESERIALIZATION
+
+  # Deserialization sinks — JavaScript
+  serialize.unserialize: DESERIALIZATION
+  vm.runInNewContext: CODE-execution
+
+  # SQL sinks — Go
+  sql.Query: SQL-value
+  sql.QueryRow: SQL-value
+  sql.Exec: SQL-value
+  db.Query: SQL-value
+  db.QueryRow: SQL-value
+  db.Exec: SQL-value
+  tx.Query: SQL-value
+  tx.Exec: SQL-value
+
+  # SQL sinks — Java
+  Statement.execute: SQL-value
+  Statement.executeQuery: SQL-value
+  Statement.executeUpdate: SQL-value
+
+  # Command sinks — Go/Java
+  exec.Command: CMD-argument
+  exec.CommandContext: CMD-argument
+  Runtime.exec: CMD-argument
+  ProcessBuilder: CMD-argument
+
+  # HTTP sinks — Go
+  http.Get: HTTP-request
+  http.Post: HTTP-request
+  http.NewRequest: HTTP-request
+  client.Do: HTTP-request
+  client.Get: HTTP-request
+
+  # File sinks — Go/Java/Dart
+  os.Open: FILE-path
+  os.Create: FILE-path
+  os.ReadFile: FILE-path
+  ioutil.ReadFile: FILE-path
+  FileInputStream: FILE-path
+  FileReader: FILE-path
+  File.open: FILE-path
+  File.readAsString: FILE-path
+
+  # Redirect sinks (CWE-601)
+  redirect: REDIRECT
+  flask.redirect: REDIRECT
+  HttpResponseRedirect: REDIRECT
+  res.redirect: REDIRECT
+  http.Redirect: REDIRECT
+  response.sendRedirect: REDIRECT
+
+  # Log sinks — Go
+  log.Print: LOG-output
+  log.Printf: LOG-output
+  log.Println: LOG-output
+  fmt.Printf: LOG-output
+  fmt.Println: LOG-output
+  fmt.Fprintf: LOG-output
+
+  # Log sinks — Java
+  System.out.println: LOG-output
+  System.out.printf: LOG-output
+  System.err.println: LOG-output
+  Log.d: LOG-output
+  Log.i: LOG-output
+  Log.e: LOG-output
+  logger.info: LOG-output
+  logger.error: LOG-output
+  logger.warn: LOG-output
+  logger.debug: LOG-output
+
   # HTTP response sinks (CWE-209) — Python
   jsonify: HTTP-response
   flask.jsonify: HTTP-response
@@ -315,6 +453,12 @@ sanitizers:
   ATTRIBUTE-injection:
     - allowlist_check
     - hasattr
+  REDIRECT:
+    - url_has_allowed_host_and_scheme
+    - is_safe_url
+    - validate_redirect_url
+    - allowedHosts.includes
+    - URL.canParse
 
 # ── JS DOM property-assignment sinks ────────────────────────────────────────
 
@@ -322,25 +466,4 @@ assign_sinks:
   - innerHTML
   - outerHTML
 
-# ── Semi-trusted sources (server-controlled, not directly user-controlled) ───
-#
-# Taint flows originating from these sources are capped at MEDIUM severity
-# and never marked as blockers.  They are still tracked because misconfigured
-# environment variables can be a vector, but they pose significantly lower risk
-# than sources directly controlled by end users (e.g. request.args).
-#
-# Users can extend this list in .warden/taint_catalog.yaml:
-#   semi_trusted_sources:
-#     python:
-#       - my_config_reader
-#     javascript:
-#       - myApp.config
-
-semi_trusted_sources:
-  python:
-    - os.environ
-    - os.getenv
-    - os.environ.get
-
-  javascript:
-    - process.env
+# Duplicate semi_trusted_sources removed — defined above near line 85.

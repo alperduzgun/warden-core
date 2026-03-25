@@ -303,10 +303,14 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                         sinks_str = ", ".join(pi.critical_sinks[:5])
                         semantic_context += f"Critical Sinks: {sinks_str}\n"
 
-                    # Framework detection (reduces FPs for framework-managed patterns)
+                    # Framework detection + security hints (reduces FPs)
                     if hasattr(pi, "detected_frameworks") and pi.detected_frameworks:
                         fw_str = ", ".join(pi.detected_frameworks[:3])
                         semantic_context += f"Framework: {fw_str}\n"
+                        from warden.validation.frames.security.framework_hints import get_framework_hints
+                        _fw_hints = get_framework_hints(fw_str)
+                        if _fw_hints:
+                            semantic_context += f"Security hints:\n{_fw_hints}\n"
 
                     # Architecture description (LLM-generated project overview)
                     if hasattr(pi, "architecture") and pi.architecture:
