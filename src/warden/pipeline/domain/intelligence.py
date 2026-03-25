@@ -58,6 +58,11 @@ class ProjectIntelligence:
     total_lines: int = 0
     primary_language: str = "unknown"
 
+    # Bridged from PRE-ANALYSIS ProjectContext (populated by pipeline_phase_runner)
+    architecture: str = ""           # e.g. "microservices", "layered", "mvc"
+    project_type: str = ""           # e.g. "api", "microservice", "application"
+    security_posture: str = ""       # e.g. "strict", "standard", "relaxed"
+
     def to_json(self) -> dict[str, Any]:
         """Serialize to JSON."""
         return {

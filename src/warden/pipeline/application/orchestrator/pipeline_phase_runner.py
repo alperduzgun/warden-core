@@ -545,6 +545,53 @@ class PipelinePhaseRunner:
                     }
                 )
 
+        # --- Bridge PRE-ANALYSIS results into ProjectIntelligence ---
+        # context.project_context is populated by pre_analysis_executor with
+        # framework detection, architecture, security posture, etc.
+        # Without this bridge those results are never visible to frames.
+        project_ctx = getattr(context, "project_context", None)
+        if project_ctx is not None:
+            # Framework(s) detected by FrameworkDetector
+            fw = getattr(project_ctx, "framework", None)
+            if fw is not None:
+                fw_value = fw.value if hasattr(fw, "value") else str(fw)
+                if fw_value and fw_value not in ("none", "unknown") and fw_value not in intel.detected_frameworks:
+                    intel.detected_frameworks.append(fw_value)
+
+            # Also check the discovery-level detected_frameworks list (may be a list of Framework enums)
+            disc_fws = getattr(project_ctx, "detected_frameworks", None) or []
+            for dfw in disc_fws:
+                dfw_val = dfw.value if hasattr(dfw, "value") else str(dfw)
+                if dfw_val and dfw_val not in ("none", "unknown") and dfw_val not in intel.detected_frameworks:
+                    intel.detected_frameworks.append(dfw_val)
+
+            # Architecture pattern (for LLM context enrichment)
+            arch = getattr(project_ctx, "architecture", None)
+            if arch is not None and not intel.architecture:
+                intel.architecture = arch.value if hasattr(arch, "value") else str(arch)
+
+            # Project type
+            proj_type = getattr(project_ctx, "project_type", None)
+            if proj_type is not None and not getattr(intel, "project_type", None):
+                try:
+                    intel.project_type = proj_type.value if hasattr(proj_type, "value") else str(proj_type)
+                except AttributeError:
+                    pass
+
+            # Security posture (for LLM context enrichment)
+            sec_posture = getattr(project_ctx, "security_posture", None)
+            if sec_posture is not None and not getattr(intel, "security_posture", None):
+                try:
+                    intel.security_posture = sec_posture.value if hasattr(sec_posture, "value") else str(sec_posture)
+                except AttributeError:
+                    pass
+
+            logger.debug(
+                "project_intelligence_enriched_from_context",
+                detected_frameworks=intel.detected_frameworks,
+                architecture=getattr(intel, "architecture", None),
+            )
+
         context.project_intelligence = intel
 
         logger.info(
@@ -555,6 +602,7 @@ class PipelinePhaseRunner:
             auth_patterns=len(intel.auth_patterns),
             entry_points=len(intel.entry_points),
             primary_language=intel.primary_language,
+            detected_frameworks=intel.detected_frameworks,
         )
 
     @staticmethod

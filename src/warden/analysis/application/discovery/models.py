@@ -91,6 +91,10 @@ class Framework(Enum):
     RAILS = "rails"  # Ruby
     LARAVEL = "laravel"  # PHP
 
+    # MCP / AI Agent frameworks
+    MCP = "mcp"          # Model Context Protocol server (any transport)
+    FASTMCP = "fastmcp"  # FastMCP — high-level MCP server library
+
     UNKNOWN = "unknown"
 
 

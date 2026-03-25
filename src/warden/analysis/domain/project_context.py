@@ -57,6 +57,10 @@ class Framework(Enum):
     RAILS = "rails"
     LARAVEL = "laravel"
 
+    # MCP / AI Agent frameworks
+    MCP = "mcp"          # Model Context Protocol server
+    FASTMCP = "fastmcp"  # FastMCP — high-level MCP library
+
     NONE = "none"  # No framework detected
     CUSTOM = "custom"  # Custom framework
 

@@ -72,6 +72,21 @@ FRAMEWORK_SECURITY_HINTS: dict[str, str] = {
         "WebView.loadUrl with user input is open-redirect. "
         "Platform channels can expose native API to Dart."
     ),
+    "fastmcp": (
+        "FastMCP server detected. Security-critical configuration: "
+        "TransportSecuritySettings(enable_dns_rebinding_protection=False) disables DNS rebinding protection — flag as HIGH. "
+        "FastMCP(transport='http') with host='0.0.0.0' exposes to all interfaces — verify auth middleware exists. "
+        "Credentials accepted via request headers (e.g. request.headers.get('x-*-private-key')) bypass standard auth — flag as HIGH. "
+        "mcp.run() without TransportSecuritySettings uses defaults — verify enable_dns_rebinding_protection=True. "
+        "HTTP transport requires CredentialsMiddleware or equivalent authentication before tool execution."
+    ),
+    "mcp": (
+        "MCP (Model Context Protocol) server detected. "
+        "MCP servers expose tools to AI agents — input validation on all tool arguments is critical. "
+        "Transport security settings must be explicitly configured (DNS rebinding protection, binding interface). "
+        "Any sensitive credentials passed through tool call arguments or request headers should be flagged. "
+        "stdio transport is safer than http transport — http transport requires additional auth middleware."
+    ),
 }
 
 

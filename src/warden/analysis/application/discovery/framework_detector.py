@@ -24,6 +24,8 @@ class FrameworkDetector:
         Framework.FASTAPI: {"fastapi", "fastapi.app"},
         Framework.PYRAMID: {"pyramid", "pyramid.config"},
         Framework.TORNADO: {"tornado", "tornado.web"},
+        Framework.FASTMCP: {"fastmcp", "mcp.server.fastmcp"},
+        Framework.MCP: {"mcp", "mcp.server", "mcp.client"},
     }
 
     # JavaScript/TypeScript framework detection in package.json
