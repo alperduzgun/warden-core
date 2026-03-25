@@ -45,10 +45,13 @@ _REDIRECT_SINKS = [
     (r"\"redirect:\s*\+", "Spring MVC redirect: concatenation"),
 ]
 
-# Variable names that strongly suggest a user-controlled redirect target
+# Variable names that strongly suggest a user-controlled redirect target.
+# Uses word-start anchors (\b) on the left and end-of-word or underscore-word
+# on the right so "next_url", "redirect_uri", "return_to" all match.
 _SUSPICIOUS_VAR_NAMES = re.compile(
-    r"\b(next|redirect_url|redirect_uri|return_url|return_to|"
-    r"callback_url|target_url|goto|redir|location|dest|destination)\b",
+    r"\b(next(?:_url|_page)?|redirect(?:_url|_uri|_to)?|return(?:_url|_to)?|"
+    r"callback(?:_url|_uri)?|target(?:_url)?|goto|redir(?:ect)?|"
+    r"location|dest(?:ination)?)\b",
     re.IGNORECASE,
 )
 

@@ -64,11 +64,12 @@ _SAFE_SANITIZERS = re.compile(
     re.IGNORECASE,
 )
 
-# Suspicious variable names that suggest user-derived path
+# Suspicious variable names that suggest user-derived path.
+# Match the name as a whole word anywhere on the line (not just at assignment).
 _SUSPICIOUS_PATH_VARS = re.compile(
-    r"\b(filename|file_name|filepath|file_path|path|dir_path|dirname|"
+    r"\b(filename|file_name|filepath|file_path|dir_path|dirname|"
     r"basepath|base_path|upload_path|download_path|resource_path|"
-    r"document_path|media_path)\s*(?:=|\[|\()",
+    r"document_path|media_path)\b",
     re.IGNORECASE,
 )
 
@@ -129,8 +130,9 @@ class PathTraversalCheck(ValidationCheck):
             if not has_user_source and not has_suspicious_var:
                 continue
 
-            # Suppress if sanitizer visible in context window
-            context = _lines_around(lines, idx, window=4)
+            # Suppress if sanitizer visible in a tight context window (2 lines).
+            # Narrow window prevents cross-function false suppression.
+            context = _lines_around(lines, idx, window=2)
             if _SAFE_SANITIZERS.search(context):
                 logger.debug(
                     "path_traversal_suppressed_by_sanitizer",

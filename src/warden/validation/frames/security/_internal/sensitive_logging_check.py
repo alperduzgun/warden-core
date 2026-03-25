@@ -114,17 +114,21 @@ class SensitiveLoggingCheck(ValidationCheck):
             if not is_log_sink:
                 continue
 
+            # Strip inline comment before checking for sensitive names
+            # so that  logger.info("ok")  # no secret  doesn't false-positive.
+            code_part = line.split("  #")[0].split(" //")[0]
+
             # Detect sensitive name in:
             # (a) f-string interpolation: f"{password}"
             # (b) direct argument: logger.info(password) — sensitive name as bare word
-            has_fstring = bool(_FSTRING_SENSITIVE.search(line))
-            has_direct = bool(_SENSITIVE_NAMES.search(line))
+            has_fstring = bool(_FSTRING_SENSITIVE.search(code_part))
+            has_direct = bool(_SENSITIVE_NAMES.search(code_part))
 
             if not has_fstring and not has_direct:
                 continue
 
-            # Suppress if sanitizer is visible on the same line
-            if _SANITIZERS.search(line):
+            # Suppress if sanitizer is visible in the code part of the line
+            if _SANITIZERS.search(code_part):
                 continue
 
             # Check inline suppression
@@ -138,7 +142,7 @@ class SensitiveLoggingCheck(ValidationCheck):
                 continue
 
             # Extract the sensitive name for the message
-            match = _SENSITIVE_NAMES.search(line)
+            match = _SENSITIVE_NAMES.search(code_part)
             sensitive_name = match.group(0) if match else "sensitive value"
 
             findings.append(
