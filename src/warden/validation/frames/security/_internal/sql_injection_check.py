@@ -110,7 +110,7 @@ class SQLInjectionCheck(ValidationCheck):
             (re.compile(pattern_str, re.IGNORECASE), description) for pattern_str, description in self.patterns
         ]
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """
         Execute SQL injection detection.
 

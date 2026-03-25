@@ -64,7 +64,7 @@ class XSSCheck(ValidationCheck):
             for pattern_str, description in self.DANGEROUS_PATTERNS
         ]
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """Execute XSS detection."""
         findings: list[CheckFinding] = []
 

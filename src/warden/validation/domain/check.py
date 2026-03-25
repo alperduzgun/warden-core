@@ -187,12 +187,15 @@ class ValidationCheck(ABC):
             raise ValueError(f"{self.__class__.__name__} must define 'name' attribute")
 
     @abstractmethod
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:  # type: ignore[name-defined]
+    async def execute_async(self, code_file: CodeFile, context: Any | None = None) -> CheckResult:  # type: ignore[name-defined]
         """
         Execute validation check on code file.
 
         Args:
             code_file: Code file to validate
+            context: Optional cross-file context (CrossFileCheckContext or PipelineContext).
+                     Checks may use this for import resolution, constant propagation, and
+                     cross-file taint tracking. Always guard with ``if context is not None``.
 
         Returns:
             CheckResult with findings

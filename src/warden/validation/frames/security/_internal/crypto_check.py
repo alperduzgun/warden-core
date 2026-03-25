@@ -258,7 +258,7 @@ class WeakCryptoCheck(ValidationCheck):
         # Safe context patterns already include word boundaries
         self._compiled_safe_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.SAFE_CONTEXT_KEYWORDS]
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """Execute weak cryptography detection."""
         findings: list[CheckFinding] = []
         lines = code_file.content.split("\n")

@@ -87,6 +87,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         self._code_graph: Any = None
         self._gap_report: Any = None
 
+        # Standalone cross-file context (built lazily from filesystem when pipeline context absent)
+        self._standalone_cross_file_ctx: Any | None = None
+
         # Check registry
         self.checks = CheckRegistry()
 
@@ -122,6 +125,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             from _internal.open_redirect_check import OpenRedirectCheck
             from _internal.sensitive_logging_check import SensitiveLoggingCheck
             from _internal.path_traversal_check import PathTraversalCheck
+            from _internal.cross_file_taint_check import CrossFileTaintCheck
         except ImportError:
             logger.error("Failed to import internal checks")
             return
@@ -140,6 +144,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         self.checks.register(OpenRedirectCheck(self.config.get("open_redirect", {})))
         self.checks.register(SensitiveLoggingCheck(self.config.get("sensitive_logging", {})))
         self.checks.register(PathTraversalCheck(self.config.get("path_traversal", {})))
+        self.checks.register(CrossFileTaintCheck(self.config.get("cross_file_taint", {})))
 
         logger.info(
             "builtin_checks_registered",
@@ -184,6 +189,69 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         self._code_graph = code_graph
         self._gap_report = gap_report
 
+    def _build_standalone_cross_file_ctx(self, code_file: CodeFile) -> Any | None:
+        """
+        Build a CrossFileContext from the filesystem when no pipeline context is available.
+
+        Scans sibling Python files in the same project to extract import graph and
+        exported constants so checks can resolve cross-file references.
+        Cached after first build.
+        """
+        if self._standalone_cross_file_ctx is not None:
+            return self._standalone_cross_file_ctx
+
+        try:
+            from pathlib import Path
+
+            from warden.analysis.services.cross_file_analyzer import CrossFileAnalyzer
+            from warden.validation.domain.frame import CodeFile as CF
+
+            # Determine project root: walk up to find .warden dir
+            file_path = Path(code_file.path)
+            project_root = None
+            for parent in [file_path.parent] + list(file_path.parent.parents):
+                if (parent / ".warden").exists():
+                    project_root = parent
+                    break
+            if project_root is None:
+                project_root = file_path.parent
+
+            # Collect sibling Python files (limit to prevent slow scans)
+            py_files = list(project_root.rglob("*.py"))
+            # Exclude large dirs, test dirs, venv
+            skip_parts = {".venv", "venv", "__pycache__", ".git", "node_modules", "dist", "build"}
+            py_files = [
+                f for f in py_files
+                if not any(p in skip_parts for p in f.parts)
+            ][:50]  # Cap at 50 files for performance
+
+            if not py_files:
+                return None
+
+            sibling_files: list[CF] = []
+            for p in py_files:
+                try:
+                    content = p.read_text(encoding="utf-8", errors="ignore")
+                    sibling_files.append(CF(path=str(p), content=content, language="python"))
+                except OSError:
+                    continue
+
+            analyzer = CrossFileAnalyzer(project_root)
+            ctx = analyzer.analyze(sibling_files)
+            self._standalone_cross_file_ctx = ctx
+
+            logger.debug(
+                "standalone_cross_file_ctx_built",
+                files=len(sibling_files),
+                imports=sum(len(v) for v in ctx.import_graph.values()),
+                exported_values=sum(len(v) for v in ctx.exported_values.values()),
+            )
+            return ctx
+
+        except Exception as e:
+            logger.debug("standalone_cross_file_ctx_failed", error=str(e))
+            return None
+
     async def execute_async(self, code_file: CodeFile, context: PipelineContext | None = None) -> FrameResult:
         """
         Execute all security checks on code file.
@@ -207,6 +275,24 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         # Get enabled checks
         enabled_checks = self.checks.get_enabled(self.config)
 
+        # STEP 0.5: Resolve cross-file context for checks
+        # Prefer pipeline-provided cross_file_context; fall back to standalone filesystem scan.
+        cross_file_ctx = getattr(context, "cross_file_context", None)
+        if cross_file_ctx is None and code_file.language in ("python",):
+            cross_file_ctx = self._build_standalone_cross_file_ctx(code_file)
+
+        # Build lightweight CrossFileCheckContext that checks can consume
+        check_context: Any = None
+        if cross_file_ctx is not None:
+            try:
+                from warden.analysis.services.cross_file_analyzer import CrossFileCheckContext
+                check_context = CrossFileCheckContext.from_cross_file_ctx(
+                    cross_file_ctx, code_file.path
+                )
+            except Exception as e:
+                logger.debug("check_context_build_failed", error=str(e))
+                check_context = cross_file_ctx  # Fallback: pass raw ctx
+
         # STEP 1: Execute pattern checks
         check_results: list[CheckResult] = []
         for check in enabled_checks:
@@ -218,7 +304,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     file_path=code_file.path,
                 )
 
-                result = await check.execute_async(code_file)
+                result = await check.execute_async(code_file, check_context or context)
                 check_results.append(result)
 
                 logger.debug(

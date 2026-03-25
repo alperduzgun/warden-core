@@ -244,7 +244,7 @@ class PhantomPackageCheck(ValidationCheck):
     def _is_known_js(self, pkg: str) -> bool:
         return pkg in _KNOWN_JS_PACKAGES or pkg in self._extra_known
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """
         Execute phantom package detection.
 

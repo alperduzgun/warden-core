@@ -389,7 +389,7 @@ class StaleAPICheck(ValidationCheck):
 
         return False
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """
         Execute deprecated API detection.
 

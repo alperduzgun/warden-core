@@ -90,7 +90,7 @@ class CSRFCheck(ValidationCheck):
         self._csurf_pattern = re.compile(r"""csurf""")
         self._csrf_middleware_js_pattern = re.compile(r"""csrf|csrfProtection|csrfToken|_csrf""")
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """Execute CSRF protection detection."""
         findings: list[CheckFinding] = []
 

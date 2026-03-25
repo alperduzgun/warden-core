@@ -50,6 +50,67 @@ class CrossFileContext:
     file_summaries: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass
+class CrossFileCheckContext:
+    """
+    Lightweight cross-file context passed to individual checks.
+
+    Contains pre-resolved information for a single file being checked:
+    - resolved_imports: {symbol_name -> ExportedValue} for symbols imported into this file
+    - imported_sensitive_names: set of symbol names that are known-sensitive from imports
+    - importing_files: files that import from this file (blast radius hint)
+    """
+
+    resolved_imports: dict[str, "ExportedValue"] = field(default_factory=dict)
+    imported_sensitive_names: set[str] = field(default_factory=set)
+    importing_files: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_cross_file_ctx(cls, ctx: "CrossFileContext", file_path: str) -> "CrossFileCheckContext":
+        """Build a per-file check context from project-wide CrossFileContext."""
+        resolved: dict[str, ExportedValue] = {}
+        sensitive_names: set[str] = set()
+
+        # Resolve what this file imports from other project files
+        imports = ctx.import_graph.get(file_path, [])
+        for imp in imports:
+            if not imp.target_file:
+                continue
+            # Try both relative and absolute key forms
+            exported = ctx.exported_values.get(imp.target_file, [])
+            if not exported:
+                # Try with full path prefix variations
+                for key in ctx.exported_values:
+                    if key.endswith(imp.target_file) or imp.target_file.endswith(key.lstrip("/")):
+                        exported = ctx.exported_values[key]
+                        break
+
+            for val in exported:
+                if not imp.symbols or val.name in imp.symbols:
+                    resolved[val.name] = val
+                    if val.is_sensitive:
+                        sensitive_names.add(val.name)
+
+        # Reverse: who imports this file
+        importing: list[str] = []
+        for src_file, src_imports in ctx.import_graph.items():
+            if src_file == file_path:
+                continue
+            for imp in src_imports:
+                if imp.target_file and (
+                    file_path.endswith(imp.target_file)
+                    or imp.target_file.endswith(file_path.lstrip("/"))
+                ):
+                    importing.append(src_file)
+                    break
+
+        return cls(
+            resolved_imports=resolved,
+            imported_sensitive_names=sensitive_names,
+            importing_files=importing,
+        )
+
+
 # Patterns that indicate a sensitive value
 _SENSITIVE_PATTERNS = re.compile(
     r"(password|secret|key|token|credential|api_key|db_url|database_url|redis_url)",

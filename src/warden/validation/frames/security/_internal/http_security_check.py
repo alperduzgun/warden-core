@@ -162,7 +162,7 @@ class HTTPSecurityCheck(ValidationCheck):
         self._express_import_pattern = re.compile(r"""import\s+.*\s+from\s+['"]express['"]""")
         self._helmet_pattern = re.compile(r"""helmet\s*\(""")
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """Execute HTTP security misconfiguration detection."""
         findings: list[CheckFinding] = []
 

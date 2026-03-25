@@ -124,7 +124,7 @@ class HardcodedPasswordCheck(ValidationCheck):
 
         return patterns
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """Execute hardcoded password detection."""
         findings: list[CheckFinding] = []
         lines = code_file.content.split("\n")

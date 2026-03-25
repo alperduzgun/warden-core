@@ -102,7 +102,7 @@ class SecretsCheck(ValidationCheck):
         # Pre-compile allowed patterns too
         self._compiled_allowed = [re.compile(p) for p in self.allowed_patterns]
 
-    async def execute_async(self, code_file: CodeFile) -> CheckResult:
+    async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """Execute secrets detection."""
         findings: list[CheckFinding] = []
 
