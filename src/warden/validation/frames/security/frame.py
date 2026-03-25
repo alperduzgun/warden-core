@@ -867,18 +867,19 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         _use_llm = getattr(self, "_use_llm", True)
         _independent_findings: dict[str, list[Finding]] = {}
         if _use_llm and hasattr(self, "llm_service") and self.llm_service:
-            def _has_significant_findings(path: str) -> bool:
-                """True if file has medium+ severity findings (skip LLM for those)."""
+            def _has_enough_deterministic(path: str) -> bool:
+                """True if file has 3+ medium+ findings — LLM scan would add little value."""
                 _SIGNIFICANT = {"medium", "high", "critical"}
+                count = 0
                 for f in findings_map.get(path, []):
                     sev = f.severity if hasattr(f, "severity") else (f.get("severity") if isinstance(f, dict) else "")
                     if str(sev).lower() in _SIGNIFICANT:
-                        return True
-                return False
+                        count += 1
+                return count >= 3
 
             clean_files = [
                 cf for cf in code_files
-                if cf.path not in error_files and not _has_significant_findings(cf.path)
+                if cf.path not in error_files and not _has_enough_deterministic(cf.path)
             ]
             if clean_files:
                 logger.info("llm_independent_scan_start", file_count=len(clean_files))
@@ -890,13 +891,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                 async def _scan_one(cf: CodeFile) -> tuple[str, list[Finding]]:
                     async with _sem:
                         try:
-                            # Direct LLM call — no deterministic re-run
-                            from warden.shared.utils.llm_context import BUDGET_SECURITY, prepare_code_for_llm, resolve_token_budget
-
-                            budget = resolve_token_budget(BUDGET_SECURITY, context=None, code_file_metadata=cf.metadata)
-                            code_for_llm = prepare_code_for_llm(cf.content, token_budget=budget, file_path=cf.path)
+                            # Send raw content — analyze_security_async owns truncation
                             response = await self.llm_service.analyze_security_async(
-                                code_for_llm, cf.language, use_fast_tier=False,
+                                cf.content, cf.language, use_fast_tier=False,
                             )
                             logger.info("llm_independent_scan_response", file=cf.path, response_type=type(response).__name__, findings_count=len(response.get("findings", [])) if isinstance(response, dict) else -1)
                             if not response or not isinstance(response, dict):
@@ -905,6 +902,8 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                             findings = []
                             _MAX_FINDINGS_PER_FILE = 15
                             _path_hash = hex(hash(cf.path) & 0xFFFF)[2:]
+                            _file_lines = cf.content.splitlines() if cf.content else []
+                            _file_line_count = len(_file_lines)
                             for item in response.get("findings", []):
                                 if len(findings) >= _MAX_FINDINGS_PER_FILE:
                                     logger.warning("llm_independent_cap_reached", file=cf.path, cap=_MAX_FINDINGS_PER_FILE)
@@ -912,6 +911,15 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                                 detail = item.get("detail", "")
                                 if len(detail) < 10:
                                     continue  # Skip vague/hallucinated findings
+                                # Line validation: reject out-of-bounds or blank-line findings
+                                _ln = item.get("line_number", 1)
+                                if isinstance(_ln, int) and _file_line_count > 0:
+                                    if _ln < 1 or _ln > _file_line_count:
+                                        logger.info("llm_finding_rejected_oob", file=cf.path, line=_ln, max_lines=_file_line_count)
+                                        continue
+                                    if not _file_lines[_ln - 1].strip():
+                                        logger.info("llm_finding_rejected_blank", file=cf.path, line=_ln)
+                                        continue
                                 f = Finding(
                                     id=f"security-llm-independent-{_path_hash}-{len(findings)}",
                                     severity=min_severity(item.get("severity", "medium"), "high"),  # Cap at HIGH

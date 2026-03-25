@@ -112,8 +112,8 @@ llm:
   fast_model: qwen-code-default
   token_budgets:
     security:
-      deep: 2400
-      fast: 900
+      deep: 6000
+      fast: 1500
     resilience:
       deep: 3000
       fast: 1200

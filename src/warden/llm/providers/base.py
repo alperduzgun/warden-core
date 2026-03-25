@@ -192,27 +192,8 @@ class ILlmClient(ABC):
 
         return response
 
-    async def analyze_security_async(self, code_content: str, language: str, use_fast_tier: bool = False) -> dict:
-        """
-        Analyze code for security vulnerabilities using LLM.
-
-        Default implementation uses complete_async with a standard prompt.
-        Providers may override this for specialized models or parameters.
-
-        Args:
-            code_content: Source code to analyze
-            language: Language of the code
-
-        Returns:
-            Dict containing findings list
-        """
-        from warden.shared.utils.json_parser import parse_json_from_llm
-        from warden.shared.utils.llm_context import BUDGET_SECURITY, prepare_code_for_llm, resolve_token_budget
-
-        budget = resolve_token_budget(BUDGET_SECURITY)
-        truncated_code = prepare_code_for_llm(code_content, token_budget=budget)
-
-        prompt = f"""Analyze this {language} code for security vulnerabilities. Focus on exploitable flaws only.
+    # ── Chunked security analysis ──────────────────────────────────────────────
+    _SECURITY_PROMPT = """Analyze this {language} code for security vulnerabilities. Focus on exploitable flaws only.
 
 CHECK THESE FIRST (report each one found):
 1. == comparing password/hash/token/secret byte values (NOT role names or status strings) — timing attack, use hmac.compare_digest
@@ -225,47 +206,129 @@ CHECK THESE FIRST (report each one found):
 8. HTML sanitizer using string replace() blocklist (bypassable)
 9. Validation regex using .* or trivially bypassable patterns
 
-ALSO CHECK: SQL Injection, XSS, Hardcoded Secrets, SSRF, Command Injection, Path Traversal, IDOR.
+ALSO CHECK: SQL Injection, XSS, Hardcoded Secrets, SSRF, CSRF, XXE, Insecure Deserialization, Command Injection, Path Traversal, IDOR.
 IDOR: endpoint uses user-controlled ID without ownership check (parameterized query alone is NOT enough).
+ALSO CHECK these code quality security issues:
+- Unbounded in-memory cache/dict without eviction (memory exhaustion DoS)
+- Secrets/credentials/private keys stored in process memory longer than needed
+- Broad except Exception swallowing programming errors as API errors
+- Binding to 0.0.0.0 without access controls
+- Missing input validation on user-controlled IDs passed into URL paths
+For each finding include source (where tainted data enters) and sink (where it is consumed unsafely) if applicable.
 
-IMPORTANT: Output ONLY valid JSON. No markdown. Keep detail field brief (1 sentence).
-{{"findings":[{{"severity":"critical|high|medium","message":"Short description","line_number":1,"detail":"Brief exploit explanation"}}]}}
+IMPORTANT: Output ONLY valid JSON. No markdown.
+{{"findings":[{{"severity":"critical|high|medium","message":"Short description","line_number":1,"detail":"Exploit explanation","source":"entry point","sink":"unsafe consumption"}}]}}
 If no issues: {{"findings":[]}}
 
-```{language}
-{truncated_code}
+{chunk_header}```{language}
+{code}
 ```"""
 
-        from warden.llm.prompts.tool_instructions import (
-            get_tool_enhanced_prompt,
-        )
+    _CHUNK_TOKEN_LIMIT = 4000
+    _LOCAL_LLM_PROVIDERS = frozenset({LlmProvider.QWEN_CLI, LlmProvider.OLLAMA, LlmProvider.CLAUDE_CODE, LlmProvider.CODEX})
 
-        security_system_prompt = get_tool_enhanced_prompt("You are a strict security auditor. Output valid JSON only.")
+    async def analyze_security_async(self, code_content: str, language: str, use_fast_tier: bool = False) -> dict:
+        """Analyze code for security vulnerabilities. Chunks large files automatically."""
+        from warden.shared.utils.llm_context import BUDGET_SECURITY, prepare_code_for_llm, resolve_token_budget
+        from warden.shared.utils.token_utils import estimate_tokens
+
+        is_local = self.provider in self._LOCAL_LLM_PROVIDERS
+        budget_tokens = self._CHUNK_TOKEN_LIMIT if is_local else resolve_token_budget(BUDGET_SECURITY).tokens
+        code_tokens = estimate_tokens(code_content)
+
+        # Small file: single call, no chunking
+        if code_tokens <= budget_tokens:
+            return await self._analyze_security_single(code_content, language, use_fast_tier, "")
+
+        # API provider: truncate (cost matters)
+        if not is_local:
+            truncated = prepare_code_for_llm(code_content, token_budget=resolve_token_budget(BUDGET_SECURITY))
+            return await self._analyze_security_single(truncated, language, use_fast_tier, "")
+
+        # Local LLM + large file: chunk
+        chunks = self._split_code_chunks(code_content, budget_tokens)
+        logger.info("analyze_security_chunked", chunks=len(chunks), total_tokens=code_tokens)
+
+        all_findings: list[dict] = []
+        for i, chunk in enumerate(chunks):
+            header = (
+                f"This is part {i + 1} of {len(chunks)} of the same file "
+                f"(lines {chunk['start']}-{chunk['end']}). "
+            )
+            if i > 0:
+                header += "Report only NEW findings in THIS section. "
+            header += "\n\n"
+
+            result = await self._analyze_security_single(chunk["code"], language, use_fast_tier, header)
+            for f in result.get("findings", []):
+                if isinstance(f.get("line_number"), int):
+                    f["line_number"] += chunk["start"] - 1
+                all_findings.append(f)
+
+        deduped = self._dedup_findings(all_findings)
+        logger.info("analyze_security_chunked_done", raw=len(all_findings), deduped=len(deduped))
+        return {"findings": deduped}
+
+    def _split_code_chunks(self, code: str, budget: int) -> list[dict]:
+        """Split code into chunks with 10-line overlap for context continuity."""
+        from warden.shared.utils.token_utils import estimate_tokens
+
+        lines = code.splitlines(keepends=True)
+        overlap = 20
+        chunks: list[dict] = []
+        pos = 0
+        while pos < len(lines):
+            tok = 0
+            end = pos
+            while end < len(lines):
+                lt = estimate_tokens(lines[end])
+                if tok + lt > budget and end > pos:
+                    break
+                tok += lt
+                end += 1
+            chunks.append({"code": "".join(lines[pos:end]), "start": pos + 1, "end": end})
+            if end >= len(lines):
+                break
+            pos = max(pos + 1, end - overlap)
+        return chunks
+
+    @staticmethod
+    def _dedup_findings(findings: list[dict]) -> list[dict]:
+        """Remove near-duplicate findings (same line ±3, similar message)."""
+        seen: set[tuple[int, str]] = set()
+        out: list[dict] = []
+        for f in findings:
+            key = (f.get("line_number", 0) // 3, f.get("message", "").lower()[:40])
+            if key not in seen:
+                seen.add(key)
+                out.append(f)
+        return out
+
+    async def _analyze_security_single(self, code: str, language: str, use_fast_tier: bool, chunk_header: str) -> dict:
+        """Single LLM call for security analysis."""
+        from warden.shared.utils.json_parser import parse_json_from_llm
+        from warden.llm.prompts.tool_instructions import get_tool_enhanced_prompt
+
+        prompt = self._SECURITY_PROMPT.format(
+            language=language, code=code, chunk_header=chunk_header,
+        )
+        system_prompt = get_tool_enhanced_prompt("You are a strict security auditor. Output valid JSON only.")
 
         try:
-            response = await self.complete_async(
-                prompt,
-                system_prompt=security_system_prompt,
-                use_fast_tier=use_fast_tier,
-            )
+            response = await self.complete_async(prompt, system_prompt=system_prompt, use_fast_tier=use_fast_tier)
             if not response.success:
-                logger.warning("analyze_security_llm_failed", reason="response.success=False", content_preview=str(response.content)[:300] if response.content else "None")
+                logger.warning("analyze_security_llm_failed", reason="response.success=False")
                 return {"findings": []}
-
             logger.debug("analyze_security_raw_response", content_length=len(response.content) if response.content else 0, content_preview=str(response.content)[:500] if response.content else "None")
-
             parsed = parse_json_from_llm(response.content)
             if not parsed:
                 logger.warning("analyze_security_parse_failed", content_preview=str(response.content)[:500] if response.content else "None")
                 return {"findings": []}
-
             logger.debug("analyze_security_parsed", findings_count=len(parsed.get("findings", [])))
-
-            # Enrich findings with MachineContext from structured LLM output
             self._enrich_findings_from_llm(parsed)
             return parsed
         except (json.JSONDecodeError, ValueError, KeyError) as exc:
-            logger.warning("analyze_security_exception", error=str(exc), content_preview=str(response.content)[:500] if 'response' in dir() else "no_response")
+            logger.warning("analyze_security_exception", error=str(exc), content_preview=str(response.content)[:500] if 'response' in locals() else "no_response")
             return {"findings": []}
 
     @staticmethod

@@ -62,14 +62,24 @@ async def batch_verify_security_findings(
     Returns:
         Updated findings_map with LLM-verified findings
     """
-    # Flatten findings
+    # Split: deterministic findings (taint, pattern) skip LLM verification.
+    # Only LLM-sourced or unattributed findings need a second opinion.
+    _DETERMINISTIC_SOURCES = {"taint", "pattern", "ast", "deterministic"}
+    deterministic_by_path: dict[str, list[Any]] = {path: [] for path in findings_map}
     all_findings_with_context = []
     for file_path, findings in findings_map.items():
         code_file = next((f for f in code_files if f.path == file_path), None)
         for finding in findings:
-            all_findings_with_context.append({"finding": finding, "file_path": file_path, "code_file": code_file})
+            ds = getattr(finding, "detection_source", None) or ""
+            if ds in _DETERMINISTIC_SOURCES:
+                deterministic_by_path[file_path].append(finding)
+            else:
+                all_findings_with_context.append({"finding": finding, "file_path": file_path, "code_file": code_file})
 
     if not all_findings_with_context:
+        # Merge deterministic back and return
+        for path in findings_map:
+            findings_map[path] = deterministic_by_path.get(path, [])
         return findings_map
 
     # Smart Batching (token-aware)
@@ -102,6 +112,10 @@ async def batch_verify_security_findings(
     for verified_batch in batch_results:
         for item in verified_batch:
             verified_findings_map[item["file_path"]].append(item["finding"])
+
+    # Merge deterministic findings back (they skipped LLM verification)
+    for path, det_findings in deterministic_by_path.items():
+        verified_findings_map[path] = det_findings + verified_findings_map.get(path, [])
 
     return verified_findings_map
 
