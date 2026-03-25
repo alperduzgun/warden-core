@@ -89,6 +89,43 @@ class TimeoutCheck(ValidationCheck):
             "MongoDB connection without timeout",
             "pymongo.MongoClient(..., serverSelectionTimeoutMS=5000)",
         ),
+        # Go — net/http client without timeout
+        # http.Get/Post without a custom client that has Timeout set
+        (
+            r"\bhttp\.(?:Get|Post|PostForm)\s*\(",
+            "Go http.Get/Post without custom client timeout",
+            "client := &http.Client{Timeout: 30 * time.Second}; client.Get(url)",
+        ),
+        # Go — http.Client literal without Timeout field
+        (
+            r"&http\.Client\s*\{(?:[^}](?!Timeout))*\}",
+            "Go http.Client without Timeout field",
+            "&http.Client{Timeout: 30 * time.Second}",
+        ),
+        # Java — HttpURLConnection without setConnectTimeout
+        (
+            r"new\s+URL\s*\(.*\)\s*\.openConnection\s*\(",
+            "Java URLConnection without connect/read timeout",
+            "conn.setConnectTimeout(10000); conn.setReadTimeout(30000);",
+        ),
+        # Java — OkHttp without timeout builder
+        (
+            r"new\s+OkHttpClient\s*\(\s*\)",
+            "OkHttp client without timeout configuration",
+            "new OkHttpClient.Builder().callTimeout(30, TimeUnit.SECONDS).build()",
+        ),
+        # Node.js — http.request / https.request without timeout
+        (
+            r"\b(?:http|https)\.request\s*\((?:(?!timeout).)*?\)",
+            "Node.js http.request without timeout",
+            "http.request({ ..., timeout: 30000 }, callback)",
+        ),
+        # got (Node.js) without timeout
+        (
+            r"\bgot\s*\((?:(?!timeout).)*?\)",
+            "got HTTP call without timeout",
+            "got(url, { timeout: { request: 30000 } })",
+        ),
     ]
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:

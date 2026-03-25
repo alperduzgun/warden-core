@@ -119,6 +119,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             from _internal.sql_injection_check import SQLInjectionCheck
             from _internal.stale_api_check import StaleAPICheck
             from _internal.xss_check import XSSCheck
+            from _internal.open_redirect_check import OpenRedirectCheck
+            from _internal.sensitive_logging_check import SensitiveLoggingCheck
+            from _internal.path_traversal_check import PathTraversalCheck
         except ImportError:
             logger.error("Failed to import internal checks")
             return
@@ -134,6 +137,9 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         self.checks.register(JWTMisconfigCheck(self.config.get("jwt_misconfiguration", {})))
         self.checks.register(PhantomPackageCheck(self.config.get("phantom_package", {})))
         self.checks.register(StaleAPICheck(self.config.get("stale_api", {})))
+        self.checks.register(OpenRedirectCheck(self.config.get("open_redirect", {})))
+        self.checks.register(SensitiveLoggingCheck(self.config.get("sensitive_logging", {})))
+        self.checks.register(PathTraversalCheck(self.config.get("path_traversal", {})))
 
         logger.info(
             "builtin_checks_registered",

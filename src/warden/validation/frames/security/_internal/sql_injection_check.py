@@ -78,6 +78,21 @@ class SQLInjectionCheck(ValidationCheck):
             r'["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER).*?["\'][\s]*%',
             "% formatting in SQL query",
         ),
+        # JavaScript/TypeScript template literals in SQL
+        (
+            r'`(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)[^`]*\$\{',
+            "JavaScript template literal interpolation in SQL query",
+        ),
+        # Go: fmt.Sprintf with SQL keywords
+        (
+            r'fmt\.Sprintf\s*\(\s*["`](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)',
+            "Go fmt.Sprintf with SQL query (use parameterized queries)",
+        ),
+        # Java: String.format with SQL keywords
+        (
+            r'String\.format\s*\(\s*["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)',
+            "Java String.format with SQL query (use PreparedStatement)",
+        ),
     ]
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:

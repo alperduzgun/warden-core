@@ -107,6 +107,39 @@ class WeakCryptoCheck(ValidationCheck):
             "crypto.createHash('sha1') weak hash",
             "javascript",
         ),
+        # Go: crypto/md5 and crypto/sha1 imports
+        (
+            r"\bmd5\.New\s*\(\s*\)",
+            "Go md5.New() weak hash algorithm",
+            "go",
+        ),
+        (
+            r"\bsha1\.New\s*\(\s*\)",
+            "Go sha1.New() weak hash algorithm",
+            "go",
+        ),
+        (
+            r'"crypto/md5"',
+            "Go crypto/md5 package imported (weak hash)",
+            "go",
+        ),
+        (
+            r'"crypto/sha1"',
+            "Go crypto/sha1 package imported (weak hash)",
+            "go",
+        ),
+        # Java: MessageDigest.getInstance("MD5" / "SHA-1" / "SHA1")
+        (
+            r'MessageDigest\.getInstance\s*\(\s*"(?:MD5|SHA-?1)"\s*\)',
+            "Java MessageDigest with weak hash algorithm",
+            "java",
+        ),
+        # Java: String.format or concat with MD5/SHA1
+        (
+            r'getInstance\s*\(\s*"(?:MD5|SHA1|SHA-1)"\s*\)',
+            "Weak hash algorithm: MD5/SHA1",
+            "java",
+        ),
     ]
 
     # --- Weak cipher / mode patterns ---
@@ -175,6 +208,33 @@ class WeakCryptoCheck(ValidationCheck):
             r"['\"]ECB['\"]",
             "ECB mode reference detected",
             "any",
+        ),
+        # Java: Cipher.getInstance("DES/..." or "AES/ECB/..." or "RC4")
+        (
+            r'Cipher\.getInstance\s*\(\s*"DES(?:/|")',
+            "Java Cipher with DES (broken, 56-bit key)",
+            "java",
+        ),
+        (
+            r'Cipher\.getInstance\s*\(\s*"AES/ECB/',
+            "Java Cipher with AES-ECB mode (no diffusion)",
+            "java",
+        ),
+        (
+            r'Cipher\.getInstance\s*\(\s*"RC4"',
+            "Java Cipher with RC4 (broken stream cipher)",
+            "java",
+        ),
+        # Go: des.NewCipher / rc4.NewCipher
+        (
+            r"\bdes\.NewCipher\s*\(",
+            "Go des.NewCipher() — DES is a broken 56-bit cipher",
+            "go",
+        ),
+        (
+            r"\brc4\.NewCipher\s*\(",
+            "Go rc4.NewCipher() — RC4 is broken",
+            "go",
         ),
     ]
 

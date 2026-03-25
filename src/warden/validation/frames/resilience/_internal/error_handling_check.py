@@ -64,6 +64,31 @@ class ErrorHandlingCheck(ValidationCheck):
             "Silent exception handling (pass in except block)",
             "except Exception as e:\n    logger.error(f'Error: {e}')\n    return fallback_value",
         ),
+        # JavaScript/TypeScript — empty catch block
+        (
+            r"catch\s*\([^)]*\)\s*\{\s*\}",
+            "Empty catch block swallows all errors silently",
+            "catch (err) { logger.error('Operation failed', err); }",
+        ),
+        # JavaScript/TypeScript — catch with only comment
+        (
+            r"catch\s*\([^)]*\)\s*\{\s*//[^\n]*\n?\s*\}",
+            "Catch block with only a comment (silent failure)",
+            "catch (err) { logger.error('Operation failed', err); }",
+        ),
+        # Go — discarding error return with blank identifier on network/IO call
+        (
+            r"\b_\s*,\s*_\s*:?=\s*(?:http\.|os\.|ioutil\.|io\.)",
+            "Go: double blank identifier discards both value and error",
+            "resp, err := http.Get(url); if err != nil { log.Printf(...) }",
+        ),
+        # Go — explicit error ignore: _, err = ...; then no if err != nil
+        # Simpler heuristic: `_ = ` on a call that returns an error
+        (
+            r"_\s*=\s*(?:os\.\w+|ioutil\.\w+|io\.\w+|net\.\w+|http\.\w+)\s*\(",
+            "Go: error return explicitly discarded with _ =",
+            "if err := os.WriteFile(...); err != nil { log.Printf('write failed: %v', err) }",
+        ),
     ]
 
     # Network operation patterns that need error handling
@@ -76,6 +101,17 @@ class ErrorHandlingCheck(ValidationCheck):
         r"http\.client",
         r"urllib\.request",
         r"socket\.",
+        # Go
+        r"\bhttp\.Get\b",
+        r"\bhttp\.Post\b",
+        r"http\.NewRequest",
+        # Java
+        r"HttpURLConnection",
+        r"OkHttpClient",
+        r"HttpClient\.newBuilder",
+        # Node.js
+        r"\bgot\s*\(",
+        r"node-fetch",
     ]
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
@@ -175,5 +211,13 @@ class ErrorHandlingCheck(ValidationCheck):
         return any(re.search(pattern, content, re.IGNORECASE) for pattern in self.NETWORK_PATTERNS)
 
     def _has_error_handling(self, content: str) -> bool:
-        """Check if code has try/except blocks."""
-        return bool(re.search(r"\btry\s*:", content, re.IGNORECASE))
+        """Check if code has try/except/catch/Go error checks."""
+        return bool(re.search(
+            r"\btry\s*:"           # Python
+            r"|\btry\s*\{"         # JS/Java/Go
+            r"|\bcatch\s*\("       # JS/Java
+            r"|if\s+err\s*!=\s*nil"  # Go
+            r"|\.catch\s*\(",      # Promise .catch()
+            content,
+            re.IGNORECASE,
+        ))
