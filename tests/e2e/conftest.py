@@ -4,6 +4,10 @@ Pre-flight checks run once per session to detect environment capabilities.
 Tests that need specific services use markers to auto-skip when unavailable.
 """
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 import json
 import os
 import re

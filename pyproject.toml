@@ -179,8 +179,10 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
 markers = [
+    "unit: fast isolated tests, no external services",
+    "integration: tests that hit filesystem, DB, subprocess, or network",
+    "llm: tests that call real LLM APIs (slow, expensive — excluded by default)",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests requiring external services",
     "live: marks tests requiring live API keys",
     "security: marks security-focused tests",
     "acceptance: subprocess-based end-user acceptance tests",

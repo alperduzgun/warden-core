@@ -14,6 +14,7 @@ import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+
 from warden.validation.frames.spec.extractors.universal_extractor import (
     UniversalContractExtractor,
     APICallCandidate,
@@ -55,6 +56,7 @@ def _ollama_available() -> bool:
 
 # Skip all tests in this module if Ollama is not available
 pytestmark = [
+    pytest.mark.llm,
     pytest.mark.integration,
     pytest.mark.skipif(
         not _ollama_available(),

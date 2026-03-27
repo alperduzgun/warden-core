@@ -27,7 +27,10 @@ def _ollama_reachable() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(not _ollama_reachable(), reason="Ollama not reachable at localhost:11434")
+pytestmark = [
+    pytest.mark.llm,
+    pytest.mark.skipif(not _ollama_reachable(), reason="Ollama not reachable at localhost:11434"),
+]
 
 
 def _make_ollama_client():

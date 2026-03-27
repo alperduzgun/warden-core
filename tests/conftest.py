@@ -8,6 +8,57 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+# ---------------------------------------------------------------------------
+# Auto-marker: classify every test into unit / integration / llm
+#
+# Priority (first match wins):
+#   1. Explicitly decorated with @pytest.mark.{unit,integration,llm} → keep
+#   2. Path contains an integration directory → integration
+#   3. Filename contains _live → llm + integration
+#   4. Filename contains _integration → integration
+#   5. Everything else → unit
+# ---------------------------------------------------------------------------
+
+_INTEGRATION_PATH_SEGMENTS = {
+    "/e2e/", "/integration/", "/chaos/", "/benchmark/",
+    "/grpc/", "/llm/",
+}
+
+
+def pytest_collection_modifyitems(config, items: list) -> None:
+    # Determine whether the user explicitly requested llm tests.
+    # markexpr is the raw -m expression passed on the CLI (empty when not given).
+    markexpr: str = getattr(config.option, "markexpr", "") or ""
+    llm_explicitly_requested = "llm" in markexpr
+
+    skip_llm = pytest.mark.skip(
+        reason="llm tests skipped by default (require Ollama/cloud keys) — run: pytest -m llm"
+    )
+
+    for item in items:
+        existing = {m.name for m in item.iter_markers()}
+
+        # Step 1 — assign tier marker if not already present
+        if not (existing & {"unit", "integration", "llm"}):
+            path = str(item.fspath).replace("\\", "/")
+            stem = Path(item.fspath).stem
+
+            if any(seg in path for seg in _INTEGRATION_PATH_SEGMENTS):
+                item.add_marker(pytest.mark.integration)
+            elif stem.endswith("_live"):
+                item.add_marker(pytest.mark.llm)
+                item.add_marker(pytest.mark.integration)
+            elif stem.endswith("_integration"):
+                item.add_marker(pytest.mark.integration)
+            else:
+                item.add_marker(pytest.mark.unit)
+
+        # Step 2 — auto-skip llm tests unless explicitly requested
+        if not llm_explicitly_requested:
+            updated = {m.name for m in item.iter_markers()}
+            if "llm" in updated:
+                item.add_marker(skip_llm)
+
 
 @pytest.fixture
 def project_root(tmp_path):

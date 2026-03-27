@@ -11,6 +11,7 @@ Usage:
 
 import pytest
 import os
+
 from warden.llm import (
     LlmProvider,
     LlmRequest,
@@ -22,11 +23,13 @@ from warden.llm import (
 )
 
 
-# Skip if no API keys configured
-pytestmark = pytest.mark.skipif(
-    not os.getenv("AZURE_OPENAI_API_KEY") and not os.getenv("GROQ_API_KEY"),
-    reason="No LLM API keys configured"
-)
+pytestmark = [
+    pytest.mark.llm,
+    pytest.mark.skipif(
+        not os.getenv("AZURE_OPENAI_API_KEY") and not os.getenv("GROQ_API_KEY"),
+        reason="No LLM API keys configured",
+    ),
+]
 
 
 @pytest.fixture

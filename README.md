@@ -788,6 +788,36 @@ commercial product and is licensed independently of this repository. Warden Core
 
 ---
 
+## 🧪 Running Tests
+
+Tests are organised into three markers. The default run excludes slow/expensive LLM calls.
+
+| Command | What runs | When to use |
+|---|---|---|
+| `pytest -m unit` | Fast isolated logic tests | Bug fix, quick iteration |
+| `pytest` | unit + integration (no LLM) | Feature development, pre-push |
+| `pytest -m integration` | Filesystem / subprocess / network | Integration check |
+| `pytest -m llm` | Real LLM API calls (Ollama/cloud) | Explicitly testing LLM behaviour |
+| `pytest --co -q -m unit` | Dry-run: list unit tests | Orientation |
+
+> **Never run `pytest` without `-m` on the full suite without reason — it collects ~3 900 tests and takes 5+ minutes.**
+
+```bash
+# Bug fix — fast feedback loop
+pytest -m unit
+
+# Default — excludes real LLM calls
+pytest
+
+# Release / CI — full suite minus LLM (LLM tests require Ollama or cloud keys)
+pytest -m "not llm"
+
+# Explicitly test LLM integration (requires Ollama at localhost:11434 or API keys)
+pytest -m llm
+```
+
+---
+
 ## 🧪 Verification Suite
 
 Warden ships with a built-in verification suite that validates the scan pipeline against known-vulnerable corpus files:
