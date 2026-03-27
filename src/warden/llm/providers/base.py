@@ -216,11 +216,12 @@ CHECK THESE FIRST (report each one found):
 ALSO CHECK: SQL Injection, XSS, Hardcoded Secrets, SSRF, CSRF, XXE, Command Injection, Path Traversal, IDOR.
 IDOR: endpoint uses user-controlled ID without ownership check (parameterized query alone is NOT enough).
 ALSO CHECK these code quality security issues:
-- Unbounded in-memory cache/dict without eviction (memory exhaustion DoS)
+- Unbounded in-memory cache in PERSISTENT state (self.X[key]=val, class-level dict, module global) that grows without bound: no max size, no TTL/expiry, no eviction. Do NOT flag: temporary per-request dicts, function-local dicts, dict literals passed as arguments to a function call.
 - Secrets/credentials/private keys stored in process memory longer than needed
-- Broad except Exception swallowing programming errors as API errors
+- `except Exception:` or bare `except:` that silently swallows ALL errors AND converts them to a success/API response. Only flag if the block cannot distinguish programming errors (TypeError, AttributeError, KeyError) from operational errors. Do NOT flag if it logs the error and returns an error dict/status.
 - Binding to 0.0.0.0 without access controls
 - Missing input validation on user-controlled IDs passed into URL paths
+IDOR precision: only flag if user A can access/modify a resource that belongs to user B by changing an ID. Filtering by an identifier to read public/own data is NOT IDOR. Parsing an API response array is NOT IDOR.
 For each finding include source (where tainted data enters) and sink (where it is consumed unsafely) if applicable.
 
 IMPORTANT: Output ONLY valid JSON. No markdown.
