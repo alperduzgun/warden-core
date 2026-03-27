@@ -16,6 +16,7 @@ from ..config import ProviderConfig
 from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient
+from ._cli_subprocess import run_cli_subprocess
 
 logger = get_logger(__name__)
 
@@ -77,32 +78,28 @@ class QwenCliClient(ILlmClient):
         """Execute Qwen CLI subprocess."""
         start_time = time.perf_counter()
         try:
-            process = await asyncio.create_subprocess_exec(
-                self._cli_path,
-                "--output-format", "json",
-                "--auth-type", "qwen-oauth",
-                "-p", prompt,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            stdout_text, stderr_text, returncode = await run_cli_subprocess(
+                [self._cli_path, "--output-format", "json", "--auth-type", "qwen-oauth", "-p", prompt],
+                timeout=float(timeout),
             )
-
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
             duration_ms = int((time.perf_counter() - start_time) * 1000)
 
-            if process.returncode != 0:
-                error_msg = stderr.decode("utf-8", errors="replace").strip()[:300]
-                logger.warning("qwen_cli_failed", returncode=process.returncode, error=error_msg)
+            if returncode != 0:
+                error_msg = stderr_text.strip()[:300]
+                logger.warning("qwen_cli_failed", returncode=returncode, error=error_msg)
                 return LlmResponse.error(
-                    f"CLI error (exit {process.returncode}): {error_msg}",
+                    f"CLI error (exit {returncode}): {error_msg}",
                     provider=self.provider,
                     duration_ms=duration_ms,
                 )
 
-            return self._parse_response(stdout, model, duration_ms)
+            return self._parse_response(stdout_text.encode("utf-8"), model, duration_ms)
 
         except (asyncio.TimeoutError, TimeoutError):
             duration_ms = int((time.perf_counter() - start_time) * 1000)
             return LlmResponse.error(f"Timeout after {timeout}s", provider=self.provider, duration_ms=duration_ms)
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start_time) * 1000)
             return LlmResponse.error(str(e), provider=self.provider, duration_ms=duration_ms)

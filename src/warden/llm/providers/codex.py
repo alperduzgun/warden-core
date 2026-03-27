@@ -25,6 +25,7 @@ import structlog
 from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient, detect_provider_error
+from ._cli_subprocess import run_cli_subprocess
 
 logger = structlog.get_logger(__name__)
 
@@ -135,6 +136,7 @@ class CodexClient(ILlmClient):
         # Write response to a temp file to capture cleanly
         fd, output_file = tempfile.mkstemp(suffix=".txt", prefix="warden_codex_")
         os.close(fd)
+        timeout = max(request.timeout_seconds or 0, self._timeout)
 
         try:
             cmd = [
@@ -156,28 +158,17 @@ class CodexClient(ILlmClient):
             # "--" terminates option parsing so a prompt starting with "--" is safe
             cmd.extend(["--", full_prompt])
 
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            stdout_text, stderr_text, returncode = await run_cli_subprocess(
+                cmd, timeout=float(timeout)
             )
-
-            timeout = max(request.timeout_seconds or 0, self._timeout)
-            try:
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=float(timeout))
-            except (asyncio.TimeoutError, TimeoutError):
-                proc.kill()
-                duration_ms = self._calc_duration_ms(start_time)
-                logger.error("codex_timeout", timeout=timeout)
-                return self._error_response(f"Timeout after {timeout}s", model, duration_ms)
 
             duration_ms = self._calc_duration_ms(start_time)
 
-            if proc.returncode != 0:
-                error = stderr.decode("utf-8", errors="replace").strip()
-                logger.error("codex_exec_failed", returncode=proc.returncode, error=error[:200])
+            if returncode != 0:
+                error = stderr_text.strip()
+                logger.error("codex_exec_failed", returncode=returncode, error=error[:200])
                 return self._error_response(
-                    f"codex exec failed (exit {proc.returncode}): {error[:200]}", model, duration_ms
+                    f"codex exec failed (exit {returncode}): {error[:200]}", model, duration_ms
                 )
 
             # Prefer the dedicated output file; fall back to stdout
@@ -190,7 +181,7 @@ class CodexClient(ILlmClient):
             except Exception:
                 pass
             if not content:
-                raw_stdout = stdout.decode("utf-8", errors="replace").strip()
+                raw_stdout = stdout_text.strip()
                 if raw_stdout:
                     content = raw_stdout
                     logger.debug("codex_output_source", source="stdout", length=len(content))
@@ -216,6 +207,12 @@ class CodexClient(ILlmClient):
                 duration_ms=duration_ms,
             )
 
+        except (asyncio.TimeoutError, TimeoutError):
+            duration_ms = self._calc_duration_ms(start_time)
+            logger.error("codex_timeout", timeout=timeout)
+            return self._error_response(f"Timeout after {timeout}s", model, duration_ms)
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             duration_ms = self._calc_duration_ms(start_time)
             logger.warning("codex_error", error=str(e))

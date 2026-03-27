@@ -55,16 +55,43 @@ class WardenBridge:
         from warden.llm.config import load_llm_config
         from warden.llm.factory import create_client
 
+        # Local providers that do not require an API key.
+        _LOCAL_PROVIDERS = frozenset({"ollama", "claude_code", "codex", "qwencode", "qwen_cli"})
+
         try:
             # Extract LLM config override from PipelineConfig (not a dict)
             pipeline_cfg = config_data.get("config")
             llm_override = getattr(pipeline_cfg, "llm_config", None) or {}
             self.llm_config = load_llm_config(config_override=llm_override)
+
+            # --- Fail-fast config validation ---
+            # validate() checks the default provider + all fallbacks for missing
+            # API keys, invalid endpoints, etc.  Cloud providers must have a key;
+            # local providers (ollama, qwen_cli, claude_code, codex) get a soft
+            # warning so the scan can still proceed.
+            validation_errors = self.llm_config.validate()
+            if validation_errors:
+                provider_name = self.llm_config.default_provider.value
+                is_local = provider_name in _LOCAL_PROVIDERS
+                if is_local:
+                    for err in validation_errors:
+                        logger.warning("llm_config_warning", warning=err, provider=provider_name)
+                else:
+                    # Cloud provider with missing/invalid credentials — hard fail.
+                    error_summary = "; ".join(validation_errors)
+                    raise RuntimeError(
+                        f"LLM configuration invalid for cloud provider '{provider_name}': {error_summary}. "
+                        "Set the required API key environment variable or switch to a local provider."
+                    )
+
             llm_service = create_client(self.llm_config.default_provider)
             if llm_service:
                 # Attach for tiering awareness
                 llm_service.config = self.llm_config
             self.llm_handler = LLMHandler(self.llm_config, llm_service=llm_service)
+        except RuntimeError:
+            # Re-raise RuntimeError from validation so caller sees it immediately.
+            raise
         except Exception as e:
             logger.warning("llm_init_failed_in_bridge", error=str(e))
             self.llm_config = None

@@ -23,6 +23,7 @@ from ..config import ProviderConfig
 from ..registry import ProviderRegistry
 from ..types import LlmProvider, LlmRequest, LlmResponse
 from .base import ILlmClient, detect_provider_error
+from ._cli_subprocess import run_cli_subprocess
 
 logger = get_logger(__name__)
 
@@ -139,47 +140,49 @@ class ClaudeCodeClient(ILlmClient):
             )
 
         start_time = time.perf_counter()
+        args = [  # warden-ignore
+            self._cli_path,
+            "--print",
+            "--output-format",
+            "json",
+            "--max-turns",
+            "2",
+            "--disallowedTools",
+            "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Task",
+            "-p",
+            prompt,
+        ]
         try:
-            process = await asyncio.create_subprocess_exec(  # warden-ignore
-                self._cli_path,
-                "--print",
-                "--output-format",
-                "json",
-                "--max-turns",
-                "2",
-                "--disallowedTools",
-                "Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,NotebookEdit,Task",
-                "-p",
-                prompt,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            stdout_text, stderr_text, returncode = await run_cli_subprocess(
+                args, timeout=float(timeout)
             )
-
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
             duration_ms = self._calc_duration_ms(start_time)
 
-            if process.returncode != 0:
-                error_msg = stderr.decode("utf-8", errors="replace").strip()
+            if returncode != 0:
+                error_msg = stderr_text.strip()
                 # If stderr is empty, check stdout for error hints (CLI may write errors as JSON to stdout)
                 if not error_msg:
-                    stdout_preview = stdout.decode("utf-8", errors="replace").strip()[:200]
+                    stdout_preview = stdout_text.strip()[:200]
                     error_msg = f"(stderr empty, stdout: {stdout_preview})" if stdout_preview else "(no output)"
                 logger.warning(  # warning — pipeline recovers via fallback lane
                     "claude_code_cli_failed",
-                    returncode=process.returncode,
+                    returncode=returncode,
                     error=error_msg[:300],
                 )
                 return self._error_response(
-                    f"CLI error (exit {process.returncode}): {error_msg[:300]}", model, duration_ms
+                    f"CLI error (exit {returncode}): {error_msg[:300]}", model, duration_ms
                 )
 
-            return self._parse_response(stdout, model, duration_ms)
+            return self._parse_response(stdout_text.encode("utf-8"), model, duration_ms)
 
         except (asyncio.TimeoutError, TimeoutError):
             duration_ms = self._calc_duration_ms(start_time)
             logger.error("claude_code_timeout", timeout=timeout)
             return self._error_response(f"Timeout after {timeout}s", model, duration_ms)
+
+        except asyncio.CancelledError:
+            raise
 
         except Exception as e:
             duration_ms = self._calc_duration_ms(start_time)
@@ -307,14 +310,11 @@ class ClaudeCodeClient(ILlmClient):
             return False
 
         try:
-            process = await asyncio.create_subprocess_exec(  # warden-ignore
-                self._cli_path,
-                "--version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            _, _, returncode = await run_cli_subprocess(
+                [self._cli_path, "--version"],  # warden-ignore
+                timeout=5.0,
             )
-            await asyncio.wait_for(process.communicate(), timeout=5.0)
-            return process.returncode == 0
+            return returncode == 0
         except Exception:
             return False
 
