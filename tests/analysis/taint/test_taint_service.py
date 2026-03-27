@@ -55,7 +55,7 @@ class TestTaintAnalysisService:
 
         import asyncio
 
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             service.analyze_all_async(code_files)
         )
 
@@ -68,7 +68,7 @@ class TestTaintAnalysisService:
 
         import asyncio
 
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             service.analyze_all_async(code_files)
         )
 
@@ -81,7 +81,7 @@ class TestTaintAnalysisService:
 
         import asyncio
 
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             service.analyze_all_async(code_files)
         )
 
@@ -116,7 +116,7 @@ class TestTaintAnalysisService:
 
         import asyncio
 
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             service.analyze_all_async(code_files)
         )
 
@@ -128,7 +128,7 @@ class TestTaintAnalysisService:
 
         import asyncio
 
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             service.analyze_all_async(code_files)
         )
 
@@ -140,7 +140,7 @@ class TestTaintAnalysisService:
 
         import asyncio
 
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             service.analyze_all_async([])
         )
 
@@ -152,7 +152,7 @@ class TestTaintAnalysisService:
 
         import asyncio
 
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             service.analyze_all_async(code_files)
         )
 
@@ -165,7 +165,7 @@ class TestTaintAnalysisService:
 
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             service.analyze_all_async(code_files)
         )
 

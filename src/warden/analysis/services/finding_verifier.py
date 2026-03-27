@@ -176,7 +176,9 @@ Return ONLY a JSON object:
         # STEP 3: Batch LLM Verification (token-aware batching)
         MAX_CONSECUTIVE_FAILURES = 3
         MAX_BATCH_TOKENS = 4000  # Safe token budget per batch
-        MAX_BATCH_SIZE = 10  # Hard cap
+        # Adaptive batch size: smaller on resource-constrained / local LLMs.
+        # _get_safe_batch_size can be replaced in tests to force a specific size.
+        MAX_BATCH_SIZE = self._get_safe_batch_size(10)
         logger.info("batch_verification_starting", count=len(remaining_after_cache))
 
         # Build token-aware batches
@@ -202,33 +204,43 @@ Return ONLY a JSON object:
         if _cur_batch:
             _batches.append(_cur_batch)
 
-        # Parallel batch verification with soft timeout + graceful degradation.
-        # All batches run concurrently via asyncio.gather — ~5x faster than sequential.
-        # Soft timeout: if verification exceeds budget, remaining batches are marked unverified.
-        import asyncio as _asyncio
+        # Sequential batch verification with circuit break + soft timeout.
+        # Sequential (not parallel) so that consecutive failures can stop further
+        # LLM calls early — a fully parallel gather would always launch all batches
+        # before the circuit break could fire.
         import time as _time
 
-        VERIFICATION_BUDGET_S = 90.0  # Soft timeout — enough for 10 parallel batches
+        VERIFICATION_BUDGET_S = 90.0
         _start = _time.monotonic()
+        consecutive_failures = 0
+        _processed_finding_count = 0
 
-        async def _verify_one_batch(batch: list) -> tuple[list, list | None]:
-            """Verify a single batch. Returns (batch, results) or (batch, None) on error."""
+        def _make_fallback_meta(reason: str) -> dict:
+            return {
+                "is_true_positive": True,
+                "confidence": self.FALLBACK_CONFIDENCE,
+                "reason": reason,
+                "fallback": True,
+                "review_required": True,
+                "verified": False,
+            }
+
+        circuit_broken = False
+        timed_out = False
+
+        for batch in _batches:
+            elapsed = _time.monotonic() - _start
+            if elapsed > VERIFICATION_BUDGET_S:
+                logger.warning(
+                    "verification_soft_timeout",
+                    elapsed_s=round(elapsed, 1),
+                    budget_s=VERIFICATION_BUDGET_S,
+                )
+                timed_out = True
+                break
+
             try:
                 results = await self._verify_batch_with_llm_async(batch, context)
-                return batch, results
-            except Exception as e:
-                logger.error("batch_verification_failed", error=str(e))
-                return batch, None
-
-        # Run all batches in parallel (bounded by LLM concurrency, not here)
-        tasks = [_verify_one_batch(b) for b in _batches]
-        completed = await _asyncio.gather(*tasks, return_exceptions=False)
-
-        consecutive_failures = 0
-        for batch, results in completed:
-            elapsed = _time.monotonic() - _start
-
-            if results is not None:
                 consecutive_failures = 0
                 for idx, result in enumerate(results):
                     finding = batch[idx]
@@ -239,33 +251,36 @@ Return ONLY a JSON object:
                     if is_tp:
                         self._set(finding, "verification_metadata", result)
                         verified_findings.append(finding)
-            else:
+            except Exception as e:
+                logger.error("batch_verification_failed", error=str(e))
                 consecutive_failures += 1
-                # Mark batch as unverified (fail-safe: keep findings, flag for review)
-                _fallback_meta = {
-                    "is_true_positive": True,
-                    "confidence": self.FALLBACK_CONFIDENCE,
-                    "reason": "LLM verification failed. Finding kept as unverified.",
-                    "review_required": True,
-                    "verified": False,
-                }
+                _fb = _make_fallback_meta("LLM verification failed. Finding kept as unverified.")
                 for finding in batch:
-                    self._set(finding, "verification_metadata", _fallback_meta)
+                    self._set(finding, "verification_metadata", _fb)
                 verified_findings.extend(batch)
 
-                # Circuit break after 3 consecutive failures
                 if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
                     logger.warning("verification_circuit_break", consecutive_failures=consecutive_failures)
+                    circuit_broken = True
+                    _processed_finding_count += len(batch)
                     break
 
-            # Soft timeout: if budget exceeded, mark remaining as unverified
-            if elapsed > VERIFICATION_BUDGET_S:
-                logger.warning(
-                    "verification_soft_timeout",
-                    elapsed_s=round(elapsed, 1),
-                    budget_s=VERIFICATION_BUDGET_S,
+            _processed_finding_count += len(batch)
+
+        # After circuit break or timeout: add any unprocessed findings with fallback meta
+        # so callers always receive the full original set.
+        if circuit_broken or timed_out:
+            unprocessed = remaining_after_cache[_processed_finding_count:]
+            if unprocessed:
+                reason = (
+                    "Verification skipped: circuit break after consecutive LLM failures."
+                    if circuit_broken
+                    else "Verification skipped: soft timeout exceeded."
                 )
-                break
+                _fb = _make_fallback_meta(reason)
+                for finding in unprocessed:
+                    self._set(finding, "verification_metadata", _fb)
+                verified_findings.extend(unprocessed)
 
         logger.info(
             "verification_summary",

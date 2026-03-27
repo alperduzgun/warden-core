@@ -242,7 +242,7 @@ class TestCodeGraphIntegration:
         """vulnerable.py parse → CodeGraphBuilder → 3 function SymbolNodes."""
         import asyncio
 
-        graph = asyncio.get_event_loop().run_until_complete(
+        graph = asyncio.run(
             self._build_code_graph(registry, {"vulnerable.py": python_code})
         )
 
@@ -255,7 +255,7 @@ class TestCodeGraphIntegration:
         """Isolated functions (no cross-calls) → callers=[], callees=[]."""
         import asyncio
 
-        graph = asyncio.get_event_loop().run_until_complete(
+        graph = asyncio.run(
             self._build_code_graph(registry, {"vulnerable.py": python_code})
         )
 
@@ -276,7 +276,7 @@ class TestCodeGraphIntegration:
 
         from warden.analysis.domain.code_graph import EdgeRelation
 
-        graph = asyncio.get_event_loop().run_until_complete(
+        graph = asyncio.run(
             self._build_code_graph(
                 registry,
                 {"vulnerable.py": python_code, "handler.py": CALLER_CODE},
@@ -301,7 +301,7 @@ class TestCodeGraphIntegration:
         """Real AST + real CodeGraph → build_focused_context produces valid output."""
         import asyncio
 
-        graph = asyncio.get_event_loop().run_until_complete(
+        graph = asyncio.run(
             self._build_code_graph(
                 registry,
                 {"vulnerable.py": python_code, "handler.py": CALLER_CODE},

@@ -28,6 +28,7 @@ def test_ensure_providers_registered():
     expected = {
         LlmProvider.ANTHROPIC,
         LlmProvider.DEEPSEEK,
+        LlmProvider.QWEN_CLI,
         LlmProvider.QWENCODE,
         LlmProvider.OPENAI,
         LlmProvider.AZURE_OPENAI,
@@ -48,7 +49,7 @@ def test_ensure_providers_idempotent():
     _ensure_providers_registered()
     count_second = len(ProviderRegistry.available())
 
-    assert count_first == count_second == 10
+    assert count_first == count_second == 11
 
 
 def test_registry_is_registered():
@@ -59,8 +60,8 @@ def test_registry_is_registered():
 
 
 def test_registry_available_count():
-    """Registry should have all 10 providers available"""
-    assert len(ProviderRegistry.available()) == 10
+    """Registry should have all 11 providers available"""
+    assert len(ProviderRegistry.available()) == 11
 
 
 def test_registry_create_anthropic():

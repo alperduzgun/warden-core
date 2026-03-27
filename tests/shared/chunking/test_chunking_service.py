@@ -133,7 +133,7 @@ class TestChunkASTPath:
             from warden.ast.providers.python_ast_provider import PythonASTProvider  # noqa: PLC0415
 
             provider = PythonASTProvider()
-            parse_result = asyncio.get_event_loop().run_until_complete(
+            parse_result = asyncio.run(
                 provider.parse(content, CodeLanguage.PYTHON, file_path=path)
             )
             return {path: parse_result}

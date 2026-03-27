@@ -58,6 +58,7 @@ def groq_config():
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("AZURE_OPENAI_API_KEY"), reason="No Azure OpenAI API key")
 async def test_azure_openai_simple_request(azure_config):
     """Test Azure OpenAI with simple request"""
     client = create_client(azure_config)
@@ -81,6 +82,7 @@ async def test_azure_openai_simple_request(azure_config):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("AZURE_OPENAI_API_KEY"), reason="No Azure OpenAI API key")
 async def test_azure_openai_code_analysis(azure_config):
     """Test Azure OpenAI code analysis with real code"""
     client = create_client(azure_config)
@@ -158,42 +160,27 @@ async def test_groq_simple_request(groq_config):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not os.getenv("GROQ_API_KEY"), reason="No Groq API key for fallback chain test")
 async def test_fallback_chain(azure_config):
-    """Test fallback chain (Azure → Groq)"""
-    # Configure both providers
+    """Test fallback chain (Azure → Groq): with no Azure key, should fall back to Groq."""
+    from warden.llm.factory import create_client_with_fallback_async
+
     config = LlmConfiguration(
         default_provider=LlmProvider.AZURE_OPENAI,
-        fallback_providers=[LlmProvider.GROQ]
-    )
-
-    # Azure config
-    config.azure_openai = azure_config.azure_openai
-
-    # Groq config (if available)
-    if os.getenv("GROQ_API_KEY"):
-        config.groq = ProviderConfig(
+        fallback_providers=[LlmProvider.GROQ],
+        groq=ProviderConfig(
             api_key=os.getenv("GROQ_API_KEY"),
             default_model="llama-3.3-70b-versatile",
-            enabled=True
-        )
+            enabled=True,
+        ),
+    )
 
-    # NOTE: Functional factory 'create_client_with_fallback' logic
-    # would need to be tested specifically if we want to simulate failure.
-    # For now, create_client just returns the client.
-    # To test actual fallback, we'd need to mock or ensure the first one fails.
-    # Skipping deep simulation for brevity, just ensuring create_client works.
-    
-    # Using 'create_client' (simpler) or 'create_client_with_fallback'?
-    # The original test used 'factory.create_client_with_fallback()'.
-    from warden.llm.factory import create_client_with_fallback
-    
-    # Should get Azure (or fallback to Groq if Azure fails)
-    client = await create_client_with_fallback(config)
+    client = await create_client_with_fallback_async(config)
 
     request = LlmRequest(
         system_prompt="You are a helpful assistant.",
         user_message="Say 'Fallback test successful!' and nothing else.",
-        max_tokens=20
+        max_tokens=20,
     )
 
     response = await client.send_async(request)

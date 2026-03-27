@@ -45,7 +45,7 @@ def _analyze(code: str, tmp_path: Path) -> list:
     """Run TaintAnalysisService on a Python code snippet and return TaintPath list."""
     service = TaintAnalysisService(project_root=tmp_path)
     code_files = [_make_code_file("target.py", code, "python")]
-    results = asyncio.get_event_loop().run_until_complete(
+    results = asyncio.run(
         service.analyze_all_async(code_files)
     )
     return results.get("target.py", [])

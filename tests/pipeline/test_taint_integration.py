@@ -58,7 +58,7 @@ class TestTaintPathsPopulatedInContext:
         service = TaintAnalysisService(project_root=tmp_path)
         code_files = [_make_code_file("app.py", VULNERABLE_PYTHON)]
 
-        results = asyncio.get_event_loop().run_until_complete(
+        results = asyncio.run(
             service.analyze_all_async(code_files)
         )
 
@@ -99,7 +99,7 @@ class TestSecurityFrameSharedPaths:
         frame.set_taint_paths({"app.py": [mock_tp]})
 
         cf = _make_code_file("app.py", VULNERABLE_PYTHON)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             frame.execute_async(cf)
         )
 
@@ -112,7 +112,7 @@ class TestSecurityFrameSharedPaths:
         # No set_taint_paths called — _taint_paths is empty
 
         cf = _make_code_file("app.py", VULNERABLE_PYTHON)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             frame.execute_async(cf)
         )
 
@@ -142,7 +142,7 @@ class TestTaintPopulationGracefulOnFailure:
             service = TaintAnalysisService(
                 project_root=Path("/nonexistent/path/that/does/not/exist")
             )
-            results = asyncio.get_event_loop().run_until_complete(
+            results = asyncio.run(
                 service.analyze_all_async([])
             )
             context.taint_paths = results
