@@ -137,6 +137,97 @@ class HTTPSecurityCheck(ValidationCheck):
         ),
     ]
 
+    # Insecure server binding patterns — all-interfaces exposure
+    BINDING_PATTERNS = [
+        # Python: uvicorn.run / app.run / mcp.settings.host = "0.0.0.0"
+        (
+            r"""(?:host\s*=\s*|\.host\s*=\s*)['"]0\.0\.0\.0['"]""",
+            "Server bound to all interfaces (0.0.0.0) — exposes service on every network interface including public",
+        ),
+        # Node.js: server.listen(port, '0.0.0.0') or app.listen(port, '0.0.0.0')
+        (
+            r"""\.listen\s*\([^,)]+,\s*['"]0\.0\.0\.0['"]""",
+            "Server listening on all interfaces (0.0.0.0)",
+        ),
+        # Go: net.Listen("tcp", "0.0.0.0:port") or http.ListenAndServe("0.0.0.0:...")
+        (
+            r"""(?:ListenAndServe|net\.Listen)\s*\(\s*["'][^"']*0\.0\.0\.0""",
+            "Go server bound to all interfaces (0.0.0.0)",
+        ),
+    ]
+
+    # Debug mode in production patterns
+    DEBUG_PATTERNS = [
+        # Flask: app.run(debug=True)
+        (
+            r"""app\.run\s*\([^)]*debug\s*=\s*True""",
+            "Flask app running with debug=True — exposes interactive debugger to clients",
+        ),
+        # Flask/Django settings: DEBUG = True
+        (
+            r"""^DEBUG\s*=\s*True\b""",
+            "DEBUG=True in settings file — must be False in production",
+        ),
+        # FastAPI/Uvicorn: uvicorn.run(..., reload=True)
+        (
+            r"""uvicorn\.run\s*\([^)]*reload\s*=\s*True""",
+            "Uvicorn running with reload=True — do not use in production",
+        ),
+        # Node: NODE_ENV != production / process.env.NODE_ENV === 'development'
+        (
+            r"""NODE_ENV\s*[=!]=\s*['"]development['"]""",
+            "Application running in development mode — ensure NODE_ENV=production in deployment",
+        ),
+    ]
+
+    # Exception info disclosure patterns — leaking stack traces / error details in HTTP response
+    EXCEPTION_DISCLOSURE_PATTERNS = [
+        # Python: return str(e) / return repr(e) in a route context
+        (
+            r"""return\s+(?:jsonify|str|repr)\s*\(\s*(?:e|err|error|exc|exception)\s*\)""",
+            "Exception object returned directly to client — may expose internals (CWE-209)",
+        ),
+        # Python: traceback in response
+        (
+            r"""traceback\.(?:format_exc|print_exc|format_tb)\s*\(\s*\)""",
+            "Stack trace captured — verify it is not sent to HTTP response (CWE-209)",
+        ),
+        # Flask: abort with error message
+        (
+            r"""abort\s*\(\s*\d+\s*,\s*(?:str|repr)\s*\(\s*(?:e|err|error)\s*\)""",
+            "abort() called with raw exception message — leaks error details to client",
+        ),
+        # Express: res.send(err) / res.json({ error: err.message })
+        (
+            r"""res\.\s*(?:send|json)\s*\([^)]*(?:err\.message|err\.stack|error\.message)\s*\)""",
+            "Express response includes exception message/stack — exposes internals (CWE-209)",
+        ),
+        # Go: http.Error with err.Error()
+        (
+            r"""http\.Error\s*\([^,]+,\s*err\.Error\s*\(\)""",
+            "Go HTTP error response includes raw error string (CWE-209)",
+        ),
+    ]
+
+    # Sensitive credentials accepted via HTTP request headers (CWE-522)
+    CREDENTIAL_IN_HEADER_PATTERNS = [
+        # Python frameworks: request.headers.get("*private*") / request.headers["*secret*"]
+        (
+            r"""request\.headers\s*(?:\.get\s*\(|\.getlist\s*\(|\[)\s*['"][^'"]*(?:private[_-]?key|secret[_-]?key|signing[_-]?key|priv[_-]?key)[^'"]*['"]""",
+            "Private/signing key accepted via HTTP request header — use proper auth (OAuth, mTLS) instead",
+        ),
+        # Express: req.headers['x-*-private-key'] / req.get('x-secret-key')
+        (
+            r"""req\.(?:headers\s*\[|get\s*\()\s*['"][^'"]*(?:private[_-]?key|secret[_-]?key|signing[_-]?key)[^'"]*['"]""",
+            "Private/signing key accepted via HTTP request header (CWE-522)",
+        ),
+        # Go: r.Header.Get("X-Private-Key")
+        (
+            r"""\.Header\.Get\s*\(\s*["'][^"']*(?:private[_-]?key|secret[_-]?key|signing[_-]?key)[^"']*["']\s*\)""",
+            "Private/signing key accepted via HTTP request header (CWE-522)",
+        ),
+    ]
+
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize HTTP security check."""
         super().__init__(config)
@@ -162,6 +253,20 @@ class HTTPSecurityCheck(ValidationCheck):
         self._express_import_pattern = re.compile(r"""import\s+.*\s+from\s+['"]express['"]""")
         self._helmet_pattern = re.compile(r"""helmet\s*\(""")
 
+        # Pre-compile new pattern groups
+        self._compiled_binding_patterns = [
+            (re.compile(p, re.IGNORECASE), d) for p, d in self.BINDING_PATTERNS
+        ]
+        self._compiled_debug_patterns = [
+            (re.compile(p, re.MULTILINE), d) for p, d in self.DEBUG_PATTERNS
+        ]
+        self._compiled_exception_patterns = [
+            (re.compile(p, re.IGNORECASE), d) for p, d in self.EXCEPTION_DISCLOSURE_PATTERNS
+        ]
+        self._compiled_credential_header_patterns = [
+            (re.compile(p, re.IGNORECASE), d) for p, d in self.CREDENTIAL_IN_HEADER_PATTERNS
+        ]
+
     async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """Execute HTTP security misconfiguration detection."""
         findings: list[CheckFinding] = []
@@ -170,6 +275,10 @@ class HTTPSecurityCheck(ValidationCheck):
         findings.extend(self._check_cors(code_file))
         findings.extend(self._check_cookies(code_file))
         findings.extend(self._check_missing_headers(code_file))
+        findings.extend(self._check_insecure_binding(code_file))
+        findings.extend(self._check_debug_mode(code_file))
+        findings.extend(self._check_exception_disclosure(code_file))
+        findings.extend(self._check_credential_in_headers(code_file))
 
         return CheckResult(
             check_id=self.id,
@@ -423,3 +532,131 @@ class HTTPSecurityCheck(ValidationCheck):
             missing.append("samesite")
 
         return missing
+
+    def _check_insecure_binding(self, code_file: CodeFile) -> list[CheckFinding]:
+        """Detect server bound to all network interfaces (0.0.0.0)."""
+        findings: list[CheckFinding] = []
+        for line_num, line in enumerate(code_file.content.split("\n"), start=1):
+            if line.strip().startswith(("#", "//", "*")):
+                continue
+            for pattern, description in self._compiled_binding_patterns:
+                if pattern.search(line):
+                    suppression_matcher = self._get_suppression_matcher(code_file.path)
+                    if suppression_matcher and suppression_matcher.is_suppressed(
+                        line=line_num, rule=self.id,
+                        file_path=str(code_file.path), code=code_file.content,
+                    ):
+                        continue
+                    findings.append(CheckFinding(
+                        check_id=self.id,
+                        check_name=self.name,
+                        severity=CheckSeverity.MEDIUM,
+                        message=f"Insecure server binding: {description}",
+                        location=f"{code_file.path}:{line_num}",
+                        code_snippet=line.strip(),
+                        suggestion=(
+                            "Bind to a specific interface or use a reverse proxy:\n"
+                            "✅ GOOD: host='127.0.0.1'  # localhost only\n"
+                            "✅ GOOD: host='0.0.0.0' behind nginx/Caddy with auth middleware\n"
+                            "❌ BAD:  host='0.0.0.0' directly exposed without auth"
+                        ),
+                        documentation_url="https://owasp.org/www-project-top-ten/",
+                    ))
+                    break
+        return findings
+
+    def _check_debug_mode(self, code_file: CodeFile) -> list[CheckFinding]:
+        """Detect debug/development mode enabled in production code."""
+        findings: list[CheckFinding] = []
+        for line_num, line in enumerate(code_file.content.split("\n"), start=1):
+            if line.strip().startswith(("#", "//", "*")):
+                continue
+            for pattern, description in self._compiled_debug_patterns:
+                if pattern.search(line):
+                    suppression_matcher = self._get_suppression_matcher(code_file.path)
+                    if suppression_matcher and suppression_matcher.is_suppressed(
+                        line=line_num, rule=self.id,
+                        file_path=str(code_file.path), code=code_file.content,
+                    ):
+                        continue
+                    findings.append(CheckFinding(
+                        check_id=self.id,
+                        check_name=self.name,
+                        severity=CheckSeverity.HIGH,
+                        message=f"Debug mode in production: {description}",
+                        location=f"{code_file.path}:{line_num}",
+                        code_snippet=line.strip(),
+                        suggestion=(
+                            "Disable debug mode before deploying:\n"
+                            "✅ GOOD: app.run(debug=False) or use FLASK_ENV=production\n"
+                            "✅ GOOD: DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'\n"
+                            "❌ BAD:  app.run(debug=True) in production"
+                        ),
+                        documentation_url="https://flask.palletsprojects.com/en/latest/config/#DEBUG",
+                    ))
+                    break
+        return findings
+
+    def _check_exception_disclosure(self, code_file: CodeFile) -> list[CheckFinding]:
+        """Detect exception details being returned in HTTP responses (CWE-209)."""
+        findings: list[CheckFinding] = []
+        for line_num, line in enumerate(code_file.content.split("\n"), start=1):
+            if line.strip().startswith(("#", "//", "*")):
+                continue
+            for pattern, description in self._compiled_exception_patterns:
+                if pattern.search(line):
+                    suppression_matcher = self._get_suppression_matcher(code_file.path)
+                    if suppression_matcher and suppression_matcher.is_suppressed(
+                        line=line_num, rule=self.id,
+                        file_path=str(code_file.path), code=code_file.content,
+                    ):
+                        continue
+                    findings.append(CheckFinding(
+                        check_id=self.id,
+                        check_name=self.name,
+                        severity=CheckSeverity.MEDIUM,
+                        message=f"Exception info disclosure: {description}",
+                        location=f"{code_file.path}:{line_num}",
+                        code_snippet=line.strip(),
+                        suggestion=(
+                            "Return generic error messages to clients; log details server-side:\n"
+                            "✅ GOOD: return jsonify({'error': 'Internal server error'}), 500\n"
+                            "✅ GOOD: logger.exception('Request failed'); return 500\n"
+                            "❌ BAD:  return jsonify({'error': str(e)})  # leaks internals"
+                        ),
+                        documentation_url="https://cwe.mitre.org/data/definitions/209.html",
+                    ))
+                    break
+        return findings
+
+    def _check_credential_in_headers(self, code_file: CodeFile) -> list[CheckFinding]:
+        """Detect private/secret keys accepted via HTTP request headers (CWE-522)."""
+        findings: list[CheckFinding] = []
+        for line_num, line in enumerate(code_file.content.split("\n"), start=1):
+            if line.strip().startswith(("#", "//", "*")):
+                continue
+            for pattern, description in self._compiled_credential_header_patterns:
+                if pattern.search(line):
+                    suppression_matcher = self._get_suppression_matcher(code_file.path)
+                    if suppression_matcher and suppression_matcher.is_suppressed(
+                        line=line_num, rule=self.id,
+                        file_path=str(code_file.path), code=code_file.content,
+                    ):
+                        continue
+                    findings.append(CheckFinding(
+                        check_id=self.id,
+                        check_name=self.name,
+                        severity=CheckSeverity.HIGH,
+                        message=f"Credential exposure via HTTP header: {description}",
+                        location=f"{code_file.path}:{line_num}",
+                        code_snippet=line.strip(),
+                        suggestion=(
+                            "Use proper authentication mechanisms instead of raw secrets in headers:\n"
+                            "✅ GOOD: OAuth 2.0 / mTLS client certificates\n"
+                            "✅ GOOD: Short-lived JWT tokens in Authorization header\n"
+                            "❌ BAD:  Transmitting private keys or long-lived secrets in custom headers"
+                        ),
+                        documentation_url="https://cwe.mitre.org/data/definitions/522.html",
+                    ))
+                    break
+        return findings

@@ -58,11 +58,13 @@ class QwenCliClient(ILlmClient):
                 duration_ms=0,
             )
 
-        # Build full prompt
-        no_tool_prefix = (
-            "IMPORTANT: Respond with text only. Do NOT use any tools. "
-            "Provide your analysis as plain text.\n\n"
-        )
+        # Build full prompt — detect JSON mode from prompt content
+        _msg_lower = (request.user_message or "").lower()
+        _wants_json = "json" in _msg_lower[:200] or "json" in _msg_lower[-400:]
+        if _wants_json:
+            no_tool_prefix = "IMPORTANT: Do NOT use any tools. Output ONLY valid JSON.\n\n"
+        else:
+            no_tool_prefix = "IMPORTANT: Do NOT use any tools.\n\n"
         if request.system_prompt:
             full_prompt = f"{request.system_prompt}\n\n{no_tool_prefix}{request.user_message}"
         else:
