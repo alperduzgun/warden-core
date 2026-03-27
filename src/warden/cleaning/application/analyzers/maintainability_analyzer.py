@@ -219,8 +219,8 @@ class MaintainabilityAnalyzer(BaseCleaningAnalyzer):
             elif isinstance(node, ast.Name):
                 operands.add(node.id)
                 total_operands += 1
-            elif isinstance(node, (ast.Constant, ast.Num, ast.Str)):
-                value = getattr(node, "value", getattr(node, "n", getattr(node, "s", "")))
+            elif isinstance(node, ast.Constant):
+                value = node.value
                 operands.add(str(value))
                 total_operands += 1
 

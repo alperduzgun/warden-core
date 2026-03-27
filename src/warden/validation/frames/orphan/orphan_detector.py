@@ -220,8 +220,6 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                             for elt in node.value.elts:
                                 if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
                                     all_exports.add(elt.value)
-                                elif isinstance(elt, ast.Str):  # Python 3.7 compat
-                                    all_exports.add(elt.s)
 
         # Collect all name references (excluding import statements)
         references: set[str] = set()
