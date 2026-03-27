@@ -443,7 +443,8 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                             logger.debug("spec_analysis_added_to_prompt", file=code_file.path, contracts=len(relevant))
 
                 # 1b. Cross-file context (import graph + value propagation)
-                cross_ctx = getattr(context, "cross_file_context", None)
+                # Use pipeline context if available, fall back to standalone-built context (STEP 0.5)
+                cross_ctx = getattr(context, "cross_file_context", None) or cross_file_ctx
                 if cross_ctx:
                     from warden.analysis.services.cross_file_analyzer import CrossFileAnalyzer
 
@@ -535,7 +536,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                             for res in search_results:
                                 if res.chunk.file_path != code_file.path:
                                     semantic_context += (
-                                        f"- File: {res.chunk.file_path}\n  Code: {res.chunk.content[:200]}...\n"
+                                        f"- File: {res.chunk.file_path}\n  Code: {res.chunk.content[:500]}...\n"
                                     )
                     except Exception as e:
                         logger.warning("security_semantic_search_failed", error=str(e))

@@ -269,7 +269,11 @@ If no issues: {{"findings":[]}}
             result = await self._analyze_security_single(chunk["code"], language, use_fast_tier, header)
             for f in result.get("findings", []):
                 if isinstance(f.get("line_number"), int):
-                    f["line_number"] += chunk["start"] - 1
+                    raw = f["line_number"]
+                    # If LLM returned an absolute line (within chunk range), keep it.
+                    # If it returned a relative line (< chunk start), apply offset.
+                    if not (chunk["start"] <= raw <= chunk["end"]):
+                        f["line_number"] = raw + chunk["start"] - 1
                 all_findings.append(f)
 
         deduped = self._dedup_findings(all_findings)
@@ -293,7 +297,8 @@ If no issues: {{"findings":[]}}
                     break
                 tok += lt
                 end += 1
-            chunks.append({"code": "".join(lines[pos:end]), "start": pos + 1, "end": end})
+            numbered = [f"{pos + i + 1}: {line}" for i, line in enumerate(lines[pos:end])]
+            chunks.append({"code": "".join(numbered), "start": pos + 1, "end": end})
             if end >= len(lines):
                 break
             pos = max(pos + 1, end - overlap)

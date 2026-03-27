@@ -205,7 +205,7 @@ def truncate_with_ast_hints(
         if prev_idx >= 0 and idx > prev_idx + 1:
             gap = idx - prev_idx - 1
             result_parts.append(f"  ... [{gap} lines omitted] ...")
-        result_parts.append(lines[idx])
+        result_parts.append(f"{idx + 1}: {lines[idx]}")
         prev_idx = idx
 
     result = "\n".join(result_parts)

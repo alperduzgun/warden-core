@@ -287,16 +287,20 @@ class CrossFileAnalyzer:
             val_strs = [f"{v.name}={v.value_repr}" for v in sensitive[:5]]
             parts.append(f"Exports: {', '.join(val_strs)}")
 
-        # Functions that accept 'request' or user-input-like params
+        # Functions that accept user input — include first 8 lines of body
         try:
             tree = ast.parse(code_file.content)
+            lines = code_file.content.splitlines()
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     params = [a.arg for a in node.args.args]
                     has_input = any(p in ("request", "req", "data", "payload", "user_input", "query")
                                    for p in params)
                     if has_input:
-                        parts.append(f"fn {node.name}({', '.join(params[:4])}) → accepts user input")
+                        start = node.lineno - 1
+                        end = min(start + 8, getattr(node, "end_lineno", start + 8))
+                        body_snippet = "\n".join(lines[start:end])
+                        parts.append(f"fn {node.name}({', '.join(params[:4])}):\n{body_snippet}")
         except SyntaxError:
             pass
 
