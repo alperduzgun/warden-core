@@ -288,7 +288,7 @@ class FrameFetcher:
                 cmd.extend(["-b", ref])
 
             logger.info("executing_git_clone", url=url, ref=ref, attempt=attempt + 1)
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
             if result.returncode == 0:
                 break

@@ -35,6 +35,7 @@ class GitHelper:
                     cwd=str(self.working_dir),
                     check=True,
                     capture_output=True,
+                    timeout=10,
                 )
             except subprocess.CalledProcessError:
                 raise RuntimeError(f"Directory {working_dir} is not a git repository")
@@ -92,7 +93,7 @@ class GitHelper:
             # Try 3-dot (merge-base) first, fallback to 2-dot if no merge-base
             if any("..." in arg for arg in cmd):
                 try:
-                    result = subprocess.run(cmd, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
+                    result = subprocess.run(cmd, cwd=str(self.working_dir), capture_output=True, text=True, check=True, timeout=30)
                     for line in result.stdout.splitlines():
                         if line.strip():
                             changed_files.add(line.strip())
@@ -101,7 +102,7 @@ class GitHelper:
                     cmd_2dot = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", f"{target}..HEAD"]
                     logger.warning("merge_base_fallback", target=target, strategy="2-dot diff")
                     try:
-                        result = subprocess.run(cmd_2dot, cwd=str(self.working_dir), capture_output=True, text=True, check=True)
+                        result = subprocess.run(cmd_2dot, cwd=str(self.working_dir), capture_output=True, text=True, check=True, timeout=30)
                         for line in result.stdout.splitlines():
                             if line.strip():
                                 changed_files.add(line.strip())
@@ -111,7 +112,7 @@ class GitHelper:
             # B. Unstaged/Staged changes (Current working tree vs HEAD)
             cmd_dirty = [self.git_cmd, "diff", "--name-only", f"--diff-filter={diff_filter}", "HEAD"]
             result_dirty = subprocess.run(
-                cmd_dirty, cwd=str(self.working_dir), capture_output=True, text=True, check=True
+                cmd_dirty, cwd=str(self.working_dir), capture_output=True, text=True, check=True, timeout=30
             )
             for line in result_dirty.stdout.splitlines():
                 if line.strip():
@@ -120,7 +121,7 @@ class GitHelper:
             # C. Untracked files
             cmd_untracked = [self.git_cmd, "ls-files", "--others", "--exclude-standard"]
             result_untracked = subprocess.run(
-                cmd_untracked, cwd=str(self.working_dir), capture_output=True, text=True, check=True
+                cmd_untracked, cwd=str(self.working_dir), capture_output=True, text=True, check=True, timeout=30
             )
             for line in result_untracked.stdout.splitlines():
                 if line.strip():
@@ -172,6 +173,7 @@ class GitHelper:
                     capture_output=True,
                     text=True,
                     check=True,
+                    timeout=30,
                 )
                 diff_output = result.stdout
             except subprocess.CalledProcessError:
@@ -183,6 +185,7 @@ class GitHelper:
                     capture_output=True,
                     text=True,
                     check=False,
+                    timeout=30,
                 )
                 diff_output = result.stdout
 
@@ -193,6 +196,7 @@ class GitHelper:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=30,
             )
             if result_dirty.stdout:
                 diff_output += "\n" + result_dirty.stdout
@@ -206,7 +210,7 @@ class GitHelper:
         """Check if a git reference exists."""
         try:
             subprocess.run(
-                [self.git_cmd, "rev-parse", "--verify", ref], cwd=str(self.working_dir), capture_output=True, check=True
+                [self.git_cmd, "rev-parse", "--verify", ref], cwd=str(self.working_dir), capture_output=True, check=True, timeout=10
             )
             return True
         except subprocess.CalledProcessError:

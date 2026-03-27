@@ -114,6 +114,7 @@ class AutoInstaller:
                 capture_output=True,
                 text=True,
                 check=True,  # Raises CalledProcessError on non-zero exit
+                timeout=120,
             )
 
             # Verify installation
@@ -174,6 +175,7 @@ class AutoInstaller:
                 capture_output=True,
                 text=True,
                 check=True,  # Fail fast
+                timeout=30,
             )
             return InstallResult(success=True, message="Verification successful")
 
@@ -193,6 +195,7 @@ class AutoInstaller:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=30,
             )
             # Extract version from output
             version_line = result.stdout.strip()
@@ -375,6 +378,7 @@ warden --version
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=10,
             )
             return result.returncode == 0
         except Exception:

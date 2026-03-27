@@ -31,6 +31,7 @@ def get_staged_files() -> list[str]:
         capture_output=True,
         text=True,
         check=False,
+        timeout=30,
     )
 
     if result.returncode != 0:
@@ -189,7 +190,7 @@ if __name__ == "__main__":
             "--ci",
         ] + staged_files
 
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=300)
 
         if result.returncode != 0:
             print("❌ Warden found issues in staged files:")
@@ -208,6 +209,7 @@ if __name__ == "__main__":
             capture_output=True,
             text=True,
             check=False,
+            timeout=30,
         )
 
         if result.returncode != 0:
