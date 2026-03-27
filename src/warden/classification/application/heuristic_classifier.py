@@ -107,29 +107,39 @@ _ANTIPATTERN_PATTERNS = (
     "metaclass=",
 )
 
-# Security-sensitive patterns that cap confidence to force LLM review
-_SECURITY_SENSITIVE_PATTERNS = (
+# Patterns that ALWAYS force LLM review by capping confidence below threshold.
+# These represent truly security-critical code where heuristics are insufficient:
+# crypto primitives, raw secret material, dangerous shell execution.
+_FORCE_LLM_PATTERNS = (
     "password",
-    "secret",
-    "token",
-    "api_key",
     "private_key",
     "hmac",
     "sha256",
+    "sha512",
     "AES",
     "RSA",
-    "auth",
-    "login",
     "jwt",
     "oauth",
+    "os.system",
+    "shell=True",
+)
+
+# Patterns that indicate security-relevant code but are common in ordinary
+# web/backend projects (Flask, Django, SQLAlchemy).  These keep the security
+# frame but do NOT cap confidence — the security frame itself ensures LLM
+# review for actual vulnerabilities.
+_SECURITY_SENSITIVE_PATTERNS = (
+    "secret",
+    "token",
+    "api_key",
+    "auth",
+    "login",
     "session",
     "cookie",
     "sql",
     "execute(",
     "cursor.",
     "subprocess.",
-    "os.system",
-    "shell=True",
 )
 
 
@@ -220,12 +230,14 @@ class HeuristicClassifier:
             reasons.append(f"architecture: {file_count} files suggest multi-module project")
             confidence += 0.02
 
-        # ── Security-sensitive: cap confidence, force LLM review ───────────
-        if any(pat in combined for pat in _SECURITY_SENSITIVE_PATTERNS):
+        # ── Force LLM for crypto/secrets/dangerous-exec patterns ───────────
+        # Only truly critical patterns cap confidence; common web patterns
+        # (auth, sql, session) keep their signal but don't block LLM skip.
+        if any(pat in combined for pat in _FORCE_LLM_PATTERNS):
             confidence = min(confidence, SKIP_LLM_THRESHOLD - 0.01)
-            reasons.append("confidence_capped: security-sensitive patterns present → LLM review required")
+            reasons.append("confidence_capped: crypto/secret/dangerous-exec patterns → LLM review required")
 
-        # ── Single-file trivial project: high confidence ────────────────────
+        # ── Single-file trivial project: force LLM for accuracy ─────────────
         if file_count == 1 and len(combined) < 500:
             confidence = min(confidence, SKIP_LLM_THRESHOLD - 0.01)
             reasons.append("confidence_capped: tiny single file → LLM review for accuracy")
