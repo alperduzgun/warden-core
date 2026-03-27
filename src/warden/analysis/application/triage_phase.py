@@ -3,6 +3,7 @@ TRIAGE Phase Orchestrator (Phase 0.5).
 Executes the Adaptive Hybrid Triage strategy.
 """
 
+import asyncio
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -18,6 +19,21 @@ from warden.pipeline.domain.pipeline_context import PipelineContext
 from warden.validation.domain.frame import CodeFile
 
 logger = structlog.get_logger()
+
+_LLM_AVAILABILITY_TIMEOUT_S = 3.0  # Fast probe — don't block startup
+
+
+async def _check_llm_available(llm_service: Any) -> bool:
+    """Return True if the LLM client responds within _LLM_AVAILABILITY_TIMEOUT_S."""
+    if not hasattr(llm_service, "is_available_async"):
+        return True  # Non-probing client — assume available
+    try:
+        return await asyncio.wait_for(
+            llm_service.is_available_async(),
+            timeout=_LLM_AVAILABILITY_TIMEOUT_S,
+        )
+    except Exception:
+        return False
 
 
 class TriagePhase:
@@ -53,6 +69,42 @@ class TriagePhase:
             self.progress_callback("triage_started", {"total_files": len(code_files)})
 
         decisions = {}
+
+        # Fast availability probe — if LLM is unreachable, skip it entirely
+        # rather than waiting for per-request timeouts across all files.
+        llm_available = await _check_llm_available(self.llm_service)
+        if not llm_available:
+            logger.warning(
+                "triage_llm_unavailable_fallback",
+                reason="LLM did not respond within availability probe window",
+                action="routing all files to MIDDLE lane",
+            )
+            for file in code_files:
+                fallback = TriageDecision(
+                    file_path=str(file.path),
+                    lane=TriageLane.MIDDLE,
+                    risk_score=RiskScore(
+                        score=5,
+                        confidence=0,
+                        reasoning="LLM unavailable — heuristic fallback",
+                        category="unavailable",
+                    ),
+                    processing_time_ms=0,
+                )
+                decisions[str(file.path)] = fallback.model_dump()
+
+            pipeline_context.triage_decisions = decisions
+            logger.info(
+                "triage_phase_completed_no_llm",
+                total=len(decisions),
+                lane="MIDDLE",
+            )
+            if self.progress_callback:
+                self.progress_callback(
+                    "triage_completed",
+                    {"duration": "0.00s", "stats": {"fast": 0, "middle": len(decisions), "deep": 0}},
+                )
+            return decisions
 
         # Attribute LLM calls in this phase to "triage" scope
         from warden.llm.metrics import get_global_metrics_collector
