@@ -17,10 +17,13 @@ from warden.shared.utils.retry_utils import async_retry
 
 logger = get_logger(__name__)
 
-# Deterministic detection sources that should NEVER be suppressed by LLM verification.
-# These are produced by pattern matching, AST analysis, taint tracing, or Rust engine —
-# their output is factual, not probabilistic.
-_DETERMINISTIC_SOURCES = frozenset({"regex", "ast", "taint", "rust_engine"})
+# High-precision sources produce exact structural/pattern matches — no LLM needed.
+_HIGH_PRECISION_SOURCES = frozenset({"regex", "ast", "rust_engine"})
+
+# Taint analysis is probabilistic (typical confidence 0.60–0.75).
+# Sending taint findings to LLM verification reduces false positives.
+# Keep this set for callers that need the full list.
+_DETERMINISTIC_SOURCES = _HIGH_PRECISION_SOURCES | frozenset({"taint"})
 
 
 class FindingVerificationService:
@@ -123,14 +126,15 @@ Return ONLY a JSON object:
                 verified_findings.append(finding)
                 continue
 
-            # Exempt deterministic findings from LLM verification.
-            # Regex, AST, taint, and rust_engine findings are produced by
-            # deterministic analyzers — LLM should not suppress them.
+            # Exempt high-precision findings from LLM verification.
+            # Regex, AST, and rust_engine produce exact structural matches — LLM adds
+            # no value and only risks suppressing real issues.
+            # Taint findings are probabilistic and benefit from LLM FP reduction.
             det_source = (
                 self._get(finding, "detection_source")
                 or self._get(finding, "detectionSource")
             )
-            if det_source in _DETERMINISTIC_SOURCES:
+            if det_source in _HIGH_PRECISION_SOURCES:
                 self._set(finding, "confidence", 1.0)
                 self._set(finding, "is_true_positive", True)
                 self._set(finding, "verification_source", "deterministic_exempt")
@@ -368,6 +372,50 @@ Return ONLY a JSON object:
 
         return False
 
+    def _get_enriched_code(self, finding: Any, context: Any, token_budget: int = 400) -> str:
+        """Build focused code context using ContextSlicerService when possible.
+
+        Resolves file_path + line_number from the finding, reads the source file,
+        and returns function-scoped context via ContextSlicerService.
+        Falls back to the stored code snippet on any error.
+        """
+        raw_code = self._get(finding, "code") or "N/A"
+
+        file_path = self._get(finding, "file_path") or ""
+        if not file_path:
+            location = self._get(finding, "location") or ""
+            file_path = location.split(":")[0] if ":" in location else location
+
+        line_number = self._get(finding, "line_number")
+        if not file_path or not line_number:
+            return raw_code
+
+        try:
+            from pathlib import Path as _Path
+
+            file_content = _Path(file_path).read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            return raw_code
+
+        try:
+            from warden.analysis.services.context_slicer import (
+                ContextSlicerService,
+                get_ast_and_graph_from_context,
+            )
+
+            ast_root, code_graph = get_ast_and_graph_from_context(context, file_path)
+            slicer = ContextSlicerService()
+            return slicer.build_focused_context(
+                file_content=file_content,
+                file_path=file_path,
+                target_lines=[int(line_number)],
+                ast_root=ast_root,
+                code_graph=code_graph,
+                token_budget=token_budget,
+            )
+        except Exception:
+            return raw_code
+
     @async_retry(retries=2, initial_delay=1.0, backoff_factor=2.0)
     async def _verify_batch_with_llm_async(
         self, batch: list[dict[str, Any]], context: Any = None
@@ -384,14 +432,15 @@ Return ONLY a JSON object:
                 f_id = self._get(f, "id", "unknown")
                 f_rule = self._get(f, "rule_id", "unknown")
                 f_msg = self._get(f, "message", "unknown")
-                f_code = self._get(f, "code", "N/A")
+                f_code = self._get_enriched_code(f, context)
 
                 findings_summary += f"""
 FINDING #{i}:
 - ID: {f_id}
 - Rule: {f_rule}
 - Message: {f_msg}
-- Code: `{f_code}`
+- Code:
+{f_code}
 """
             except Exception as e:
                 import traceback

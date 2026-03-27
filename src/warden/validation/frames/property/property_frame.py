@@ -98,9 +98,14 @@ Focus on:
 3. Logical fallacies (always true/false conditions, dead code).
 4. State machine transitions (illegal states, race conditions).
 5. Mathematical properties (division by zero, overflow, precision loss).
+6. Mutable-argument mutation in loops: dict.pop() / del / .remove() applied to a shared mutable argument inside a retry or iteration loop modifies the original collection on the first pass — subsequent iterations silently use a different value or fall back to a default.
+7. Exception hierarchy gaps: a call site that can raise both ExceptionTypeA and ExceptionTypeB, where only ExceptionTypeA is caught — ExceptionTypeB propagates uncaught and crashes the caller.
+8. Inert template-literal syntax: string literals containing "${var}", "{{var}}", or similar substitution markers that are valid in another language but never interpolated in the current one — the variable is never substituted, and the literal string is used as-is.
+9. Unbounded concurrent I/O: asyncio.gather / Promise.all / goroutine fan-out with no semaphore or rate-limit, where fan-out count scales with input size, can saturate connections or memory.
 
 KNOWN SAFE PATTERNS — do NOT flag these as issues:
 - Python's `contextvars.ContextVar` (PEP 567): This is the official async-safe per-task state mechanism since Python 3.7. It is designed specifically for use in asyncio, FastAPI, Starlette, and other async frameworks. Never flag ContextVar usage as an async safety concern, thread safety issue, or race condition.
+- Python f-strings and str.format(): these DO interpolate — never flag them as "inert template syntax".
 
 Output must be a valid JSON object with the following structure:
 {
@@ -127,8 +132,15 @@ Output must be a valid JSON object with the following structure:
 
     BATCH_SYSTEM_PROMPT = """You are an expert Formal Verification and Property Testing analyst. Analyze the provided code files for logical errors, invariant violations, and precondition failures.
 
+Focus on (in addition to standard logic analysis):
+- Mutable-argument mutation in loops: dict.pop() / del / .remove() on a shared mutable argument inside a retry or iteration loop modifies the collection on the first pass — subsequent iterations silently use a different value.
+- Exception hierarchy gaps: a call site that can raise multiple exception types where only a subset is caught — sibling exceptions propagate uncaught.
+- Inert template-literal syntax: "${var}" or "{{var}}" patterns that look like substitution markers but are never interpolated in the current language context.
+- Unbounded concurrent I/O: asyncio.gather / Promise.all / goroutine fan-out with no semaphore where fan-out scales with input size.
+
 KNOWN SAFE PATTERNS — do NOT flag these as issues:
 - Python's `contextvars.ContextVar` (PEP 567): This is the official async-safe per-task state mechanism since Python 3.7. It is designed specifically for use in asyncio, FastAPI, Starlette, and other async frameworks. Never flag ContextVar usage as an async safety concern, thread safety issue, or race condition.
+- Python f-strings and str.format(): these DO interpolate — never flag them as "inert template syntax".
 
 For EACH file, output a JSON object. Return a JSON array where each element corresponds to a file:
 [
@@ -659,6 +671,16 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
         ("contextvar", "race"),
         ("contextvar", "safety"),
         ("contextvar", "safe"),
+        # Exception hierarchy — FP when the handler is a broad base class that covers all cases.
+        ("exception hierarchy", "base exception"),
+        ("exception hierarchy", "catches all"),
+        # Inert template literal — FP for f-strings and str.format() which DO interpolate.
+        ("template", "f-string"),
+        ("template", "format_map"),
+        ("inert template", "f-string"),
+        # Unbounded gather — FP when a semaphore is already present in the same scope.
+        ("unbounded", "semaphore"),
+        ("concurrency", "bounded"),
     ]
 
     # Keywords that, when present in a LOW-severity LLM finding's combined
@@ -681,6 +703,14 @@ For EACH file, output a JSON object. Return a JSON array where each element corr
             "not externalized",
             "externalize",
             "should be configurable",
+            # Exception hierarchy noise — vague reports that don't name the uncaught exception type.
+            "may not be caught",
+            "might not be caught",
+            "could raise other exceptions",
+            # Inert template noise — reports on non-interpolating string contexts without proof.
+            "may not be interpolated",
+            "might not be interpolated",
+            "template syntax not evaluated",
         }
     )
 
