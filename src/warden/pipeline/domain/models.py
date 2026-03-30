@@ -109,6 +109,9 @@ class PipelineConfig(BaseDomainModel):
     # LSP Integration (NEW!)
     lsp_config: dict[str, Any] | None = None  # LSP integration configuration (enabled, servers)
 
+    # Runtime state (not serialized) — wired by PreAnalysisExecutor after phase completes
+    memory_manager: Any | None = Field(default=None, exclude=True)  # LLM verification cache
+
     def get_tpm_limit(self) -> int:
         """Resolve tpm_limit from llm_config dict, default 1000."""
         if self.llm_config:

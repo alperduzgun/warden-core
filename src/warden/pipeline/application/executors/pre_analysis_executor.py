@@ -59,6 +59,10 @@ class PreAnalysisExecutor(BasePhaseExecutor):
 
                 result = await phase.execute_async(code_files, pipeline_context=context)
 
+                # Wire memory_manager to config so downstream executors can use LLM cache (#595)
+                if hasattr(phase, "memory_manager") and phase.memory_manager is not None:
+                    self.config.memory_manager = phase.memory_manager
+
                 # Store results in context
                 context.project_type = result.project_context  # legacy field (may hold full object)
                 context.project_context = result.project_context  # dedicated typed field
