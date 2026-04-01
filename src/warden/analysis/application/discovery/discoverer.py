@@ -77,6 +77,10 @@ class FileDiscoverer:
         # Discover files
         files = await self._discover_files_async()
 
+        # Sort by mtime descending so recently modified files are analysed first.
+        # Failures to stat a path are treated as mtime=0 (sort to end).
+        files.sort(key=lambda f: Path(f.path).stat().st_mtime if Path(f.path).exists() else 0.0, reverse=True)
+
         # Detect frameworks
         framework_detector = FrameworkDetector(self.root_path)
         framework_result = await framework_detector.detect()
