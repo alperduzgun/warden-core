@@ -22,6 +22,8 @@ from warden.llm.types import LlmRequest
 
 logger = structlog.get_logger(__name__)
 
+_MAX_CODE_FILE_BYTES: int = 256 * 1024  # 256 KB — prevents OOM on large/generated files
+
 
 class ServiceCategory(Enum):
     """Category of service abstraction."""
@@ -347,7 +349,7 @@ class ServiceAbstractionDetector:
         if not provider:
             return
 
-        content = file_path.read_text(encoding="utf-8", errors="ignore")
+        content = file_path.read_bytes()[:_MAX_CODE_FILE_BYTES].decode("utf-8", errors="ignore")
         result = await provider.parse(content, language, str(file_path))
 
         if not result.ast_root:

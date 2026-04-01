@@ -32,6 +32,8 @@ from warden.shared.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
+_MAX_CODE_FILE_BYTES: int = 256 * 1024  # 256 KB — prevents OOM on large/generated files
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -279,7 +281,7 @@ class DataDependencyBuilder:
             ddg: Graph to accumulate results into.
         """
         try:
-            source = file_path.read_text(encoding="utf-8", errors="replace")
+            source = file_path.read_bytes()[:_MAX_CODE_FILE_BYTES].decode("utf-8", errors="replace")
             tree = ast.parse(source, filename=str(file_path))
         except SyntaxError as exc:
             logger.debug(
@@ -323,7 +325,7 @@ class DataDependencyBuilder:
 
         for pc_file in candidates:
             try:
-                source = pc_file.read_text(encoding="utf-8", errors="replace")
+                source = pc_file.read_bytes()[:_MAX_CODE_FILE_BYTES].decode("utf-8", errors="replace")
                 tree = ast.parse(source, filename=str(pc_file))
             except (SyntaxError, OSError):
                 continue

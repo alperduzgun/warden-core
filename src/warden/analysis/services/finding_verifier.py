@@ -17,6 +17,8 @@ from warden.shared.utils.retry_utils import async_retry
 
 logger = get_logger(__name__)
 
+_MAX_CODE_FILE_BYTES: int = 256 * 1024  # 256 KB — prevents OOM on large/generated files
+
 # High-precision sources produce exact structural/pattern matches — no LLM needed.
 _HIGH_PRECISION_SOURCES = frozenset({"regex", "ast", "rust_engine"})
 
@@ -408,7 +410,7 @@ Return ONLY a JSON object:
         try:
             from pathlib import Path as _Path
 
-            file_content = _Path(file_path).read_text(encoding="utf-8", errors="replace")
+            file_content = _Path(file_path).read_bytes()[:_MAX_CODE_FILE_BYTES].decode("utf-8", errors="replace")
         except Exception:
             return raw_code
 

@@ -40,6 +40,8 @@ from .data_flow_analyzer import analyze_data_flow, format_data_flow_context
 
 logger = get_logger(__name__)
 
+_MAX_CODE_FILE_BYTES: int = 256 * 1024  # 256 KB — prevents OOM on large/generated files
+
 
 class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware):
     """
@@ -231,7 +233,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
             sibling_files: list[CF] = []
             for p in py_files:
                 try:
-                    content = p.read_text(encoding="utf-8", errors="ignore")
+                    content = p.read_bytes()[:_MAX_CODE_FILE_BYTES].decode("utf-8", errors="ignore")
                     sibling_files.append(CF(path=str(p), content=content, language="python"))
                 except OSError:
                     continue
