@@ -26,6 +26,9 @@ class GitignoreFilter:
         self.root_path = root_path
         self.patterns: list[Pattern[str]] = []
         self.raw_patterns: list[str] = []
+        # Negation patterns (lines starting with '!').  A path that matches
+        # one of these is *un-ignored* even if it matched an ignore pattern.
+        self._negate_patterns: list[Pattern[str]] = []
 
         # Default patterns to always ignore
         self._add_default_patterns()
@@ -128,6 +131,16 @@ class GitignoreFilter:
         if not pattern or pattern.startswith("#"):
             return
 
+        # Negation pattern: store separately so should_ignore() can un-ignore.
+        if pattern.startswith("!"):
+            negated = pattern[1:]
+            if negated:
+                self.raw_patterns.append(pattern)
+                regex_pattern = self._pattern_to_regex(negated)
+                if regex_pattern:
+                    self._negate_patterns.append(re.compile(regex_pattern))
+            return
+
         self.raw_patterns.append(pattern)
 
         # Convert gitignore pattern to regex
@@ -152,10 +165,6 @@ class GitignoreFilter:
         - / at end means directory only
         - / at start means from root
         """
-        # Handle negation (we'll skip negations for simplicity)
-        if pattern.startswith("!"):
-            return ""
-
         # Strip leading/trailing slashes for processing
         is_directory = pattern.endswith("/")
         pattern = pattern.strip("/")
@@ -208,8 +217,16 @@ class GitignoreFilter:
         # Convert to string with forward slashes (gitignore uses /)
         path_str = str(relative_path).replace("\\", "/")
 
-        # Check against all patterns
-        return any(pattern.search(path_str) for pattern in self.patterns)
+        # Phase 1: check whether any ignore pattern matches.
+        if not any(pattern.search(path_str) for pattern in self.patterns):
+            return False
+
+        # Phase 2: a negation pattern can un-ignore a previously matched path.
+        # Per gitignore spec: a later '!pattern' re-includes files excluded earlier.
+        if any(neg.search(path_str) for neg in self._negate_patterns):
+            return False
+
+        return True
 
     def filter_files(self, file_paths: list[Path]) -> list[Path]:
         """
