@@ -174,8 +174,19 @@ def prepare_code_for_llm(
         max_tokens = token_budget.tokens
 
     # 1. Fits in budget → return as-is (still sanitize — content is untrusted)
-    if estimate_tokens(content) <= max_tokens:
+    original_tokens = estimate_tokens(content)
+    if original_tokens <= max_tokens:
         return _sanitize(content)
+
+    def _with_note(truncated: str) -> str:
+        """Prepend a truncation notice so the model knows content is incomplete."""
+        shown = estimate_tokens(truncated)
+        note = (
+            f"[NOTE: This file was truncated to fit the analysis budget. "
+            f"Showing ~{shown} of ~{original_tokens} tokens. "
+            f"Analysis may be incomplete.]\n\n"
+        )
+        return note + _sanitize(truncated)
 
     # Auto-resolve AST root and CodeGraph from pipeline context
     if context is not None and (ast_root is None or code_graph is None):
@@ -204,7 +215,7 @@ def prepare_code_for_llm(
                 token_budget=max_tokens,
             )
             if result and estimate_tokens(result) <= max_tokens:
-                return _sanitize(result)
+                return _with_note(result)
         except Exception as e:
             logger.debug("prepare_code_slicer_failed", error=str(e))
 
@@ -219,7 +230,7 @@ def prepare_code_for_llm(
                 preserve_end_lines=20,
             )
             if result:
-                return _sanitize(result)
+                return _with_note(result)
         except Exception as e:
             logger.debug("prepare_code_ast_hints_failed", error=str(e))
 
@@ -230,7 +241,7 @@ def prepare_code_for_llm(
         max_tokens=max_tokens,
         message="File exceeded token budget and was truncated. Some logic may have been omitted from analysis.",
     )
-    return _sanitize(
+    return _with_note(
         truncate_content_for_llm(
             content,
             max_tokens=max_tokens,
