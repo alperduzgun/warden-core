@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import errno
 import importlib
 import re
 import subprocess
 import sys
+import time
 
 from warden.self_healing.classifier import ErrorClassifier
 from warden.self_healing.models import DiagnosticResult, ErrorCategory
@@ -175,7 +177,23 @@ def _try_pip_install(pip_name: str) -> bool:
         if not mgr.is_venv:
             cmd.append("--break-system-packages")
 
-        result = subprocess.run(cmd, capture_output=True, timeout=120)
+        _eagain_retries = 3
+        _result = None
+        for _attempt in range(_eagain_retries):
+            try:
+                _result = subprocess.run(cmd, capture_output=True, timeout=120)
+                break
+            except BlockingIOError as _exc:
+                if _attempt < _eagain_retries - 1:
+                    time.sleep(0.5 * (2 ** _attempt))
+                else:
+                    raise
+            except OSError as _exc:
+                if _exc.errno == errno.EAGAIN and _attempt < _eagain_retries - 1:
+                    time.sleep(0.5 * (2 ** _attempt))
+                else:
+                    raise
+        result = _result
 
         if result.returncode == 0:
             importlib.invalidate_caches()

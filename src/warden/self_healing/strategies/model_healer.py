@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import errno
 import re
 import subprocess
+import time
 
 from warden.self_healing.models import DiagnosticResult, ErrorCategory
 from warden.self_healing.registry import HealerRegistry
@@ -109,11 +111,27 @@ def _try_ollama_pull(model_name: str) -> bool:
         console = None
 
     try:
-        result = subprocess.run(
-            ["ollama", "pull", model_name],
-            capture_output=True,
-            timeout=60,
-        )
+        _eagain_retries = 3
+        _result = None
+        for _attempt in range(_eagain_retries):
+            try:
+                _result = subprocess.run(
+                    ["ollama", "pull", model_name],
+                    capture_output=True,
+                    timeout=60,
+                )
+                break
+            except BlockingIOError as _exc:
+                if _attempt < _eagain_retries - 1:
+                    time.sleep(0.5 * (2 ** _attempt))
+                else:
+                    raise
+            except OSError as _exc:
+                if _exc.errno == errno.EAGAIN and _attempt < _eagain_retries - 1:
+                    time.sleep(0.5 * (2 ** _attempt))
+                else:
+                    raise
+        result = _result
 
         if result.returncode == 0:
             logger.info("self_healing_model_pulled", model_name=model_name)
