@@ -165,7 +165,9 @@ class GitignoreFilter:
         - / at end means directory only
         - / at start means from root
         """
-        # Strip leading/trailing slashes for processing
+        # A leading slash anchors the pattern to the root (gitignore spec §5).
+        # Must be detected *before* stripping so we can emit a `^` anchor.
+        is_anchored = pattern.startswith("/")
         is_directory = pattern.endswith("/")
         pattern = pattern.strip("/")
 
@@ -178,11 +180,11 @@ class GitignoreFilter:
         regex = regex.replace("DOUBLESTAR", ".*")
         regex = regex.replace(r"\?", ".")
 
-        # If pattern is for directory only, match directory and its contents
-        if is_directory:
-            regex = f"(^|/){regex}(/|$)"
+        # Anchored patterns (leading /) only match from the repo root.
+        # Un-anchored patterns match anywhere in the path.
+        if is_anchored:
+            regex = f"^{regex}(/|$)"
         else:
-            # Match pattern anywhere in path
             regex = f"(^|/){regex}(/|$)"
 
         return regex
