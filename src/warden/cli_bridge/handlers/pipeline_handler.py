@@ -47,9 +47,10 @@ class PipelineHandler(BaseHandler):
         # Serialize concurrent streaming requests so each request exclusively
         # owns the shared orchestrator's progress_callback slot (#211).
         self._stream_lock = asyncio.Lock()
-        # Discovery cache: root_path → (DiscoveryResult, cached_at, gitignore_mtime)
+        # Discovery cache: (root_path, max_size_mb) → (DiscoveryResult, cached_at, gitignore_mtime)
         # Avoids re-parsing .gitignore and re-walking the filesystem on every request.
-        self._discovery_cache: dict[Path, tuple[Any, float, float]] = {}
+        # Key includes max_size_mb so different size limits don't share a cached result.
+        self._discovery_cache: dict[tuple[Path, float | None], tuple[Any, float, float]] = {}
 
     async def execute_pipeline_async(
         self, file_path: str, frames: list[str] | None = None, analysis_level: str = "standard"
@@ -172,7 +173,7 @@ class PipelineHandler(BaseHandler):
                 pass
         return mtime
 
-    def _get_cached_discovery(self, root_path: Path) -> Any | None:
+    def _get_cached_discovery(self, root_path: Path, max_size_mb: float | None = None) -> Any | None:
         """Return a cached DiscoveryResult if still valid, else None.
 
         A cached entry is invalidated when:
@@ -181,7 +182,7 @@ class PipelineHandler(BaseHandler):
           cached (mtime check).  OSError during the mtime check is treated
           as a cache miss so discovery always falls back gracefully.
         """
-        entry = self._discovery_cache.get(root_path)
+        entry = self._discovery_cache.get((root_path, max_size_mb))
         if entry is None:
             return None
         result, cached_at, cached_mtime = entry
@@ -236,15 +237,18 @@ class PipelineHandler(BaseHandler):
             # Use optimized FileDiscoverer (leverages Rust).
             # Check cache first — avoid re-parsing .gitignore and re-walking
             # the filesystem on every streaming request for the same root.
-            discovery_result = self._get_cached_discovery(root_path)
+            discovery_result = self._get_cached_discovery(root_path, max_size_mb)
             if discovery_result is None:
+                # Capture mtime BEFORE discovery so any gitignore change during
+                # the walk is not silently absorbed into the cached entry (TOCTOU).
+                mtime_before = self._gitignore_mtime(root_path)
                 logger.info("discovery_started_bridge", root=str(root_path), max_size_mb=max_size_mb)
                 discoverer = FileDiscoverer(root_path, use_gitignore=True, max_size_mb=max_size_mb)
                 discovery_result = await discoverer.discover_async()
-                self._discovery_cache[root_path] = (
+                self._discovery_cache[(root_path, max_size_mb)] = (
                     discovery_result,
                     time.monotonic(),
-                    self._gitignore_mtime(root_path),
+                    mtime_before,
                 )
             else:
                 logger.debug("discovery_cache_hit", root=str(root_path))
