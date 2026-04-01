@@ -7,12 +7,28 @@ Usable by claude_code, qwen_cli, codex, and any future CLI tool provider.
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
 from typing import Sequence
 
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+# Maximum retries when the OS refuses to spawn a process (EAGAIN / resource
+# temporarily unavailable — common inside Docker containers with tight PID or
+# file-descriptor limits).  Delays follow exponential backoff: 0.5 s, 1.0 s.
+_EAGAIN_MAX_RETRIES: int = 3
+_EAGAIN_BASE_DELAY: float = 0.5
+
+
+def _is_eagain(exc: BaseException) -> bool:
+    """Return True if *exc* represents a resource-exhaustion spawn failure."""
+    if isinstance(exc, BlockingIOError):
+        return True
+    if isinstance(exc, OSError) and exc.errno == errno.EAGAIN:
+        return True
+    return False
 
 
 async def run_cli_subprocess(
@@ -50,13 +66,34 @@ async def run_cli_subprocess(
 
     stdin_mode = asyncio.subprocess.PIPE if stdin_input is not None else asyncio.subprocess.DEVNULL
 
-    process = await asyncio.create_subprocess_exec(
-        *args,
-        stdin=stdin_mode,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=merged_env,
-    )
+    # Retry process creation on EAGAIN (resource temporarily unavailable).
+    # This is common in Docker/CI environments with tight PID or fd limits.
+    # Only EAGAIN / BlockingIOError triggers a retry — all other errors propagate.
+    process: asyncio.subprocess.Process | None = None
+    for _attempt in range(_EAGAIN_MAX_RETRIES):
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *args,
+                stdin=stdin_mode,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=merged_env,
+            )
+            break
+        except BaseException as exc:
+            if _is_eagain(exc) and _attempt < _EAGAIN_MAX_RETRIES - 1:
+                delay = _EAGAIN_BASE_DELAY * (2 ** _attempt)
+                logger.warning(
+                    "cli_subprocess_spawn_eagain_retry",
+                    cmd=args[0] if args else "unknown",
+                    attempt=_attempt + 1,
+                    delay=delay,
+                )
+                await asyncio.sleep(delay)
+            else:
+                raise
+
+    assert process is not None  # loop always breaks or raises
 
     stdin_bytes = stdin_input.encode("utf-8") if stdin_input is not None else None
 

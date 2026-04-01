@@ -19,6 +19,7 @@ Process Isolation (#100):
 """
 
 import asyncio
+import errno
 import os
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -276,7 +277,22 @@ class ASTPreParser:
         # Use ProcessPoolExecutor for isolation.  The pool is created
         # per-call so that a broken pool from a previous crash does not
         # contaminate subsequent batches.
-        executor = ProcessPoolExecutor(max_workers=self._max_workers)
+        #
+        # EAGAIN fallback: in Docker/CI environments with tight PID limits,
+        # spawning a worker process may raise BlockingIOError(EAGAIN).  On
+        # first occurrence we recreate the executor with max_workers=1 so the
+        # scan continues sequentially rather than failing entirely.  A second
+        # EAGAIN falls back to the in-process parser as a last resort.
+        def _make_executor(max_workers: int) -> ProcessPoolExecutor:
+            return ProcessPoolExecutor(max_workers=max_workers)
+
+        def _is_eagain(exc: BaseException) -> bool:
+            if isinstance(exc, BlockingIOError):
+                return True
+            return isinstance(exc, OSError) and exc.errno == errno.EAGAIN
+
+        executor = _make_executor(self._max_workers)
+        _eagain_degraded = False  # True once we fell back to max_workers=1
         try:
             for code_file in files_to_parse:
                 lang_value = code_file.language.lower()
@@ -299,6 +315,43 @@ class ASTPreParser:
                     )
                     errors += 1
                 except Exception as e:
+                    # EAGAIN: OS refused to spawn a worker process.
+                    if _is_eagain(e):
+                        try:
+                            executor.shutdown(wait=False)
+                        except Exception:
+                            pass
+                        if not _eagain_degraded:
+                            logger.warning(
+                                "ast_pre_parse_eagain_degraded",
+                                file=code_file.path,
+                                error=str(e),
+                            )
+                            executor = _make_executor(max_workers=1)
+                            _eagain_degraded = True
+                            # Retry this file in the single-worker executor.
+                            try:
+                                future = loop.run_in_executor(
+                                    executor,
+                                    _parse_file_in_worker,
+                                    code_file.content,
+                                    lang_value,
+                                    code_file.path,
+                                )
+                                result = await asyncio.wait_for(future, timeout=self._timeout)
+                                context.ast_cache[code_file.path] = result
+                                parsed += 1
+                            except Exception:
+                                errors += 1
+                        else:
+                            # Already degraded — OS still refusing; skip this file.
+                            logger.error(
+                                "ast_pre_parse_eagain_persistent",
+                                file=code_file.path,
+                            )
+                            errors += 1
+                        continue
+
                     # BrokenProcessPool, RuntimeError from worker crash,
                     # or any other exception from the child process.
                     error_type = type(e).__name__
@@ -315,7 +368,7 @@ class ASTPreParser:
                             executor.shutdown(wait=False)
                         except Exception:
                             pass
-                        executor = ProcessPoolExecutor(max_workers=self._max_workers)
+                        executor = _make_executor(max_workers=self._max_workers)
                     else:
                         logger.debug(
                             "ast_pre_parse_error",
