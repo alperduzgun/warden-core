@@ -7,6 +7,7 @@ Handles timeouts, output capturing, and logging.
 
 import asyncio
 import contextlib
+import errno
 import os
 import signal
 from dataclasses import dataclass
@@ -87,26 +88,47 @@ class CommandExecutor:
         cwd_str = str(cwd) if cwd else "cwd"
         logger.debug("executing_command", command=cmd_str, cwd=cwd_str, timeout=timeout_val)
 
+        def _is_eagain(exc: BaseException) -> bool:
+            if isinstance(exc, BlockingIOError):
+                return True
+            return isinstance(exc, OSError) and exc.errno == errno.EAGAIN
+
         process = None
-        try:
-            if shell:
-                process = await asyncio.create_subprocess_shell(
-                    cmd_str,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=cwd,
-                    env=run_env,
-                    preexec_fn=os.setsid,  # Create process group for easier cleanup
-                )
-            else:
-                process = await asyncio.create_subprocess_exec(
-                    *cmd_args,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=cwd,
-                    env=run_env,
-                    preexec_fn=os.setsid,
-                )
+        _eagain_retries = 3
+        _eagain_base_delay = 0.5
+        for _attempt in range(_eagain_retries):
+            try:
+                if shell:
+                    process = await asyncio.create_subprocess_shell(
+                        cmd_str,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        cwd=cwd,
+                        env=run_env,
+                        preexec_fn=os.setsid,  # Create process group for easier cleanup
+                    )
+                else:
+                    process = await asyncio.create_subprocess_exec(
+                        *cmd_args,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        cwd=cwd,
+                        env=run_env,
+                        preexec_fn=os.setsid,
+                    )
+                break
+            except BaseException as _exc:
+                if _is_eagain(_exc) and _attempt < _eagain_retries - 1:
+                    _delay = _eagain_base_delay * (2 ** _attempt)
+                    logger.warning(
+                        "command_executor_spawn_eagain_retry",
+                        command=cmd_str,
+                        attempt=_attempt + 1,
+                        delay=_delay,
+                    )
+                    await asyncio.sleep(_delay)
+                else:
+                    raise
 
             try:
                 stdout_data, stderr_data = await asyncio.wait_for(process.communicate(), timeout=timeout_val)
