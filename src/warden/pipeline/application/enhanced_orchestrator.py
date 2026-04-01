@@ -22,6 +22,11 @@ from warden.validation.domain.frame import CodeFile, ValidationFrame
 
 logger = get_logger(__name__)
 
+# Cap individual file content reads to prevent OOM on large generated/minified files.
+# Files larger than this are truncated at the byte boundary and decoded with
+# errors="replace" so downstream analysis still sees the leading portion.
+_MAX_CODE_FILE_BYTES: int = 256 * 1024  # 256 KB
+
 
 class EnhancedPipelineOrchestrator(PhaseOrchestrator):
     """
@@ -198,9 +203,19 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
 
         for discovered_file in discovered_files:
             try:
-                # Read file content
+                # Read file content — truncate at _MAX_CODE_FILE_BYTES to prevent OOM.
                 file_path = Path(discovered_file.path)
-                content = file_path.read_text(encoding="utf-8")
+                size = discovered_file.size_bytes or 0
+                if size > _MAX_CODE_FILE_BYTES:
+                    logger.warning(
+                        "file_content_truncated",
+                        file=str(file_path),
+                        size_bytes=size,
+                        limit_bytes=_MAX_CODE_FILE_BYTES,
+                    )
+                    content = file_path.read_bytes()[:_MAX_CODE_FILE_BYTES].decode("utf-8", errors="replace")
+                else:
+                    content = file_path.read_text(encoding="utf-8")
 
                 # Determine language from file extension
                 language = self._get_language_from_extension(file_path.suffix)

@@ -16,6 +16,23 @@ from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
 
+# Cap individual file content reads to prevent OOM on large generated/minified files.
+_MAX_CODE_FILE_BYTES: int = 256 * 1024  # 256 KB
+
+
+def _read_file_capped(path: Path) -> str:
+    """Read a source file, truncating at _MAX_CODE_FILE_BYTES if needed."""
+    size = path.stat().st_size
+    if size > _MAX_CODE_FILE_BYTES:
+        logger.warning(
+            "file_content_truncated",
+            file=str(path),
+            size_bytes=size,
+            limit_bytes=_MAX_CODE_FILE_BYTES,
+        )
+        return path.read_bytes()[:_MAX_CODE_FILE_BYTES].decode("utf-8", errors="replace")
+    return path.read_text(encoding="utf-8", errors="replace")
+
 
 class PipelineHandler(BaseHandler):
     """Handles code scanning and pipeline streaming events."""
@@ -44,7 +61,7 @@ class PipelineHandler(BaseHandler):
 
         code_file = CodeFile(
             path=str(path.absolute()),
-            content=path.read_text(encoding="utf-8"),
+            content=_read_file_capped(path),
             language=self._detect_language(path),
         )
 
@@ -152,7 +169,7 @@ class PipelineHandler(BaseHandler):
                     code_files.append(
                         CodeFile(
                             path=str(root_path.absolute()),
-                            content=root_path.read_text(encoding="utf-8", errors="replace"),
+                            content=_read_file_capped(root_path),
                             language=self._detect_language(root_path),
                         )
                     )
@@ -187,7 +204,7 @@ class PipelineHandler(BaseHandler):
                     code_files.append(
                         CodeFile(
                             path=str(p.absolute()),
-                            content=p.read_text(encoding="utf-8", errors="replace"),
+                            content=_read_file_capped(p),
                             language=f.file_type.value,
                             line_count=f.line_count or 0,
                             hash=f.hash,
