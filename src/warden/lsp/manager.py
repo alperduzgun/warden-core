@@ -25,141 +25,128 @@ from warden.lsp.client import LanguageServerClient
 logger = structlog.get_logger()
 
 
-# LSP server configurations: language -> (binary_names, args)
-# Based on Serena's 30+ language support
-LSP_SERVER_CONFIG: dict[str, dict] = {
+# LSP server configurations: language -> {binary_name: args}
+# Dict iteration order defines discovery priority (first found wins).
+# Each binary carries its own args so mixed-binary languages (e.g. python
+# has both pyright and pylsp) don't get wrong flags.
+LSP_SERVER_CONFIG: dict[str, dict[str, list[str]]] = {
     # --- Primary Languages ---
     "python": {
-        "binaries": ["pyright-langserver", "pylsp", "pyls", "jedi-language-server"],
-        "args": ["--stdio"],
+        "pyright-langserver":   ["--stdio"],
+        "pylsp":                [],           # reads stdin directly, no --stdio flag
+        "pyls":                 [],           # legacy pylsp, same behaviour
+        "jedi-language-server": ["--stdio"],
     },
     "typescript": {
-        "binaries": ["typescript-language-server"],
-        "args": ["--stdio"],
+        "typescript-language-server": ["--stdio"],
     },
     "javascript": {
-        "binaries": ["typescript-language-server"],
-        "args": ["--stdio"],
+        "typescript-language-server": ["--stdio"],
     },
     "rust": {
-        "binaries": ["rust-analyzer"],
-        "args": [],  # rust-analyzer uses stdio by default
+        "rust-analyzer": [],  # stdio by default
     },
     "go": {
-        "binaries": ["gopls"],
-        "args": ["serve"],
+        "gopls": ["serve"],
     },
     # --- JVM Languages ---
     "java": {
-        "binaries": ["jdtls", "java-language-server"],
-        "args": [],  # jdtls has complex setup, may need config
+        "jdtls":                [],
+        "java-language-server": [],
     },
     "kotlin": {
-        "binaries": ["kotlin-language-server"],
-        "args": [],
+        "kotlin-language-server": [],
     },
     "scala": {
-        "binaries": ["metals"],
-        "args": [],
+        "metals": [],
     },
     # --- .NET Languages ---
     "csharp": {
-        "binaries": ["OmniSharp", "omnisharp", "csharp-ls"],
-        "args": ["--languageserver"],
+        "OmniSharp":  ["--languageserver"],
+        "omnisharp":  ["--languageserver"],
+        "csharp-ls":  ["--stdio"],
     },
     "fsharp": {
-        "binaries": ["fsautocomplete"],
-        "args": ["--background-service-enabled"],
+        "fsautocomplete": ["--background-service-enabled"],
     },
     # --- Web Languages ---
     "html": {
-        "binaries": ["vscode-html-language-server", "html-languageserver"],
-        "args": ["--stdio"],
+        "vscode-html-language-server": ["--stdio"],
+        "html-languageserver":         ["--stdio"],
     },
     "css": {
-        "binaries": ["vscode-css-language-server", "css-languageserver"],
-        "args": ["--stdio"],
+        "vscode-css-language-server": ["--stdio"],
+        "css-languageserver":         ["--stdio"],
     },
     "vue": {
-        "binaries": ["vue-language-server", "vls"],
-        "args": ["--stdio"],
+        "vue-language-server": ["--stdio"],
+        "vls":                 [],   # vls does not accept --stdio
     },
     # --- Scripting Languages ---
     "ruby": {
-        "binaries": ["solargraph", "ruby-lsp"],
-        "args": ["stdio"],
+        "solargraph": ["stdio"],    # no leading dash
+        "ruby-lsp":   ["--stdio"],
     },
     "php": {
-        "binaries": ["phpactor", "intelephense"],
-        "args": ["language-server"],
+        "phpactor":    ["language-server"],
+        "intelephense": ["--stdio"],
     },
     "perl": {
-        "binaries": ["perl-language-server"],
-        "args": [],
+        "perl-language-server": [],
     },
     "lua": {
-        "binaries": ["lua-language-server"],
-        "args": [],
+        "lua-language-server": [],
     },
     # --- Systems Languages ---
     "cpp": {
-        "binaries": ["clangd", "ccls"],
-        "args": [],
+        "clangd": [],
+        "ccls":   [],
     },
     "c": {
-        "binaries": ["clangd", "ccls"],
-        "args": [],
+        "clangd": [],
+        "ccls":   [],
     },
     "zig": {
-        "binaries": ["zls"],
-        "args": [],
+        "zls": [],
     },
     # --- Shell/Config ---
     "bash": {
-        "binaries": ["bash-language-server"],
-        "args": ["start"],
+        "bash-language-server": ["start"],
     },
     "shell": {
-        "binaries": ["bash-language-server"],
-        "args": ["start"],
+        "bash-language-server": ["start"],
     },
     "yaml": {
-        "binaries": ["yaml-language-server"],
-        "args": ["--stdio"],
+        "yaml-language-server": ["--stdio"],
     },
     "toml": {
-        "binaries": ["taplo"],
-        "args": ["lsp", "stdio"],
+        "taplo": ["lsp", "stdio"],
     },
     "json": {
-        "binaries": ["vscode-json-language-server"],
-        "args": ["--stdio"],
+        "vscode-json-language-server": ["--stdio"],
     },
     # --- Functional Languages ---
     "haskell": {
-        "binaries": ["haskell-language-server-wrapper", "hls"],
-        "args": ["--lsp"],
+        "haskell-language-server-wrapper": ["--lsp"],
+        "hls":                             ["--lsp"],
     },
     "elixir": {
-        "binaries": ["elixir-ls", "language_server.sh"],
-        "args": [],
+        "elixir-ls":        [],
+        "language_server.sh": [],
     },
     "erlang": {
-        "binaries": ["erlang_ls"],
-        "args": [],
+        "erlang_ls": [],
     },
     "clojure": {
-        "binaries": ["clojure-lsp"],
-        "args": [],
+        "clojure-lsp": [],
     },
     # --- Mobile ---
     "dart": {
-        "binaries": ["dart", "dart-language-server"],
-        "args": ["language-server", "--protocol=lsp"],
+        "dart":                 ["language-server", "--protocol=lsp"],
+        "dart-language-server": ["--stdio"],
     },
     "swift": {
-        "binaries": ["sourcekit-lsp"],
-        "args": [],
+        "sourcekit-lsp": [],
     },
 }
 
@@ -179,7 +166,8 @@ class LSPManager:
 
     def __init__(self, auto_install: bool = True) -> None:
         self._clients: dict[str, LanguageServerClient] = {}
-        self._binaries: dict[str, str] = {}
+        self._binaries: dict[str, str] = {}       # language → binary path
+        self._binary_names: dict[str, str] = {}   # language → binary name (for args lookup)
         self._root_path: str | None = None
         self._auto_install_enabled = auto_install
         self._discover_binaries()
@@ -221,13 +209,13 @@ class LSPManager:
         available = []
         missing = []
 
-        for language, config in LSP_SERVER_CONFIG.items():
+        for language, binaries in LSP_SERVER_CONFIG.items():
             found = False
-            for binary_name in config["binaries"]:
-                # Check PATH
+            for binary_name in binaries:  # dict key iteration = priority order
                 binary_path = shutil.which(binary_name)
                 if binary_path:
                     self._binaries[language] = binary_path
+                    self._binary_names[language] = binary_name
                     available.append(f"{language}:{binary_name}")
                     found = True
                     break
@@ -269,10 +257,11 @@ class LSPManager:
                     result = _sp.run(cmd, capture_output=True, text=True, timeout=120)
                     if result.returncode == 0:
                         # Re-discover after install
-                        for binary_name in LSP_SERVER_CONFIG.get(lang, {}).get("binaries", []):
+                        for binary_name in LSP_SERVER_CONFIG.get(lang, {}):
                             binary_path = shutil.which(binary_name)
                             if binary_path:
                                 self._binaries[lang] = binary_path
+                                self._binary_names[lang] = binary_name
                                 logger.info("lsp_auto_installed", language=lang, binary=binary_name)
                                 break
                         break
@@ -313,10 +302,10 @@ class LSPManager:
         if language in self._clients:
             return self._clients[language]
 
-        # Spawn new client
+        # Spawn new client — look up args by the exact binary name that was found
         binary = self._binaries[language]
-        config = LSP_SERVER_CONFIG.get(language, {"args": ["--stdio"]})
-        args = config["args"]
+        binary_name = self._binary_names.get(language, "")
+        args = LSP_SERVER_CONFIG.get(language, {}).get(binary_name, [])
 
         try:
             client = LanguageServerClient(binary, args, cwd=root_path)
@@ -334,13 +323,13 @@ class LSPManager:
 
         except FileNotFoundError:
             logger.warning("lsp_binary_not_found", language=language, binary=binary)
-            # Remove from binaries to prevent retry
             del self._binaries[language]
+            self._binary_names.pop(language, None)
             return None
         except Exception as e:
             logger.error("lsp_spawn_failed", language=language, binary=binary, error=str(e))
-            # Remove from binaries to prevent repeated spawn attempts
             self._binaries.pop(language, None)
+            self._binary_names.pop(language, None)
             return None
 
     async def shutdown_all_async(self) -> None:
