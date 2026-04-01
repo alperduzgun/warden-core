@@ -4,6 +4,7 @@ Handles scanning files and streaming pipeline progress.
 """
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,9 @@ logger = get_logger(__name__)
 
 # Cap individual file content reads to prevent OOM on large generated/minified files.
 _MAX_CODE_FILE_BYTES: int = 256 * 1024  # 256 KB
+
+# Discovery cache TTL — same root path reuses the last DiscoveryResult for this many seconds.
+_DISCOVERY_CACHE_TTL: float = 60.0
 
 
 def _read_file_capped(path: Path) -> str:
@@ -43,6 +47,9 @@ class PipelineHandler(BaseHandler):
         # Serialize concurrent streaming requests so each request exclusively
         # owns the shared orchestrator's progress_callback slot (#211).
         self._stream_lock = asyncio.Lock()
+        # Discovery cache: root_path → (DiscoveryResult, cached_at, gitignore_mtime)
+        # Avoids re-parsing .gitignore and re-walking the filesystem on every request.
+        self._discovery_cache: dict[Path, tuple[Any, float, float]] = {}
 
     async def execute_pipeline_async(
         self, file_path: str, frames: list[str] | None = None, analysis_level: str = "standard"
@@ -151,6 +158,42 @@ class PipelineHandler(BaseHandler):
             finally:
                 self.orchestrator.progress_callback = original_callback
 
+    def _gitignore_mtime(self, root: Path) -> float:
+        """Return the max mtime of .gitignore and .wardenignore under *root*.
+
+        Returns 0.0 if neither file exists (or on any OSError).  Used to
+        invalidate the discovery cache when ignore-rules change on disk.
+        """
+        mtime = 0.0
+        for name in (".gitignore", ".wardenignore"):
+            try:
+                mtime = max(mtime, (root / name).stat().st_mtime)
+            except OSError:
+                pass
+        return mtime
+
+    def _get_cached_discovery(self, root_path: Path) -> Any | None:
+        """Return a cached DiscoveryResult if still valid, else None.
+
+        A cached entry is invalidated when:
+        - The TTL (_DISCOVERY_CACHE_TTL seconds) has elapsed, or
+        - .gitignore or .wardenignore has been modified since the entry was
+          cached (mtime check).  OSError during the mtime check is treated
+          as a cache miss so discovery always falls back gracefully.
+        """
+        entry = self._discovery_cache.get(root_path)
+        if entry is None:
+            return None
+        result, cached_at, cached_mtime = entry
+        if time.monotonic() - cached_at > _DISCOVERY_CACHE_TTL:
+            return None
+        try:
+            if self._gitignore_mtime(root_path) > cached_mtime:
+                return None
+        except Exception:
+            return None
+        return result
+
     async def _collect_files_async(self, paths: list[Path]) -> list[CodeFile]:
         """Collect and prepare code files for pipeline execution using optimized discoverer."""
         from warden.analysis.application.discovery.discoverer import FileDiscoverer
@@ -190,10 +233,21 @@ class PipelineHandler(BaseHandler):
                         if max_size_mb:
                             break
 
-            # Use optimized FileDiscoverer (leverages Rust)
-            logger.info("discovery_started_bridge", root=str(root_path), max_size_mb=max_size_mb)
-            discoverer = FileDiscoverer(root_path, use_gitignore=True, max_size_mb=max_size_mb)
-            discovery_result = await discoverer.discover_async()
+            # Use optimized FileDiscoverer (leverages Rust).
+            # Check cache first — avoid re-parsing .gitignore and re-walking
+            # the filesystem on every streaming request for the same root.
+            discovery_result = self._get_cached_discovery(root_path)
+            if discovery_result is None:
+                logger.info("discovery_started_bridge", root=str(root_path), max_size_mb=max_size_mb)
+                discoverer = FileDiscoverer(root_path, use_gitignore=True, max_size_mb=max_size_mb)
+                discovery_result = await discoverer.discover_async()
+                self._discovery_cache[root_path] = (
+                    discovery_result,
+                    time.monotonic(),
+                    self._gitignore_mtime(root_path),
+                )
+            else:
+                logger.debug("discovery_cache_hit", root=str(root_path))
 
             for f in discovery_result.get_analyzable_files():
                 if f.path in seen_paths:
