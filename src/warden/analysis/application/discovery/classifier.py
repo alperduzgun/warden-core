@@ -8,6 +8,10 @@ from pathlib import Path
 
 from warden.analysis.application.discovery.models import FileType
 
+# Lazily populated on first call to should_skip() to avoid circular-import risk at
+# module load time.  Subsequent calls pay only a frozenset membership test.
+_supported_extensions_cache: frozenset[str] | None = None
+
 
 class FileClassifier:
     """
@@ -200,9 +204,11 @@ class FileClassifier:
             return True
 
         # Fast path: known code extension — no content probe needed.
-        from warden.shared.utils.language_utils import get_supported_extensions
-
-        if extension in get_supported_extensions():
+        global _supported_extensions_cache
+        if _supported_extensions_cache is None:
+            from warden.shared.utils.language_utils import get_supported_extensions
+            _supported_extensions_cache = frozenset(get_supported_extensions())
+        if extension in _supported_extensions_cache:
             return False
 
         # Slow path: unknown extension — probe for null bytes.
