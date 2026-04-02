@@ -482,9 +482,11 @@ Return patterns as JSON."""
                     existing_patterns[idx].get("occurrence_count", 1) + 1
                 )
                 existing_patterns[idx]["last_seen"] = now
-                # Raise confidence: confidence = min(1.0, occurrences / 2)
+                # Confidence ladder: 4 independent marks needed to reach 1.0.
+                # Threshold for auto-suppress is 0.8 (reached at occ=4 with /4).
+                # Using /2 was too aggressive — 2 accidental re-runs → full suppress.
                 occ = existing_patterns[idx]["occurrence_count"]
-                existing_patterns[idx]["confidence"] = min(1.0, occ / 2)
+                existing_patterns[idx]["confidence"] = min(1.0, occ / 4)
             else:
                 existing_patterns.append(new_p)
                 existing_index[k] = len(existing_patterns) - 1

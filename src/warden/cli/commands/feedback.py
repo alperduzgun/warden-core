@@ -68,6 +68,10 @@ def _load_report(project_root: Path, scan_id: Optional[str]) -> dict:
                     return data
             except Exception:
                 continue
+        # scan_id was specified but not matched in any candidate
+        raise FileNotFoundError(
+            f"No warden-report found with scan_id '{scan_id}'. Run 'warden scan' first."
+        )
 
     if candidates:
         with open(candidates[0]) as f:
@@ -79,7 +83,7 @@ def _load_report(project_root: Path, scan_id: Optional[str]) -> dict:
         return _load_report_from_findings_cache(findings_cache)
 
     raise FileNotFoundError(
-        "No scan report found. Run 'warden scan' first."
+        "No warden-report found. Run 'warden scan' first."
     )
 
 
@@ -136,6 +140,9 @@ def _resolve_finding_ids(
     """
     Resolve requested rule/finding IDs to actual finding dicts.
 
+    Uses exact match only — prefix matching would unintentionally suppress
+    findings with the same rule_id across unrelated files.
+
     Returns (matched_findings, unmatched_ids).
     """
     matched: list[dict] = []
@@ -145,7 +152,7 @@ def _resolve_finding_ids(
         found = False
         for f in all_findings:
             fid = f.get("id") or f.get("rule_id", "")
-            if fid == req_id or str(fid).startswith(req_id):
+            if fid == req_id:
                 matched.append(f)
                 found = True
         if not found:
@@ -180,6 +187,12 @@ def mark_command(
         "-p",
         help="Project root directory (defaults to current directory)",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force suppression of CRITICAL/HIGH severity findings (bypasses safety gate)",
+    ),
 ) -> None:
     """
     Mark findings as false positives or confirm as true positives.
@@ -187,11 +200,16 @@ def mark_command(
     Warden learns from your feedback and suppresses known false positives
     on future scans automatically.
 
+    CRITICAL and HIGH severity findings cannot be marked as false positives
+    without --force to prevent accidental suppression of real security issues.
+
     Examples:
 
         warden feedback mark --false-positives W001,W003 --scan-id abc123
 
         warden feedback mark --true-positives W002
+
+        warden feedback mark --false-positives W001 --force
     """
     if not false_positives and not true_positives:
         console.print("[red]Error:[/red] Provide --false-positives and/or --true-positives.")
@@ -227,6 +245,27 @@ def mark_command(
     if not fp_findings and not tp_findings:
         console.print("[red]Error:[/red] No matching findings found. Check your IDs and scan report.")
         raise typer.Exit(code=1)
+
+    # Safety gate: block silent suppression of CRITICAL/HIGH findings
+    if fp_findings and not force:
+        risky = [
+            f for f in fp_findings
+            if f.get("severity", "").lower() in ("critical", "high")
+        ]
+        if risky:
+            console.print(
+                f"\n[bold red]Safety gate:[/bold red] {len(risky)} CRITICAL/HIGH finding(s) "
+                "requested for false-positive suppression:"
+            )
+            for f in risky:
+                sev = f.get("severity", "unknown").upper()
+                fid = f.get("id") or f.get("rule_id", "?")
+                path = f.get("file_path") or f.get("path", "?")
+                console.print(f"  [bold red]•[/bold red] [{sev}] {fid} in {path}")
+            console.print(
+                "\n[dim]If these are genuine false positives, re-run with [bold]--force[/bold].[/dim]"
+            )
+            raise typer.Exit(code=1)
 
     console.print(
         f"[cyan]Processing feedback:[/cyan] "
@@ -426,4 +465,78 @@ def list_command(
     console.print(
         f"\n[dim]{len(patterns)} pattern(s) total. "
         "Patterns with confidence >= 0.8 suppress findings automatically.[/dim]"
+    )
+
+
+@feedback_app.command(name="unmark")
+def unmark_command(
+    finding_ids: str = typer.Argument(
+        ...,
+        help="Comma-separated rule IDs to remove from learned patterns",
+    ),
+    project_dir: Optional[str] = typer.Option(
+        None,
+        "--project",
+        "-p",
+        help="Project root directory (defaults to current directory)",
+    ),
+) -> None:
+    """
+    Remove learned patterns to re-enable previously suppressed findings.
+
+    Use this to undo a false-positive marking and restore a finding to future
+    scan results.
+
+    Example:
+
+        warden feedback unmark W001,W003
+    """
+    import yaml
+
+    ids_to_remove = [x.strip() for x in finding_ids.split(",") if x.strip()]
+    if not ids_to_remove:
+        console.print("[red]Error:[/red] Provide at least one rule ID.")
+        raise typer.Exit(code=1)
+
+    project_root = Path(project_dir).resolve() if project_dir else Path.cwd()
+    patterns_file = project_root / _LEARNED_PATTERNS_FILE
+
+    if not patterns_file.exists():
+        console.print("[yellow]No learned patterns file found — nothing to unmark.[/yellow]")
+        raise typer.Exit(code=0)
+
+    try:
+        with open(patterns_file) as f:
+            data = yaml.safe_load(f) or {}
+    except Exception as exc:
+        console.print(f"[red]Error reading learned patterns:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+    existing = data.get("patterns", [])
+    before_count = len(existing)
+
+    kept = [p for p in existing if p.get("rule_id", "") not in ids_to_remove]
+    removed_count = before_count - len(kept)
+
+    if removed_count == 0:
+        console.print(
+            f"[yellow]No patterns found for IDs:[/yellow] {', '.join(ids_to_remove)}"
+        )
+        raise typer.Exit(code=0)
+
+    data["patterns"] = kept
+
+    try:
+        with open(patterns_file, "w") as f:
+            yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
+    except Exception as exc:
+        console.print(f"[red]Error writing learned patterns:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+    console.print(
+        f"\n[bold green]Unmarked {removed_count} pattern(s).[/bold green]"
+    )
+    console.print(
+        f"[dim]Findings with rule ID(s) {', '.join(ids_to_remove)} "
+        "will appear again on the next scan.[/dim]"
     )

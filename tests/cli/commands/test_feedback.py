@@ -6,8 +6,9 @@ Tests cover:
 - Pattern building from finding lists
 - Learned-pattern persistence (merge / increment)
 - Loading learned patterns
-- CLI mark command (happy path, missing IDs, no-report)
+- CLI mark command (happy path, missing IDs, no-report, severity guard, --force)
 - CLI list command (no patterns, with patterns)
+- CLI unmark command
 """
 
 from __future__ import annotations
@@ -51,6 +52,14 @@ SAMPLE_FINDING_B = {
     "file_path": "src/db.py",
     "message": "SQL injection risk",
     "severity": "high",
+}
+
+SAMPLE_FINDING_LOW = {
+    "id": "W003",
+    "rule_id": "W003",
+    "file_path": "src/utils.py",
+    "message": "Unused import",
+    "severity": "low",
 }
 
 SAMPLE_REPORT = {
@@ -129,6 +138,21 @@ class TestResolveFindingIds:
         assert matched == []
         assert unmatched == []
 
+    def test_exact_match_does_not_match_prefix(self) -> None:
+        """'W00' must NOT match 'W001' — prefix matching is disabled."""
+        all_findings = [SAMPLE_FINDING_A, SAMPLE_FINDING_B]
+        matched, unmatched = _resolve_finding_ids(["W00"], all_findings)
+        assert matched == []
+        assert "W00" in unmatched
+
+    def test_same_rule_id_in_different_files_both_match_exact(self) -> None:
+        """When two findings share the same rule_id both should be returned on exact match."""
+        f1 = {**SAMPLE_FINDING_A, "file_path": "src/a.py"}
+        f2 = {**SAMPLE_FINDING_A, "file_path": "src/b.py"}
+        matched, unmatched = _resolve_finding_ids(["W001"], [f1, f2])
+        assert len(matched) == 2
+        assert unmatched == []
+
 
 # ---------------------------------------------------------------------------
 # _load_report
@@ -149,8 +173,18 @@ class TestLoadReport:
             _load_report(tmp_path, None)
 
     def test_raises_for_unknown_scan_id(self, report_file: Path) -> None:
+        """scan_id not found must raise — must not silently fall back to latest report."""
         with pytest.raises(FileNotFoundError, match="scan_id 'xyz'"):
             _load_report(report_file, "xyz")
+
+    def test_raises_with_scan_id_in_message(self, report_file: Path) -> None:
+        """Error message should name the missing scan_id for debuggability."""
+        try:
+            _load_report(report_file, "missing-42")
+        except FileNotFoundError as exc:
+            assert "missing-42" in str(exc)
+        else:
+            pytest.fail("FileNotFoundError not raised")
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +276,8 @@ class TestPersistLearnedPatterns:
         assert len(loaded["patterns"]) == 1
         assert loaded["patterns"][0]["occurrence_count"] == 2
 
-    def test_confidence_increases_with_occurrences(self, tmp_path: Path) -> None:
+    def test_confidence_reaches_threshold_at_4_marks(self, tmp_path: Path) -> None:
+        """4 marks should reach confidence 1.0; 2 marks should stay below 0.8."""
         pattern = {
             "rule_id": "W001",
             "file_pattern": "auth.py",
@@ -255,7 +290,7 @@ class TestPersistLearnedPatterns:
         }
         batch = {"version": 1, "patterns": [pattern]}
 
-        # Write four times → occurrence_count = 4 → confidence = min(1.0, 4/2) = 1.0
+        # Write four times → occurrence_count = 4 → confidence = min(1.0, 4/4) = 1.0
         for _ in range(4):
             LLMClassificationPhase._persist_learned_patterns(batch, tmp_path)
 
@@ -264,6 +299,30 @@ class TestPersistLearnedPatterns:
             loaded = yaml.safe_load(f)
 
         assert loaded["patterns"][0]["confidence"] == 1.0
+
+    def test_confidence_below_threshold_after_2_marks(self, tmp_path: Path) -> None:
+        """2 marks must NOT reach confidence >= 0.8 (auto-suppress threshold)."""
+        pattern = {
+            "rule_id": "W001",
+            "file_pattern": "auth.py",
+            "message_pattern": "Hardcoded",
+            "type": "false_positive",
+            "occurrence_count": 1,
+            "confidence": 0.5,
+            "first_seen": "2026-04-01T00:00:00+00:00",
+            "last_seen": "2026-04-01T00:00:00+00:00",
+        }
+        batch = {"version": 1, "patterns": [pattern]}
+
+        LLMClassificationPhase._persist_learned_patterns(batch, tmp_path)
+        LLMClassificationPhase._persist_learned_patterns(batch, tmp_path)
+
+        patterns_file = tmp_path / ".warden" / "learned_patterns.yaml"
+        with open(patterns_file) as f:
+            loaded = yaml.safe_load(f)
+
+        # occurrence_count = 2 → confidence = 2/4 = 0.5 < 0.8 → must not auto-suppress
+        assert loaded["patterns"][0]["confidence"] < 0.8
 
     def test_appends_new_patterns(self, tmp_path: Path) -> None:
         p1 = {
@@ -379,7 +438,7 @@ class TestSuppressLearnedFalsePositives:
             "file_pattern": "auth.py",
             "message_pattern": "Hardcoded",
             "type": "false_positive",
-            "occurrence_count": 2,
+            "occurrence_count": 4,
             "confidence": 1.0,
             "first_seen": "2026-04-01T00:00:00+00:00",
             "last_seen": "2026-04-01T00:00:00+00:00",
@@ -412,7 +471,7 @@ class TestSuppressLearnedFalsePositives:
             "file_pattern": "auth.py",
             "message_pattern": "Hardcoded",
             "type": "false_positive",
-            "occurrence_count": 1,
+            "occurrence_count": 2,
             "confidence": 0.5,  # Below 0.8 threshold
             "first_seen": "2026-04-01T00:00:00+00:00",
             "last_seen": "2026-04-01T00:00:00+00:00",
@@ -513,28 +572,213 @@ class TestFeedbackCLI:
         reports_dir = tmp_path / ".warden" / "reports"
         reports_dir.mkdir(parents=True)
         report_path = reports_dir / "warden-report.json"
-        report_path.write_text(json.dumps(SAMPLE_REPORT))
+        # Use a low-severity finding to avoid severity gate
+        report = {**SAMPLE_REPORT, "findings": [SAMPLE_FINDING_LOW], "frameResults": []}
+        report_path.write_text(json.dumps(report))
 
-        with patch(
-            "warden.cli.commands.feedback._run_feedback_async",
-            new_callable=lambda: lambda *a, **kw: AsyncMock(return_value=None)(),
-        ):
-            # Patch asyncio.run to run the coroutine synchronously in tests
-            async def _noop(**kwargs: Any) -> None:
-                return None
-
-            with patch("warden.cli.commands.feedback.asyncio.run") as mock_run:
-                mock_run.return_value = None
-                result = runner.invoke(
-                    feedback_app,
-                    [
-                        "mark",
-                        "--false-positives",
-                        "W001",
-                        "--project",
-                        str(tmp_path),
-                    ],
-                )
+        with patch("warden.cli.commands.feedback.asyncio.run") as mock_run:
+            mock_run.return_value = None
+            result = runner.invoke(
+                feedback_app,
+                [
+                    "mark",
+                    "--false-positives",
+                    "W003",
+                    "--project",
+                    str(tmp_path),
+                ],
+            )
 
         assert result.exit_code == 0
         assert "Processing feedback" in result.output
+
+    # ------------------------------------------------------------------
+    # Severity guard tests
+    # ------------------------------------------------------------------
+
+    def test_mark_blocks_critical_finding_without_force(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """CRITICAL finding as FP must be blocked unless --force is passed."""
+        reports_dir = tmp_path / ".warden" / "reports"
+        reports_dir.mkdir(parents=True)
+        report = {**SAMPLE_REPORT, "findings": [SAMPLE_FINDING_A], "frameResults": []}
+        (reports_dir / "warden-report.json").write_text(json.dumps(report))
+
+        result = runner.invoke(
+            feedback_app,
+            ["mark", "--false-positives", "W001", "--project", str(tmp_path)],
+        )
+        assert result.exit_code != 0
+        assert "Safety gate" in result.output or "CRITICAL" in result.output
+
+    def test_mark_blocks_high_finding_without_force(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """HIGH finding as FP must be blocked unless --force is passed."""
+        reports_dir = tmp_path / ".warden" / "reports"
+        reports_dir.mkdir(parents=True)
+        report = {**SAMPLE_REPORT, "findings": [SAMPLE_FINDING_B], "frameResults": []}
+        (reports_dir / "warden-report.json").write_text(json.dumps(report))
+
+        result = runner.invoke(
+            feedback_app,
+            ["mark", "--false-positives", "W002", "--project", str(tmp_path)],
+        )
+        assert result.exit_code != 0
+        assert "Safety gate" in result.output or "HIGH" in result.output
+
+    def test_mark_allows_critical_finding_with_force(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """--force bypasses severity gate for CRITICAL/HIGH findings."""
+        reports_dir = tmp_path / ".warden" / "reports"
+        reports_dir.mkdir(parents=True)
+        report = {**SAMPLE_REPORT, "findings": [SAMPLE_FINDING_A], "frameResults": []}
+        (reports_dir / "warden-report.json").write_text(json.dumps(report))
+
+        with patch("warden.cli.commands.feedback.asyncio.run") as mock_run:
+            mock_run.return_value = None
+            result = runner.invoke(
+                feedback_app,
+                [
+                    "mark",
+                    "--false-positives",
+                    "W001",
+                    "--force",
+                    "--project",
+                    str(tmp_path),
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert "Processing feedback" in result.output
+
+    def test_mark_low_severity_bypasses_gate(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """LOW severity findings should pass without --force."""
+        reports_dir = tmp_path / ".warden" / "reports"
+        reports_dir.mkdir(parents=True)
+        report = {**SAMPLE_REPORT, "findings": [SAMPLE_FINDING_LOW], "frameResults": []}
+        (reports_dir / "warden-report.json").write_text(json.dumps(report))
+
+        with patch("warden.cli.commands.feedback.asyncio.run") as mock_run:
+            mock_run.return_value = None
+            result = runner.invoke(
+                feedback_app,
+                [
+                    "mark",
+                    "--false-positives",
+                    "W003",
+                    "--project",
+                    str(tmp_path),
+                ],
+            )
+
+        assert result.exit_code == 0
+
+    # ------------------------------------------------------------------
+    # Unmark command tests
+    # ------------------------------------------------------------------
+
+    def test_unmark_removes_pattern(self, runner: CliRunner, tmp_path: Path) -> None:
+        patterns_dir = tmp_path / ".warden"
+        patterns_dir.mkdir()
+        data = {
+            "version": 1,
+            "patterns": [
+                {
+                    "rule_id": "W001",
+                    "file_pattern": "auth.py",
+                    "message_pattern": "Hardcoded",
+                    "type": "false_positive",
+                    "occurrence_count": 4,
+                    "confidence": 1.0,
+                    "first_seen": "2026-04-01T00:00:00+00:00",
+                    "last_seen": "2026-04-02T00:00:00+00:00",
+                }
+            ],
+        }
+        (patterns_dir / "learned_patterns.yaml").write_text(yaml.safe_dump(data))
+
+        result = runner.invoke(
+            feedback_app, ["unmark", "W001", "--project", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+        assert "Unmarked 1 pattern" in result.output
+
+        # Verify the file no longer contains the pattern
+        with open(patterns_dir / "learned_patterns.yaml") as f:
+            remaining = yaml.safe_load(f)
+        assert remaining["patterns"] == []
+
+    def test_unmark_nonexistent_id(self, runner: CliRunner, tmp_path: Path) -> None:
+        patterns_dir = tmp_path / ".warden"
+        patterns_dir.mkdir()
+        data = {"version": 1, "patterns": []}
+        (patterns_dir / "learned_patterns.yaml").write_text(yaml.safe_dump(data))
+
+        result = runner.invoke(
+            feedback_app, ["unmark", "W999", "--project", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+        assert "No patterns found" in result.output
+
+    def test_unmark_no_patterns_file(self, runner: CliRunner, tmp_path: Path) -> None:
+        result = runner.invoke(
+            feedback_app, ["unmark", "W001", "--project", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+        assert "nothing to unmark" in result.output.lower() or "No learned patterns" in result.output
+
+    def test_unmark_multiple_ids(self, runner: CliRunner, tmp_path: Path) -> None:
+        patterns_dir = tmp_path / ".warden"
+        patterns_dir.mkdir()
+        data = {
+            "version": 1,
+            "patterns": [
+                {
+                    "rule_id": "W001",
+                    "file_pattern": "a.py",
+                    "message_pattern": "msg1",
+                    "type": "false_positive",
+                    "occurrence_count": 4,
+                    "confidence": 1.0,
+                    "first_seen": "2026-04-01T00:00:00+00:00",
+                    "last_seen": "2026-04-01T00:00:00+00:00",
+                },
+                {
+                    "rule_id": "W002",
+                    "file_pattern": "b.py",
+                    "message_pattern": "msg2",
+                    "type": "false_positive",
+                    "occurrence_count": 4,
+                    "confidence": 1.0,
+                    "first_seen": "2026-04-01T00:00:00+00:00",
+                    "last_seen": "2026-04-01T00:00:00+00:00",
+                },
+                {
+                    "rule_id": "W003",
+                    "file_pattern": "c.py",
+                    "message_pattern": "msg3",
+                    "type": "false_positive",
+                    "occurrence_count": 1,
+                    "confidence": 0.5,
+                    "first_seen": "2026-04-01T00:00:00+00:00",
+                    "last_seen": "2026-04-01T00:00:00+00:00",
+                },
+            ],
+        }
+        (patterns_dir / "learned_patterns.yaml").write_text(yaml.safe_dump(data))
+
+        result = runner.invoke(
+            feedback_app, ["unmark", "W001,W002", "--project", str(tmp_path)]
+        )
+        assert result.exit_code == 0
+        assert "2 pattern" in result.output
+
+        with open(patterns_dir / "learned_patterns.yaml") as f:
+            remaining = yaml.safe_load(f)
+        assert len(remaining["patterns"]) == 1
+        assert remaining["patterns"][0]["rule_id"] == "W003"
