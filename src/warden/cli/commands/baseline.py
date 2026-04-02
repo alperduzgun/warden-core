@@ -239,6 +239,74 @@ def status_command() -> None:
             console.print("[dim]Run 'warden scan --update-baseline' to create one.[/dim]")
 
 
+@baseline_app.command(name="reset")
+def reset_command(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+) -> None:
+    """
+    Delete the entire Warden baseline (module-based and legacy).
+
+    Removes all baseline state — including module-based baseline files and the
+    legacy baseline.json — so the next scan starts fresh with no suppressed
+    findings.  This is irreversible without a backup.
+
+    Examples:
+        warden baseline reset          # Interactive confirmation required
+        warden baseline reset --yes    # Skip prompt (e.g. in scripts)
+    """
+    from warden.cli.commands.helpers.confirmation import confirm_destructive_operation
+
+    root = Path.cwd()
+
+    confirmed = confirm_destructive_operation(
+        "delete the entire Warden baseline (all suppressed findings will reappear on next scan)",
+        yes=yes,
+    )
+    if not confirmed:
+        console.print("[yellow]Baseline reset cancelled.[/yellow]")
+        raise typer.Exit(code=0)
+
+    import shutil
+
+    deleted_any = False
+
+    # Remove module-based baseline directory
+    baseline_dir = root / ".warden" / "baseline"
+    if baseline_dir.exists():
+        shutil.rmtree(baseline_dir)
+        console.print(f"[green]Deleted module-based baseline directory:[/green] {baseline_dir}")
+        deleted_any = True
+
+    # Remove legacy baseline.json
+    legacy_path = root / ".warden" / "baseline.json"
+    if legacy_path.exists():
+        legacy_path.unlink()
+        console.print(f"[green]Deleted legacy baseline file:[/green] {legacy_path}")
+        deleted_any = True
+
+    if not deleted_any:
+        console.print("[yellow]No baseline found — nothing to delete.[/yellow]")
+    else:
+        console.print("\n[bold green]Baseline reset complete.[/bold green]")
+        console.print("[dim]Run 'warden scan --update-baseline' to create a fresh baseline.[/dim]")
+
+
+@baseline_app.command(name="clear")
+def clear_command(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
+) -> None:
+    """
+    Alias for 'warden baseline reset'.
+
+    Deletes all baseline state so the next scan starts from scratch.
+
+    Examples:
+        warden baseline clear          # Interactive confirmation required
+        warden baseline clear --yes    # Skip prompt (e.g. in scripts)
+    """
+    reset_command(yes=yes)
+
+
 # Export for main.py registration
 def baseline_command():
     """Placeholder for typer sub-app registration."""

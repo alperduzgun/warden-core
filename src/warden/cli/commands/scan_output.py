@@ -332,8 +332,10 @@ def _render_text_report(
             message = finding.get("message", "")
             detail = finding.get("detail", "")
             rule_id = finding.get("id", finding.get("rule_id", ""))
+            raw_confidence = finding.get("verification_confidence", finding.get("verificationConfidence"))
+            confidence_str = f"{int(raw_confidence * 100)}%" if raw_confidence is not None else "\u2014"
 
-            # ── Header line: ● SEVERITY  file.py:14  rule-id ──
+            # ── Header line: ● SEVERITY  file.py:14  rule-id  confidence ──
             header = Text()
             header.append("  ● ", style=f"bold {color}")
             header.append(sev_label.upper(), style=f"bold {color}")
@@ -343,6 +345,7 @@ def _render_text_report(
                 header.append(f":{line_num}", style="dim white")
             if rule_id:
                 header.append(f"  [{rule_id}]", style="dim")
+            header.append(f"  confidence: {confidence_str}", style="dim cyan")
             console.print(header)
 
             # ── Message ──
@@ -386,6 +389,21 @@ def _render_text_report(
                 from rich.padding import Padding
 
                 console.print(Padding(fix_syntax, (0, 0, 0, 4)))
+
+            # ── Actionable hints (#622): remediation_hint, root_cause, risk_scope ──
+            remediation_hint = finding.get("remediationHint") or finding.get("remediation_hint")
+            root_cause = finding.get("rootCause") or finding.get("root_cause")
+            risk_scope = finding.get("riskScope") or finding.get("risk_scope")
+            if remediation_hint:
+                hint_truncated = remediation_hint[:120] + ("…" if len(remediation_hint) > 120 else "")
+                console.print(f"    [bold cyan]Fix:[/bold cyan] [dim]{hint_truncated}[/dim]")
+            if root_cause:
+                cause_truncated = root_cause[:120] + ("…" if len(root_cause) > 120 else "")
+                console.print(f"    [bold yellow]Cause:[/bold yellow] [dim]{cause_truncated}[/dim]")
+            if risk_scope:
+                scope_colors = {"local": "dim", "service": "yellow3", "data": "red"}
+                scope_color = scope_colors.get(risk_scope.lower(), "dim")
+                console.print(f"    [bold]Scope:[/bold] [{scope_color}]{risk_scope.upper()}[/{scope_color}]")
 
             # ── Remediation tip (first meaningful line) ──
             if detail:

@@ -226,6 +226,10 @@ def _serialize_finding(f: Finding) -> dict[str, Any]:
         "column": f.column,
         "is_blocker": f.is_blocker,
         "detection_source": f.detection_source,
+        "verification_confidence": f.verification_confidence,
+        "root_cause": f.root_cause,
+        "risk_scope": f.risk_scope,
+        "remediation_hint": f.remediation_hint,
     }
     if f.remediation is not None:
         data["remediation"] = f.remediation.to_json()
@@ -279,6 +283,9 @@ def _deserialize_finding(d: dict[str, Any]) -> Finding:
             confidence=float(ee.get("confidence", 0.0)),
         )
 
+    raw_confidence = d.get("verification_confidence")
+    verification_confidence = float(raw_confidence) if raw_confidence is not None else None
+
     return Finding(
         id=str(d["id"]),
         severity=str(d["severity"]),
@@ -290,6 +297,10 @@ def _deserialize_finding(d: dict[str, Any]) -> Finding:
         column=int(d.get("column", 0)),
         is_blocker=bool(d.get("is_blocker", False)),
         detection_source=d.get("detection_source"),
+        verification_confidence=verification_confidence,
+        root_cause=d.get("root_cause"),
+        risk_scope=d.get("risk_scope"),
+        remediation_hint=d.get("remediation_hint"),
         remediation=remediation,
         machine_context=machine_context,
         exploit_evidence=exploit_evidence,

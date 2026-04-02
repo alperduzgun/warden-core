@@ -148,6 +148,18 @@ class Finding:
     # Valid values: "rust_engine", "regex", "ast", "taint", "llm", "llm_verified"
     # None means source is unknown or not yet attributed.
     detection_source: str | None = None
+    # LLM verification confidence score (0.0–1.0). Set by FindingVerificationService
+    # after LLM verification. None when no LLM verification was performed (e.g.
+    # deterministic or linter findings that are exempt from verification).
+    verification_confidence: float | None = None
+    # Actionable enrichment fields (#622)
+    # root_cause: Short explanation of why this vulnerability exists in the code.
+    root_cause: str | None = None
+    # risk_scope: Blast radius of exploitation — "local", "service", or "data".
+    risk_scope: str | None = None
+    # remediation_hint: Concise 1-sentence fix hint for CLI display.
+    # Distinct from remediation (Remediation object with full code patch).
+    remediation_hint: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON."""
@@ -169,6 +181,14 @@ class Finding:
             result["exploitEvidence"] = self.exploit_evidence.to_json()
         if self.detection_source is not None:
             result["detectionSource"] = self.detection_source
+        if self.verification_confidence is not None:
+            result["verificationConfidence"] = self.verification_confidence
+        if self.root_cause is not None:
+            result["rootCause"] = self.root_cause
+        if self.risk_scope is not None:
+            result["riskScope"] = self.risk_scope
+        if self.remediation_hint is not None:
+            result["remediationHint"] = self.remediation_hint
         return result
 
     def to_dict(self) -> dict[str, Any]:

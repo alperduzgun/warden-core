@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -100,7 +101,11 @@ Return ONLY a JSON object:
     async def verify_findings_async(self, findings: list[dict[str, Any]], context: Any = None) -> list[dict[str, Any]]:
         """
         Filters out false positives from the findings list using:
-        Heuristic Filter -> Cache -> Batch LLM Verification.
+        Heuristic Filter -> Cache -> Parallel Category LLM Verification.
+
+        Findings that reach the LLM stage are first grouped by category
+        (secrets / taint / structural / other) and all categories are
+        verified concurrently via asyncio.gather for lower end-to-end latency.
         """
         if not self.enabled or not self.llm:
             return findings
@@ -167,6 +172,10 @@ Return ONLY a JSON object:
                 self._set(cached_result, "cached", True)
                 if self._get(cached_result, "is_true_positive", True):
                     self._set(finding, "verification_metadata", cached_result)
+                    # Propagate confidence from cached verification result
+                    cached_confidence = self._get(cached_result, "confidence")
+                    if cached_confidence is not None:
+                        self._set(finding, "verification_confidence", float(cached_confidence))
                     verified_findings.append(finding)
                 continue
 
@@ -175,47 +184,87 @@ Return ONLY a JSON object:
         if not remaining_after_cache:
             return verified_findings
 
-        # STEP 3: Batch LLM Verification (token-aware batching)
-        MAX_CONSECUTIVE_FAILURES = 3
-        MAX_BATCH_TOKENS = 4000  # Safe token budget per batch
-        # Adaptive batch size: smaller on resource-constrained / local LLMs.
-        # _get_safe_batch_size can be replaced in tests to force a specific size.
-        MAX_BATCH_SIZE = self._get_safe_batch_size(10)
-        logger.info("batch_verification_starting", count=len(remaining_after_cache))
+        # STEP 3: Parallel Category LLM Verification
+        # Group by category and verify each category concurrently.
+        categories = self._categorize_findings(remaining_after_cache)
+        logger.info(
+            "verification_parallelized",
+            categories=list(categories.keys()),
+            total_findings=len(remaining_after_cache),
+        )
 
-        # Build token-aware batches
-        _batches: list[list] = []
-        _cur_batch: list = []
-        _cur_tokens = 0
-        for _finding in remaining_after_cache:
-            _msg = getattr(_finding, "message", "") or (
-                _finding.get("message", "") if isinstance(_finding, dict) else ""
-            ) or ""
-            _code = getattr(_finding, "code", "") or (
-                _finding.get("code", "") if isinstance(_finding, dict) else ""
-            ) or ""
-            _est = len(_msg.split()) + len(_code.split())
-            if _cur_tokens + _est > MAX_BATCH_TOKENS or len(_cur_batch) >= MAX_BATCH_SIZE:
-                if _cur_batch:
-                    _batches.append(_cur_batch)
-                _cur_batch = [_finding]
-                _cur_tokens = _est
+        category_results = await asyncio.gather(
+            *[self._verify_category(cat, items, context) for cat, items in categories.items()],
+            return_exceptions=True,
+        )
+
+        for cat_outcome in category_results:
+            if isinstance(cat_outcome, Exception):
+                # A whole category failed — log and skip (findings stay unverified).
+                logger.error("category_verification_failed", error=str(cat_outcome))
+                continue
+            verified_findings.extend(cat_outcome)
+
+        logger.info(
+            "verification_summary",
+            initial=initial_count,
+            final=len(verified_findings),
+            reduction=f"{((initial_count - len(verified_findings)) / initial_count) * 100:.1f}%"
+            if initial_count > 0
+            else "0%",
+        )
+
+        return verified_findings
+
+    # ------------------------------------------------------------------
+    # Category helpers (Issue #621)
+    # ------------------------------------------------------------------
+
+    _SECRETS_KEYWORDS = frozenset({"secret", "password", "token", "key", "credential"})
+    _TAINT_KEYWORDS = frozenset({"sql", "injection", "xss", "command"})
+    _STRUCTURAL_KEYWORDS = frozenset({"orphan", "unused", "unreferenced"})
+
+    def _categorize_findings(self, findings: list) -> dict[str, list]:
+        """Group findings by verification category.
+
+        Categories:
+          secrets    — rule_id contains: secret / password / token / key / credential
+          taint      — rule_id contains: sql / injection / xss / command
+          structural — rule_id contains: orphan / unused / unreferenced
+          other      — everything else
+
+        Each category is verified concurrently so that slow LLM calls for one
+        category do not block another.
+        """
+        result: dict[str, list] = {"secrets": [], "taint": [], "structural": [], "other": []}
+
+        for finding in findings:
+            rule_id = (self._get(finding, "rule_id") or self._get(finding, "id") or "").lower()
+
+            if any(kw in rule_id for kw in self._SECRETS_KEYWORDS):
+                result["secrets"].append(finding)
+            elif any(kw in rule_id for kw in self._TAINT_KEYWORDS):
+                result["taint"].append(finding)
+            elif any(kw in rule_id for kw in self._STRUCTURAL_KEYWORDS):
+                result["structural"].append(finding)
             else:
-                _cur_batch.append(_finding)
-                _cur_tokens += _est
-        if _cur_batch:
-            _batches.append(_cur_batch)
+                result["other"].append(finding)
 
-        # Sequential batch verification with circuit break + soft timeout.
-        # Sequential (not parallel) so that consecutive failures can stop further
-        # LLM calls early — a fully parallel gather would always launch all batches
-        # before the circuit break could fire.
+        # Drop empty categories so asyncio.gather has fewer tasks.
+        return {cat: items for cat, items in result.items() if items}
+
+    async def _verify_category(self, category: str, findings: list, context: Any) -> list:
+        """Verify all findings in a single category using token-aware batching.
+
+        Mirrors the original sequential batch loop (with circuit break and soft
+        timeout) but scoped to one category so categories run in parallel.
+        """
         import time as _time
 
+        MAX_CONSECUTIVE_FAILURES = 3
+        MAX_BATCH_TOKENS = 4000
+        MAX_BATCH_SIZE = self._get_safe_batch_size(10)
         VERIFICATION_BUDGET_S = 90.0
-        _start = _time.monotonic()
-        consecutive_failures = 0
-        _processed_finding_count = 0
 
         def _make_fallback_meta(reason: str) -> dict:
             return {
@@ -227,14 +276,44 @@ Return ONLY a JSON object:
                 "verified": False,
             }
 
+        # Build token-aware batches for this category.
+        batches: list[list] = []
+        cur_batch: list = []
+        cur_tokens = 0
+        for finding in findings:
+            msg = getattr(finding, "message", "") or (
+                finding.get("message", "") if isinstance(finding, dict) else ""
+            ) or ""
+            code = getattr(finding, "code", "") or (
+                finding.get("code", "") if isinstance(finding, dict) else ""
+            ) or ""
+            est = len(msg.split()) + len(code.split())
+            if cur_tokens + est > MAX_BATCH_TOKENS or len(cur_batch) >= MAX_BATCH_SIZE:
+                if cur_batch:
+                    batches.append(cur_batch)
+                cur_batch = [finding]
+                cur_tokens = est
+            else:
+                cur_batch.append(finding)
+                cur_tokens += est
+        if cur_batch:
+            batches.append(cur_batch)
+
+        logger.info("batch_verification_starting", category=category, count=len(findings))
+
+        verified: list = []
+        _start = _time.monotonic()
+        consecutive_failures = 0
+        processed_count = 0
         circuit_broken = False
         timed_out = False
 
-        for batch in _batches:
+        for batch in batches:
             elapsed = _time.monotonic() - _start
             if elapsed > VERIFICATION_BUDGET_S:
                 logger.warning(
                     "verification_soft_timeout",
+                    category=category,
                     elapsed_s=round(elapsed, 1),
                     budget_s=VERIFICATION_BUDGET_S,
                 )
@@ -252,48 +331,44 @@ Return ONLY a JSON object:
                     is_tp = self._get(result, "is_true_positive", True)
                     if is_tp:
                         self._set(finding, "verification_metadata", result)
-                        verified_findings.append(finding)
+                        result_confidence = self._get(result, "confidence")
+                        if result_confidence is not None:
+                            self._set(finding, "verification_confidence", float(result_confidence))
+                        verified.append(finding)
             except Exception as e:
-                logger.error("batch_verification_failed", error=str(e))
+                logger.error("batch_verification_failed", category=category, error=str(e))
                 consecutive_failures += 1
-                _fb = _make_fallback_meta("LLM verification failed. Finding kept as unverified.")
+                fb = _make_fallback_meta("LLM verification failed. Finding kept as unverified.")
                 for finding in batch:
-                    self._set(finding, "verification_metadata", _fb)
-                verified_findings.extend(batch)
+                    self._set(finding, "verification_metadata", fb)
+                verified.extend(batch)
 
                 if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                    logger.warning("verification_circuit_break", consecutive_failures=consecutive_failures)
+                    logger.warning(
+                        "verification_circuit_break",
+                        category=category,
+                        consecutive_failures=consecutive_failures,
+                    )
                     circuit_broken = True
-                    _processed_finding_count += len(batch)
+                    processed_count += len(batch)
                     break
 
-            _processed_finding_count += len(batch)
+            processed_count += len(batch)
 
-        # After circuit break or timeout: add any unprocessed findings with fallback meta
-        # so callers always receive the full original set.
         if circuit_broken or timed_out:
-            unprocessed = remaining_after_cache[_processed_finding_count:]
+            unprocessed = findings[processed_count:]
             if unprocessed:
                 reason = (
                     "Verification skipped: circuit break after consecutive LLM failures."
                     if circuit_broken
                     else "Verification skipped: soft timeout exceeded."
                 )
-                _fb = _make_fallback_meta(reason)
+                fb = _make_fallback_meta(reason)
                 for finding in unprocessed:
-                    self._set(finding, "verification_metadata", _fb)
-                verified_findings.extend(unprocessed)
+                    self._set(finding, "verification_metadata", fb)
+                verified.extend(unprocessed)
 
-        logger.info(
-            "verification_summary",
-            initial=initial_count,
-            final=len(verified_findings),
-            reduction=f"{((initial_count - len(verified_findings)) / initial_count) * 100:.1f}%"
-            if initial_count > 0
-            else "0%",
-        )
-
-        return verified_findings
+        return verified
 
     def _is_obvious_false_positive(self, finding: Any, code: str) -> bool:
         """Heuristic Alpha Filter to detect obvious false positives instantly."""
@@ -555,22 +630,36 @@ Return ONLY a JSON array of objects in the EXACT order:
             ]
 
     def _generate_key(self, finding: Any) -> str:
+        """Generate a cross-file cache key using (rule_id, code_snippet_hash).
+
+        The key deliberately excludes file_path so that the same vulnerability
+        pattern in multiple files shares a single cache entry.  If no code
+        snippet is available the finding message is used as the content anchor.
+
+        Old entries produced by the previous (file-path-inclusive) scheme simply
+        won't match the new keys — they produce a graceful cache miss and are
+        re-verified normally.
+        """
         import hashlib
 
-        # Include file_path + line_number so the same rule firing on different files
-        # gets separate cache entries rather than reusing the first file's result.
-        finding_id = self._get(finding, "id") or ""
-        file_path = self._get(finding, "file_path") or self._get(finding, "location") or ""
-        line_number = str(self._get(finding, "line_number") or "")
-        code = self._get(finding, "code") or ""
+        rule_id = self._get(finding, "rule_id") or self._get(finding, "id") or ""
+        code_snippet = (self._get(finding, "code") or "").strip()
 
-        unique_str = f"{finding_id}:{file_path}:{line_number}:{code}"
-        return hashlib.sha256(unique_str.encode()).hexdigest()
+        if code_snippet:
+            content_hash = hashlib.md5(code_snippet.encode()).hexdigest()[:12]
+        else:
+            message = (self._get(finding, "message") or "").strip()
+            content_hash = hashlib.md5(message.encode()).hexdigest()[:12]
+
+        return f"{rule_id}:{content_hash}"
 
     def _check_cache(self, key: str) -> dict | None:
         try:
             if self.memory_manager:
-                return self.memory_manager.get_llm_cache(f"verify:{key}")
+                result = self.memory_manager.get_llm_cache(f"verify:{key}")
+                if result is not None:
+                    logger.debug("verification_cache_hit", key=key)
+                return result
         except Exception as e:
             logger.warning("cache_lookup_failed", key=key, error=str(e))
         return None
