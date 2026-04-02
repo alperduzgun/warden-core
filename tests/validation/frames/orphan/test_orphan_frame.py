@@ -57,7 +57,8 @@ def get_home():
     # Should have unused import findings
     # Note: Message wording varies by detector (PythonOrphanDetector: "never used", RustOrphanDetector: "appears unused")
     unused_import_findings = [
-        f for f in result.findings if "unused" in f.message.lower() and "import" in f.message.lower()
+        f for f in result.findings
+        if "import" in f.message.lower() and ("never used" in f.message.lower() or "unused" in f.message.lower() or "appears unused" in f.message.lower())
     ]
     assert len(unused_import_findings) > 0
 

@@ -1260,15 +1260,23 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
 
         for check_result in check_results:
             for check_finding in check_result.findings:
-                # Determine detection source from check_id
+                # Determine detection source from check_id.
+                # "pattern" and "taint" are in _DETERMINISTIC_SOURCES (batch_processor.py)
+                # and bypass LLM verification — only assign these to fully deterministic checks.
+                _CHECK_SOURCE_MAP: dict[str, str] = {
+                    "llm-security":       "llm",
+                    "llm-security-check": "llm",
+                    "taint-analysis":     "taint",
+                    "phantom-package":    "pattern",
+                    "hardcoded-password": "pattern",
+                    "sql-injection":      "pattern",
+                    "xss":                "pattern",
+                    "secrets":            "pattern",
+                    "weak-crypto":        "pattern",
+                    "http-security":      "pattern",
+                }
                 check_id = check_finding.check_id
-                if check_id == "llm-security":
-                    detection_source: str | None = "llm"
-                elif check_id == "taint-analysis":
-                    detection_source = "taint"
-                else:
-                    # Built-in pattern/regex checks (sql-injection, xss, secrets, etc.)
-                    detection_source = "regex"
+                detection_source: str | None = _CHECK_SOURCE_MAP.get(check_id, "llm")
 
                 # Convert CheckFinding to Frame-level Finding
                 finding = Finding(

@@ -259,8 +259,10 @@ class HardcodedPasswordCheck(ValidationCheck):
             if stripped.startswith("#") or stripped.startswith("//"):
                 continue
 
-            # Skip constant/list definitions (e.g. pattern lists used for detection)
-            if re.match(r'^["\'][\w]+["\'],?\s*$', stripped):
+            # Skip collection items: lines composed entirely of quoted strings
+            # separated by commas (frozenset/list/set/tuple definitions, blocklists, etc.)
+            # Matches: "admin",  OR  "admin", "root", "api"  OR  "admin"
+            if re.match(r'^(?:["\'][\w\-\.@]+["\'],?\s*)+$', stripped):
                 continue
 
             for compiled_pattern, weak_password in self._compiled_weak_patterns:

@@ -340,6 +340,12 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 if self._has_framework_decorator(node):
                     continue
 
+                # Skip exported schema/DTO classes defined in schema modules.
+                # These are referenced via imports in sibling files — single-file
+                # analysis cannot see cross-file usage (#632).
+                if def_type == "class" and self._is_exported_schema(def_name):
+                    continue
+
                 # Get accurate snippet including decorators
                 code_snippet = self._get_definition_snippet(node)
 
@@ -354,6 +360,29 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 )
 
         return findings
+
+    def _is_exported_schema(self, name: str) -> bool:
+        """Return True if `name` looks like an exported schema/DTO class.
+
+        FastAPI/Django/DRF projects define Pydantic models or serializers in
+        dedicated schema modules and import them in router/view files.
+        Single-file orphan analysis cannot see those cross-file references (#632).
+
+        Heuristic: class is in a file whose path contains a schema/model directory
+        AND its name ends with a recognised schema suffix.
+        """
+        _SCHEMA_DIRS = {"schemas", "schema", "models", "dtos", "dto",
+                        "serializers", "types", "payloads", "forms", "views"}
+        _SCHEMA_SUFFIXES = (
+            "Request", "Response", "Schema", "DTO", "Dto",
+            "Payload", "Input", "Output", "Form", "View",
+            "Model", "Data", "Body", "Params",
+        )
+        import os as _os
+        parts = set(_os.path.normpath(self.file_path).split(_os.sep))
+        in_schema_dir = bool(parts & _SCHEMA_DIRS)
+        has_schema_suffix = name.endswith(_SCHEMA_SUFFIXES)
+        return in_schema_dir and has_schema_suffix
 
     @staticmethod
     def _is_convention_dispatch_method(name: str, node: ast.AST) -> bool:

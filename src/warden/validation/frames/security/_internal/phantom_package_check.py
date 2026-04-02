@@ -147,6 +147,25 @@ def _normalize_python_pkg(name: str) -> str:
     return name.lower().replace("_", "-")
 
 
+def _is_local_module(pkg: str, file_path: str) -> bool:
+    """Check whether `pkg` exists as a local module relative to the project root.
+
+    Walks up from the scanned file's directory to find the project root
+    (identified by the presence of ``.warden/`` or ``pyproject.toml``), then
+    checks whether ``{root}/{pkg}/`` (package) or ``{root}/{pkg}.py`` (module)
+    exists on disk.  Returns False when the project root cannot be determined
+    so the caller falls through to the PyPI lookup.
+    """
+    from pathlib import Path as _Path
+
+    current = _Path(file_path).resolve().parent
+    while current != current.parent:
+        if (current / ".warden").exists() or (current / "pyproject.toml").exists() or (current / "setup.py").exists():
+            return (current / pkg).is_dir() or (current / f"{pkg}.py").exists()
+        current = current.parent
+    return False
+
+
 def _extract_python_imports(content: str) -> list[str]:
     """Return top-level module names from Python import statements."""
     names: list[str] = []
@@ -277,15 +296,19 @@ class PhantomPackageCheck(ValidationCheck):
             candidates = _extract_js_imports(code_file.content)
             is_known = self._is_known_js
 
-        # Deduplicate, filter known-good packages
+        # Deduplicate, filter known-good packages and local modules
         seen: set[str] = set()
         to_check: list[str] = []
         for pkg in candidates:
             if not pkg or pkg in seen:
                 continue
             seen.add(pkg)
-            if not is_known(pkg):
-                to_check.append(pkg)
+            if is_known(pkg):
+                continue
+            if language == "python" and _is_local_module(pkg, str(code_file.path)):
+                logger.debug("phantom_package_local_module_skip", package=pkg, file=code_file.path)
+                continue
+            to_check.append(pkg)
 
         # Cap to avoid runaway network calls
         to_check = to_check[:_MAX_PACKAGES_PER_SCAN]

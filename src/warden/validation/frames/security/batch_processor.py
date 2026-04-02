@@ -183,17 +183,17 @@ async def _verify_security_batch(
         prompt_parts.append(f"File: {item['file_path']}")
         prompt_parts.append(f"Severity: {finding.severity}")
         prompt_parts.append(f"Message: {finding.message}")
-        if code_file and finding.line_number:
+        if code_file and finding.line:
             # Show ±20 lines around the flagged line so verifier sees full context
             lines = (code_file.content or "").splitlines()
-            ln = finding.line_number - 1  # 0-indexed
+            ln = finding.line - 1  # 0-indexed
             start = max(0, ln - 20)
             end = min(len(lines), ln + 21)
             numbered = [f"{start + j + 1}: {lines[start + j]}" for j in range(end - start)]
             prompt_parts.append(f"Code (lines {start + 1}–{end}):\n```\n" + "\n".join(numbered) + "\n```")
         elif finding.code:
             prompt_parts.append(f"Code:\n```\n{finding.code[:200]}\n```")
-        if code_file and not finding.line_number:
+        if code_file and not finding.line:
             # Fallback: first-chunk context for findings without line numbers
             file_context = _prepare_code_for_batch(code_file)
             prompt_parts.append(f"File Context:\n```\n{file_context}\n```")
