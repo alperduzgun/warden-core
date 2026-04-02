@@ -272,6 +272,28 @@ Warden gives you granular control over what to check:
 *   **Global Config:** Define suppressions in `.warden/suppressions.yaml`.
 *   **File Exclusion:** Respects `.gitignore` and supports `.warden/ignore.yaml`.
 
+#### 🔁 Learning Loop — Teach Warden from Your Feedback
+Warden learns from your feedback and automatically suppresses known noise on future scans:
+
+```bash
+# Mark a finding as a false positive — Warden won't report it again
+warden feedback mark --false-positives W001,W003
+
+# Confirm a finding is a true positive (reinforces detection)
+warden feedback mark --true-positives W002
+
+# Force suppression of a CRITICAL/HIGH finding (safety gate bypassed)
+warden feedback mark --false-positives W001 --force
+
+# List all patterns Warden has learned
+warden feedback list
+
+# Undo a false-positive marking — finding reappears on next scan
+warden feedback unmark W001
+```
+
+**How it works:** Patterns are stored in `.warden/learned_patterns.yaml`. A finding is auto-suppressed once it reaches **confidence ≥ 0.8** (requires 4 independent markings). CRITICAL and HIGH findings require `--force` to prevent accidental suppression of real security issues.
+
 ### 9. 🧠 Structural Intelligence & Hygiene (New!)
 Warden goes beyond code syntax; it understands your **Project Architecture**:
 *   **Anomaly Detection:** Uses AI to identify structural flaws (e.g., redundant configuration files, orphaned directories) that static analysis misses.
@@ -311,6 +333,13 @@ Warden reduces false positives by implementing a "Trust but Verify" approach:
 3.  **Result:**
     -   **True Positives:** Passed to Fortification for fixing.
     -   **False Positives:** (e.g., Type Hints mistaken for arrays) are silently filtered out BEFORE consuming tokens on auto-fix generation.
+
+#### Actionable Output
+Each verified finding includes:
+- **Confidence score** — how certain Warden is (e.g., `87%`). Shown inline in CLI output.
+- **Root cause** — why the issue exists (e.g., "User-controlled data interpolated into SQL query").
+- **Remediation hint** — concrete fix suggestion (e.g., "Use parameterized queries or an ORM").
+- **Risk scope** — impact radius: `local` (single function), `service` (process-wide), or `data` (database/storage).
 
 ### 13. 🎯 Intent-Driven Validation
 Warden doesn't just check *correctness*; it checks *appropriateness*.
@@ -438,9 +467,17 @@ AI Agents working in a Warden project follow this strict protocol:
 | Command | Description |
 | :--- | :--- |
 | `warden scan` | Runs the full validation pipeline on the project. |
-| `warden scan --diff` | **(New!)** Incremental scan. Checks only files changed relative to main branch. |
-| `warden scan --diff` (with baseline) | **(New!)** Smart Autopilot. Baseline is auto-loaded from `.warden/baseline.json` when present — no extra flag needed. |
-| `warden config llm` | **(New!)** Manage LLM provider (status/use/test). |
+| `warden scan --plan` | Preview the scan strategy (frames, file count, LLM estimates) without running. |
+| `warden scan --diff` | Incremental scan — checks only files changed relative to main branch. |
+| `warden scan --diff` (with baseline) | Smart Autopilot. Baseline is auto-loaded from `.warden/baseline.json` when present. |
+| `warden feedback mark` | Mark findings as false positives or true positives to train the learning loop. |
+| `warden feedback list` | List all learned suppression patterns and their confidence scores. |
+| `warden feedback unmark <id>` | Remove a learned pattern — finding reappears on next scan. |
+| `warden workflow list` | Show all named scan presets (`ci`, `security-audit`, `pre-commit`, `nightly`). |
+| `warden workflow run <preset>` | Run a named scan preset with pre-configured options. |
+| `warden baseline reset --yes` | Delete the entire baseline (all suppressed findings reappear). |
+| `warden baseline clear --yes` | Clear baseline entries for specific modules. |
+| `warden config llm` | Manage LLM provider (status/use/test). |
 | `warden config llm status` | Shows current LLM configuration and available providers. |
 | `warden config llm test` | Tests the active LLM provider connection. |
 | `warden serve` | Starts the MCP Server for AI integration. |
@@ -489,6 +526,53 @@ warden baseline          # View baseline status
 ```
 
 > **Note:** There is no `--baseline` flag. Baseline filtering is automatic when a baseline file is present.
+
+#### Resetting the Baseline
+Destructive baseline operations require explicit confirmation to prevent accidents:
+
+```bash
+# Interactive (prompts for Y/N — defaults to N)
+warden baseline reset
+
+# Non-interactive / scripted
+warden baseline reset --yes
+
+# CI environments auto-confirm (CI=true or GITHUB_ACTIONS=true detected)
+```
+
+---
+
+### 🗺️ Pre-Scan Planning (`--plan`)
+Preview exactly what Warden will do before committing to a full scan:
+
+```bash
+warden scan src/ --plan
+```
+
+Output shows: frames selected, file count, files skipped (gitignored/binary), estimated LLM calls, and reasoning — all in a Rich table. The scan does **not** execute. Useful for understanding scope before a deep audit.
+
+---
+
+### ⚡ Workflow Presets
+Run pre-configured scan strategies for common scenarios:
+
+```bash
+# List all available presets
+warden workflow list
+
+# Run a preset
+warden workflow run ci               # Fast scan for CI pipelines (basic level)
+warden workflow run security-audit   # Deep SARIF output for penetration testing
+warden workflow run pre-commit       # Diff-only scan for pre-commit hooks
+warden workflow run nightly          # Full scan with baseline update
+```
+
+| Preset | Level | Key Options |
+| :--- | :--- | :--- |
+| `ci` | basic | No preflight, 120s timeout, CI mode |
+| `security-audit` | deep | SARIF output |
+| `pre-commit` | standard | Diff against HEAD only |
+| `nightly` | standard | SARIF output to `.warden/reports/` |
 
 ---
 
