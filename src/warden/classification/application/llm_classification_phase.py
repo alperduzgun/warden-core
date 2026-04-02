@@ -142,14 +142,48 @@ class LLMClassificationPhase(LLMPhaseBase):
     ) -> dict[str, tuple[list[str], dict[str, Any], float]]:
         """
         Classify multiple files in batch for frame selection.
+
+        Static pre-filter (#618): Before calling the LLM, run a fast
+        grep/keyword-based pre-classification.  Files resolved by the
+        pre-filter are excluded from LLM batches, reducing token spend and
+        latency.
         """
         results = {}
         if not files:
             return results
 
+        # ── Static pre-filter gate (#618) ────────────────────────────────
+        # Build a source map from file_contexts (which may carry "content").
+        # Fall back to empty string when content is absent so the pre-filter
+        # can still apply path-based rules (test files, dep manifests).
+        file_sources: dict[str, str] = {}
+        for fp in files:
+            ctx = file_contexts.get(fp, {})
+            if isinstance(ctx, dict):
+                file_sources[fp] = ctx.get("content", "")
+            else:
+                file_sources[fp] = getattr(ctx, "content", "") or ""
+
+        from warden.classification.application.static_pre_filter import StaticPreFilter
+
+        pre_classified, llm_files = StaticPreFilter.batch_classify(files, file_sources)
+
+        # Convert pre-filter results to the canonical tuple format
+        for file_path, pf_result in pre_classified.items():
+            selected_frames = pf_result.get("selected_frames", ["orphan"])
+            suppression_config = self._default_suppression_config(
+                {file_path: file_contexts.get(file_path, {})}
+            )
+            confidence = float(pf_result.get("confidence", 0.90))
+            results[file_path] = (selected_frames, suppression_config, confidence)
+
+        # If all files were resolved statically, skip LLM entirely.
+        if not llm_files:
+            return results
+
         if not self.config.enabled or not self.llm:
-            # Fallback for all
-            for file_path in files:
+            # Fallback for remaining files
+            for file_path in llm_files:
                 selected_frames = self._rule_based_selection(
                     project_type, framework, {file_path: file_contexts.get(file_path, {})}
                 )
@@ -157,9 +191,10 @@ class LLMClassificationPhase(LLMPhaseBase):
                 results[file_path] = (selected_frames, suppression_config, 0.6)
             return results
 
+        # ── LLM batch classification for remaining files ──────────────────
         # Pre-compute all batches then process in parallel — closes #305
         batch_size = self._get_realtime_safe_batch_size(2)
-        batches = [files[i : i + batch_size] for i in range(0, len(files), batch_size)]
+        batches = [llm_files[i : i + batch_size] for i in range(0, len(llm_files), batch_size)]
         system_prompt = self.get_system_prompt()
 
         async def _classify_one_batch(batch_files: list[str]) -> dict[str, tuple[list[str], dict[str, Any], float]]:
