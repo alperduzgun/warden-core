@@ -178,6 +178,74 @@ def _attempt_self_healing_sync(error: Exception, level: str) -> bool:
         return False
 
 
+def _run_scan_plan(paths: list[str] | None, level: str) -> None:
+    """
+    Generate and display a pre-scan analysis plan using ScanPlanner.
+
+    Exits after printing — does not run the actual scan.
+    """
+    import asyncio as _asyncio
+    from pathlib import Path as _Path
+
+    from rich.table import Table
+
+    from warden.pipeline.application.scan_planner import ScanPlanner
+
+    project_root = _Path(paths[0]) if paths else _Path.cwd()
+    if not project_root.is_dir():
+        project_root = project_root.parent
+
+    console.print(f"\n[bold cyan]Scan Plan[/bold cyan] — [dim]{project_root}[/dim]")
+
+    # Minimal config shim so planner picks up the analysis level
+    class _MinimalConfig:
+        class analysis_level:  # noqa: N801
+            value = level
+
+        use_gitignore = True
+
+    planner = ScanPlanner()
+    scan_plan = _asyncio.run(planner.plan(project_root=project_root, config=_MinimalConfig()))
+
+    # --- Summary panel ---
+    console.print(f"\n[dim]{scan_plan.reasoning}[/dim]\n")
+
+    # --- Files summary ---
+    summary_table = Table(show_header=False, box=None, padding=(0, 2))
+    summary_table.add_column("Key", style="bold")
+    summary_table.add_column("Value", style="cyan")
+    summary_table.add_row("Analysis level", scan_plan.analysis_level)
+    summary_table.add_row("Files to scan", str(scan_plan.file_count))
+    summary_table.add_row("Files skipped", str(scan_plan.skipped_count))
+    summary_table.add_row("Estimated LLM calls", str(scan_plan.estimated_llm_calls))
+    summary_table.add_row("Frames selected", str(len(scan_plan.frames)))
+    console.print(summary_table)
+
+    # --- Frame table ---
+    if scan_plan.frames:
+        console.print()
+        frame_table = Table(title="Frames", show_header=True, header_style="bold magenta")
+        frame_table.add_column("Frame ID", style="green", min_width=16)
+        frame_table.add_column("Display Name", style="white")
+        frame_table.add_column("LLM", style="cyan", justify="center")
+        frame_table.add_column("Reason", style="dim")
+
+        for frame in scan_plan.frames:
+            llm_badge = "[cyan]yes[/cyan]" if frame.is_llm_powered else "[dim]no[/dim]"
+            frame_table.add_row(
+                frame.frame_id,
+                frame.display_name,
+                llm_badge,
+                frame.reason,
+            )
+
+        console.print(frame_table)
+
+    console.print(
+        "\n[dim]Run without --plan to execute the scan.[/dim]\n"
+    )
+
+
 def scan_command(
     paths: list[str] | None = typer.Argument(None, help="Files or directories to scan"),
     frames: list[str] | None = typer.Option(None, "--frame", "-f", help="Specific frames to run"),
@@ -214,6 +282,7 @@ def scan_command(
         help="Resume a previously interrupted scan, skipping already-scanned files.",
     ),
     provider: str | None = typer.Option(None, "--provider", help="LLM provider override (e.g., ollama, groq, qwen_cli, auto)"),
+    plan: bool = typer.Option(False, "--plan", help="Print the analysis plan (frames, file count, LLM estimates) and exit without scanning"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -293,6 +362,11 @@ def scan_command(
             else:
                 console.print("\n[bold yellow]⚠ Basic Mode[/bold yellow] — AI verification disabled.")
                 console.print("[dim]Deterministic checks only (regex, AST, taint analysis).[/dim]\n")
+
+        # --plan: generate and display analysis plan then exit
+        if plan:
+            _run_scan_plan(paths=paths, level=level)
+            return
 
         # Auto-install scan dependencies based on analysis level
         if level != "basic":

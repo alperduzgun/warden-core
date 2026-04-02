@@ -26,6 +26,7 @@ from warden.cli.commands.search import index_command, search_command
 from warden.cli.commands.serve import serve_app
 from warden.cli.commands.status import status_command
 from warden.cli.commands.update import update_command
+from warden.cli.commands.workflow import workflow_app
 
 # Command Logic Imports
 from warden.cli.commands.version import version_command
@@ -93,6 +94,7 @@ app.add_typer(ci_app, name="ci")
 app.add_typer(config_app, name="config")
 app.add_typer(context_app, name="context")
 app.add_typer(codex_app, name="codex")
+app.add_typer(workflow_app, name="workflow")
 
 # Register Top-Level Commands
 app.command(name="version")(version_command)
