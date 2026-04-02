@@ -321,10 +321,46 @@ class PreAnalysisPhase:
             except Exception as e:
                 logger.warning("user_context_load_failed", error=str(e))
 
+            # Check project profile cache before running expensive structure analysis
+            _profile_cache_hit = False
+            try:
+                from warden.analysis.application.project_profile_cache import (
+                    ProjectProfileCache,
+                )
+
+                _profile_cache = ProjectProfileCache()
+                _cached_profile = _profile_cache.load(self.project_root)
+                if _cached_profile:
+                    _profile_cache_hit = True
+                    # Apply cached detection results to project_context
+                    from warden.analysis.domain.project_context import Framework, ProjectType
+
+                    try:
+                        project_context.project_type = ProjectType(_cached_profile["project_type"])
+                    except (ValueError, KeyError):
+                        pass
+                    try:
+                        project_context.framework = Framework(_cached_profile["framework"])
+                    except (ValueError, KeyError):
+                        pass
+            except Exception as _ppc_exc:
+                logger.debug("project_profile_cache_check_failed", error=str(_ppc_exc))
+                _profile_cache = None  # type: ignore[assignment]
+                _profile_cache_hit = False
+
             # Analyze structure (will only discover purpose if missing after enrichment)
             _emit("Analyzing project structure & framework")
             all_paths = [Path(cf.path).resolve() for cf in code_files]
-            project_context = await self._analyze_project_structure_async(project_context, all_files=all_paths)
+            if _profile_cache_hit:
+                # Cache hit: skip expensive detection, only run lightweight refresh
+                logger.info(
+                    "project_structure_analysis_skipped",
+                    reason="project_profile_cache_hit",
+                    project_type=project_context.project_type.value if project_context.project_type else None,
+                    framework=project_context.framework.value if project_context.framework else None,
+                )
+            else:
+                project_context = await self._analyze_project_structure_async(project_context, all_files=all_paths)
 
             # Re-apply user context conventions after structure analysis (structure analysis may reset them)
             if _user_ctx_style.get("line_length"):
@@ -402,6 +438,29 @@ class PreAnalysisPhase:
             if self.linter_service:
                 _emit("Detecting available linters")
                 await self.linter_service.detect_and_setup(project_context)
+
+            # Save project profile cache on cache miss (i.e. fresh detection ran)
+            if not _profile_cache_hit:
+                try:
+                    if _profile_cache is not None:
+                        # Collect language info from file contexts if available
+                        _languages: list[str] = []
+                        for _fctx in file_contexts.values():
+                            _lang = (_fctx or {}).get("language") if isinstance(_fctx, dict) else None
+                            if _lang and _lang not in _languages:
+                                _languages.append(_lang)
+
+                        _profile_cache.save(
+                            self.project_root,
+                            {
+                                "project_type": project_context.project_type.value if project_context.project_type else "unknown",
+                                "framework": project_context.framework.value if project_context.framework else "none",
+                                "languages": _languages,
+                                "file_count": len(file_contexts),
+                            },
+                        )
+                except Exception as _save_exc:
+                    logger.debug("project_profile_cache_save_skipped", error=str(_save_exc))
 
             # Create result
             result = PreAnalysisResult(

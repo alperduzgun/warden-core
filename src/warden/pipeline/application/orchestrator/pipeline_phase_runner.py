@@ -410,6 +410,9 @@ class PipelinePhaseRunner:
         # Post-Process: Apply Baseline (Smart Filter)
         self.post_processor.apply_baseline(context)
 
+        # Post-Process: Re-rank findings by git churn-based composite score
+        self.post_processor.apply_git_risk_weighting(context)
+
         # Post-Process: Filter to changed lines only (diff-mode)
         self.post_processor.filter_by_diff_lines(context)
 

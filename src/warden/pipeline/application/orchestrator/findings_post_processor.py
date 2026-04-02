@@ -595,6 +595,29 @@ class FindingsPostProcessor:
 
         return False
 
+    def apply_git_risk_weighting(self, context: PipelineContext) -> None:
+        """Re-rank context.findings by git churn-based composite score.
+
+        Uses GitRiskWeighter to sort findings so high-churn, high-severity
+        findings appear first. Operates silently when git is not available.
+
+        Args:
+            context: Pipeline context whose findings list will be reordered.
+        """
+        if not context.findings:
+            return
+
+        try:
+            from warden.pipeline.application.orchestrator.git_risk_weighter import (
+                GitRiskWeighter,
+            )
+
+            project_root = context.project_root or self.project_root
+            weighter = GitRiskWeighter(project_root)
+            context.findings = weighter.weight_findings(context.findings, project_root)
+        except Exception as exc:
+            logger.warning("git_risk_weighting_skipped", error=str(exc))
+
     def filter_by_diff_lines(self, context: PipelineContext) -> None:
         """
         Filter findings to only those on changed lines (diff-mode post-filter).
