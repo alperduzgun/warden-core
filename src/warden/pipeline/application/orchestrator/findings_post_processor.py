@@ -277,7 +277,9 @@ class FindingsPostProcessor:
                 file_path = (
                     getattr(finding, "file_path", None)
                     or getattr(finding, "path", None)
+                    or getattr(finding, "location", None)  # Finding.location = "path:line"
                     or (finding.get("file_path") if isinstance(finding, dict) else None)
+                    or (finding.get("location") if isinstance(finding, dict) else None)
                     or ""
                 )
                 message = (

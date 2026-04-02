@@ -37,9 +37,10 @@ def _load_report(project_root: Path, scan_id: Optional[str]) -> dict:
     """
     Load the scan report that contains findings.
 
-    If scan_id is provided, look for a report whose metadata.scan_id
-    matches.  Otherwise fall back to the most-recently modified
-    warden-report.json in .warden/reports/.
+    Search order:
+    1. .warden/reports/warden-report*.json  (--output or --ci mode)
+    2. warden-report.json in project root
+    3. .warden/cache/findings_cache.json    (always written by scan)
     """
     reports_dir = project_root / _REPORTS_DIR
 
@@ -57,12 +58,7 @@ def _load_report(project_root: Path, scan_id: Optional[str]) -> dict:
     if root_report.exists():
         candidates.insert(0, root_report)
 
-    if not candidates:
-        raise FileNotFoundError(
-            "No warden-report.json found. Run 'warden scan' first."
-        )
-
-    if scan_id:
+    if scan_id and candidates:
         for candidate in candidates:
             try:
                 with open(candidate) as f:
@@ -72,14 +68,38 @@ def _load_report(project_root: Path, scan_id: Optional[str]) -> dict:
                     return data
             except Exception:
                 continue
-        raise FileNotFoundError(
-            f"No report found for scan_id '{scan_id}'. "
-            "Run 'warden scan' to generate a report."
-        )
 
-    # Use most-recent report
-    with open(candidates[0]) as f:
-        return json.load(f)
+    if candidates:
+        with open(candidates[0]) as f:
+            return json.load(f)
+
+    # Fallback: findings_cache.json — always written by warden scan
+    findings_cache = project_root / ".warden" / "cache" / "findings_cache.json"
+    if findings_cache.exists():
+        return _load_report_from_findings_cache(findings_cache)
+
+    raise FileNotFoundError(
+        "No scan report found. Run 'warden scan' first."
+    )
+
+
+def _load_report_from_findings_cache(cache_path: Path) -> dict:
+    """Convert .warden/cache/findings_cache.json into a report-like dict."""
+    with open(cache_path) as f:
+        cache = json.load(f)
+
+    all_findings: list[dict] = []
+    for entry in cache.values():
+        if isinstance(entry, dict):
+            for finding in entry.get("findings", []):
+                if isinstance(finding, dict):
+                    # Normalize: ensure file_path field exists
+                    if "file_path" not in finding and "location" in finding:
+                        loc = finding["location"]
+                        finding["file_path"] = loc.split(":")[0] if ":" in loc else loc
+                    all_findings.append(finding)
+
+    return {"findings": all_findings, "frameResults": []}
 
 
 def _collect_all_findings(report: dict) -> list[dict]:
