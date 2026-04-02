@@ -16,6 +16,7 @@ jobs:
       WARDEN_LLM_PROVIDER: ollama
       WARDEN_BLOCKED_PROVIDERS: "claude_code,codex"
       OLLAMA_HOST: http://localhost:11434
+      WARDEN_OLLAMA_TIMEOUT: "300"  # GitHub-hosted runners are slower; qwen2.5-coder:3b needs ~130s
 
     steps:
       - name: Checkout Code

@@ -24,6 +24,11 @@ logger = get_logger(__name__)
 # CI detection for aggressive fail-fast
 _IS_CI = os.environ.get("CI", "").lower() == "true" or os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
 
+# Per-request timeout for Ollama. 120s was too short for qwen2.5-coder:3b on
+# GitHub-hosted runners (~130s needed). Default 300s works for all environments.
+# Override via WARDEN_OLLAMA_TIMEOUT env var for special CI configurations.
+_OLLAMA_TIMEOUT: float = float(os.environ.get("WARDEN_OLLAMA_TIMEOUT", "300"))
+
 
 class ModelNotFoundError(Exception):
     """Raised when the requested Ollama model is not installed (HTTP 404).
@@ -87,7 +92,7 @@ class OllamaClient(ILlmClient):
 
     @resilient(
         name="provider_send",
-        timeout_seconds=120.0 if _IS_CI else 300.0,
+        timeout_seconds=_OLLAMA_TIMEOUT,
         retry_max_attempts=1 if _IS_CI else 2,
     )
     async def send_async(self, request: LlmRequest) -> LlmResponse:
