@@ -404,6 +404,9 @@ class PipelinePhaseRunner:
                     },
                 )
 
+        # Post-Process: Suppress known false positives learned from feedback
+        self.post_processor.suppress_learned_false_positives(context)
+
         # Post-Process: Apply Baseline (Smart Filter)
         self.post_processor.apply_baseline(context)
 

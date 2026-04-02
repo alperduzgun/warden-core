@@ -6,7 +6,9 @@ Context-aware frame selection and false positive suppression with AI.
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from warden.analysis.application.llm_phase_base import (
@@ -353,11 +355,182 @@ Return patterns as JSON."""
             if self.cache:
                 self.cache.set("learned_patterns", llm_result)
 
+            # Persist to disk so next scan can load them
+            project_root = getattr(self, "project_root", None) or Path.cwd()
+            patterns = self._build_patterns_dict(
+                context["false_positives"],
+                context["true_positives"],
+            )
+            self._persist_learned_patterns(patterns, project_root)
+
             logger.info(
                 "classification_learning_complete",
                 false_positive_count=len(false_positive_ids),
                 true_positive_count=len(true_positive_ids),
             )
+
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_patterns_dict(
+        fp_findings: list[dict[str, Any]],
+        tp_findings: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Build a raw patterns dict from categorised finding lists.
+
+        The dict is compatible with the .warden/learned_patterns.yaml schema.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        patterns: list[dict[str, Any]] = []
+
+        for f in fp_findings:
+            rule_id = f.get("id") or f.get("rule_id") or ""
+            file_path = f.get("file_path") or f.get("path") or ""
+            message = f.get("message") or ""
+            patterns.append(
+                {
+                    "rule_id": rule_id,
+                    "file_pattern": str(Path(file_path).name) if file_path else "",
+                    "message_pattern": message[:80] if message else "",
+                    "type": "false_positive",
+                    "occurrence_count": 1,
+                    "confidence": 0.5,
+                    "first_seen": now,
+                    "last_seen": now,
+                }
+            )
+
+        for f in tp_findings:
+            rule_id = f.get("id") or f.get("rule_id") or ""
+            file_path = f.get("file_path") or f.get("path") or ""
+            message = f.get("message") or ""
+            patterns.append(
+                {
+                    "rule_id": rule_id,
+                    "file_pattern": str(Path(file_path).name) if file_path else "",
+                    "message_pattern": message[:80] if message else "",
+                    "type": "true_positive",
+                    "occurrence_count": 1,
+                    "confidence": 0.5,
+                    "first_seen": now,
+                    "last_seen": now,
+                }
+            )
+
+        return {"version": 1, "patterns": patterns}
+
+    @staticmethod
+    def _persist_learned_patterns(
+        new_patterns: dict[str, Any],
+        project_root: Path,
+    ) -> None:
+        """
+        Merge *new_patterns* into .warden/learned_patterns.yaml on disk.
+
+        Existing patterns with the same (rule_id, file_pattern,
+        message_pattern, type) key have their occurrence_count incremented
+        and last_seen updated.  New patterns are appended.
+
+        Args:
+            new_patterns: Dict with schema {"version": 1, "patterns": [...]}
+            project_root: Absolute path to the project root.
+        """
+        try:
+            import yaml
+        except ImportError:
+            logger.warning("learned_patterns_persist_skipped", reason="pyyaml not installed")
+            return
+
+        patterns_file = project_root / ".warden" / "learned_patterns.yaml"
+        patterns_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Load existing data
+        existing: dict[str, Any] = {"version": 1, "patterns": []}
+        if patterns_file.exists():
+            try:
+                with open(patterns_file) as fh:
+                    loaded = yaml.safe_load(fh) or {}
+                    existing = loaded if isinstance(loaded, dict) else existing
+            except Exception as exc:
+                logger.warning("learned_patterns_load_failed", error=str(exc))
+
+        existing_patterns: list[dict[str, Any]] = existing.get("patterns", [])
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Build a lookup key for deduplication
+        def _key(p: dict[str, Any]) -> tuple:
+            return (
+                p.get("rule_id", ""),
+                p.get("file_pattern", ""),
+                p.get("message_pattern", ""),
+                p.get("type", ""),
+            )
+
+        existing_index: dict[tuple, int] = {
+            _key(p): idx for idx, p in enumerate(existing_patterns)
+        }
+
+        for new_p in new_patterns.get("patterns", []):
+            k = _key(new_p)
+            if k in existing_index:
+                idx = existing_index[k]
+                existing_patterns[idx]["occurrence_count"] = (
+                    existing_patterns[idx].get("occurrence_count", 1) + 1
+                )
+                existing_patterns[idx]["last_seen"] = now
+                # Raise confidence: confidence = min(1.0, occurrences / 2)
+                occ = existing_patterns[idx]["occurrence_count"]
+                existing_patterns[idx]["confidence"] = min(1.0, occ / 2)
+            else:
+                existing_patterns.append(new_p)
+                existing_index[k] = len(existing_patterns) - 1
+
+        existing["patterns"] = existing_patterns
+
+        try:
+            with open(patterns_file, "w") as fh:
+                yaml.safe_dump(existing, fh, default_flow_style=False, sort_keys=False)
+            logger.info(
+                "learned_patterns_persisted",
+                path=str(patterns_file),
+                total_patterns=len(existing_patterns),
+            )
+        except Exception as exc:
+            logger.warning("learned_patterns_write_failed", error=str(exc))
+
+    @staticmethod
+    def _load_learned_patterns(project_root: Path) -> list[dict[str, Any]]:
+        """
+        Load learned patterns from .warden/learned_patterns.yaml.
+
+        Returns an empty list if the file does not exist or cannot be parsed.
+
+        Args:
+            project_root: Absolute path to the project root.
+
+        Returns:
+            List of pattern dicts as stored in the YAML file.
+        """
+        try:
+            import yaml
+        except ImportError:
+            return []
+
+        patterns_file = project_root / ".warden" / "learned_patterns.yaml"
+        if not patterns_file.exists():
+            return []
+
+        try:
+            with open(patterns_file) as fh:
+                data = yaml.safe_load(fh) or {}
+            return data.get("patterns", [])
+        except Exception as exc:
+            logger.warning("learned_patterns_load_failed", error=str(exc))
+            return []
 
     def _rule_based_selection(
         self,

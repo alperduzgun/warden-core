@@ -225,6 +225,108 @@ class FindingsPostProcessor:
                     traceback=traceback.format_exc(),
                 )
 
+    def suppress_learned_false_positives(self, context: PipelineContext) -> None:
+        """
+        Pre-filter step: suppress findings that match learned FP patterns.
+
+        Patterns are loaded once from .warden/learned_patterns.yaml.  A
+        finding is suppressed when a pattern with confidence >= 0.8
+        (occurrence_count >= 2) matches on all three of:
+          - rule_id equality
+          - file_path contains pattern.file_pattern (relative substring)
+          - message contains pattern.message_pattern (substring)
+
+        Logs a single ``learned_fp_suppressed`` event with the total count.
+        """
+        try:
+            from warden.classification.application.llm_classification_phase import (
+                LLMClassificationPhase,
+            )
+
+            patterns = LLMClassificationPhase._load_learned_patterns(self.project_root)
+        except Exception as exc:
+            logger.warning("learned_patterns_load_error", error=str(exc))
+            return
+
+        if not patterns:
+            return
+
+        # Only keep FP patterns with enough confidence to auto-suppress
+        fp_patterns = [
+            p for p in patterns
+            if p.get("type") == "false_positive" and p.get("confidence", 0.0) >= 0.8
+        ]
+        if not fp_patterns:
+            return
+
+        total_suppressed = 0
+
+        for _fid, f_res in context.frame_results.items():
+            result_obj = f_res.get("result")
+            if not result_obj or not result_obj.findings:
+                continue
+
+            filtered_findings = []
+            for finding in result_obj.findings:
+                rule_id = (
+                    getattr(finding, "id", None)
+                    or getattr(finding, "rule_id", None)
+                    or (finding.get("id") if isinstance(finding, dict) else None)
+                    or ""
+                )
+                file_path = (
+                    getattr(finding, "file_path", None)
+                    or getattr(finding, "path", None)
+                    or (finding.get("file_path") if isinstance(finding, dict) else None)
+                    or ""
+                )
+                message = (
+                    getattr(finding, "message", None)
+                    or (finding.get("message") if isinstance(finding, dict) else None)
+                    or ""
+                )
+
+                suppressed = False
+                for pat in fp_patterns:
+                    pat_rule = pat.get("rule_id", "")
+                    pat_file = pat.get("file_pattern", "")
+                    pat_msg = pat.get("message_pattern", "")
+
+                    rule_match = (not pat_rule) or (pat_rule == rule_id)
+                    file_match = (not pat_file) or (pat_file in str(file_path))
+                    msg_match = (not pat_msg) or (pat_msg in str(message))
+
+                    if rule_match and file_match and msg_match:
+                        suppressed = True
+                        break
+
+                if suppressed:
+                    total_suppressed += 1
+                else:
+                    filtered_findings.append(finding)
+
+            if len(filtered_findings) < len(result_obj.findings):
+                result_obj.findings = filtered_findings
+                result_obj.issues_found = len(filtered_findings)
+
+                if (
+                    not filtered_findings
+                    and getattr(result_obj, "status", None) == "failed"
+                    and not self._has_blocker_violations(result_obj)
+                ):
+                    result_obj.status = "passed"
+
+        if total_suppressed > 0:
+            logger.info("learned_fp_suppressed", count=total_suppressed)
+
+            # Sync context.findings
+            all_findings: list[Any] = []
+            for f_res in context.frame_results.values():
+                res = f_res.get("result")
+                if res and res.findings:
+                    all_findings.extend(res.findings)
+            context.findings = _deduplicate_by_id(all_findings)
+
     def _resolve_baseline_path(self) -> Path:
         """Resolve the baseline file path from warden config, with fallback to default."""
         for config_candidate in [

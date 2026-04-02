@@ -10,6 +10,7 @@ import typer
 
 from warden.cli.commands.audit_context import audit_context_command
 from warden.cli.commands.baseline import baseline_app
+from warden.cli.commands.feedback import feedback_app
 from warden.cli.commands.chat import chat_command
 from warden.cli.commands.ci import ci_app
 from warden.cli.commands.ci_config import ci_config_command
@@ -87,6 +88,7 @@ app = typer.Typer(
 # Register Sub-Apps
 app.add_typer(serve_app, name="serve")
 app.add_typer(baseline_app, name="baseline")
+app.add_typer(feedback_app, name="feedback")
 app.add_typer(ci_app, name="ci")
 app.add_typer(config_app, name="config")
 app.add_typer(context_app, name="context")
