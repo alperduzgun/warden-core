@@ -199,6 +199,11 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 # Skip if inside TYPE_CHECKING block
                 if node.lineno in type_checking_lines:
                     continue
+                # Skip `from __future__ import ...` — these are PEP directives
+                # (e.g. annotations, generator_stop) that are always "used"
+                # implicitly and never appear as Name references (#636).
+                if node.module == "__future__":
+                    continue
                 module = node.module or ""
                 for alias in node.names:
                     if alias.name == "*":
@@ -346,6 +351,14 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 if def_type == "class" and self._is_exported_schema(def_name):
                     continue
 
+                # Skip abstract port/interface/repository classes used via DI (#637).
+                if def_type == "class" and self._is_port_or_interface(def_name, node):
+                    continue
+
+                # Skip FastAPI dependency-injection functions (#637).
+                if def_type == "function" and self._is_fastapi_dependency(def_name):
+                    continue
+
                 # Get accurate snippet including decorators
                 code_snippet = self._get_definition_snippet(node)
 
@@ -383,6 +396,61 @@ class PythonOrphanDetector(AbstractOrphanDetector):
         in_schema_dir = bool(parts & _SCHEMA_DIRS)
         has_schema_suffix = name.endswith(_SCHEMA_SUFFIXES)
         return in_schema_dir and has_schema_suffix
+
+    def _is_port_or_interface(self, name: str, node: ast.AST) -> bool:
+        """Return True if `name` is an abstract port/interface/repository class.
+
+        These classes define contracts for dependency injection and are only
+        referenced by type annotation in other files.  Single-file analysis
+        cannot see cross-file usage, so they would always appear as orphans (#637).
+
+        Heuristics (any one is sufficient):
+        - File path contains ports/, interfaces/, abstractions/, or repositories/ dir
+        - Class name ends with Port, Interface, Repository, Gateway, or ABC
+        - Class directly inherits from ABC or Protocol
+        """
+        _PORT_DIRS = {"ports", "interfaces", "abstractions", "repositories", "contracts"}
+        _PORT_SUFFIXES = ("Port", "Interface", "Repository", "Gateway", "ABC",
+                          "Protocol", "Base", "Abstract")
+        import os as _os
+        parts = set(_os.path.normpath(self.file_path).split(_os.sep))
+        if parts & _PORT_DIRS:
+            return True
+        if name.endswith(_PORT_SUFFIXES):
+            return True
+        if isinstance(node, ast.ClassDef):
+            for base in node.bases:
+                base_name = ""
+                if isinstance(base, ast.Name):
+                    base_name = base.id
+                elif isinstance(base, ast.Attribute):
+                    base_name = base.attr
+                if base_name in ("ABC", "Protocol", "ABCMeta"):
+                    return True
+        return False
+
+    def _is_fastapi_dependency(self, name: str) -> bool:
+        """Return True if `name` is a FastAPI dependency injection function.
+
+        FastAPI Depends() functions are invoked by the framework via type
+        annotations, not by direct reference in the same file (#637).
+
+        Heuristics (any one is sufficient):
+        - File name is dependencies.py, deps.py, di.py, or inject.py
+        - File path contains dependencies/ or deps/ directory
+        - Function name starts with `get_` (dominant FastAPI DI convention)
+        """
+        import os as _os
+        basename = _os.path.basename(self.file_path)
+        _DI_FILENAMES = {"dependencies.py", "deps.py", "di.py", "inject.py", "providers.py"}
+        if basename in _DI_FILENAMES:
+            return True
+        parts = set(_os.path.normpath(self.file_path).split(_os.sep))
+        if parts & {"dependencies", "deps", "di"}:
+            return True
+        if name.startswith("get_"):
+            return True
+        return False
 
     @staticmethod
     def _is_convention_dispatch_method(name: str, node: ast.AST) -> bool:
