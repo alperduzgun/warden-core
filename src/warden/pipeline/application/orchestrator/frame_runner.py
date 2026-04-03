@@ -35,6 +35,7 @@ from .file_filter import FileFilter
 from .findings_cache import FindingsCache
 from .rule_executor import RuleExecutor
 from .suppression_filter import SuppressionFilter
+from warden.shared.utils.schema_version import derive_file_hash
 
 # Per-file timeout constants (proportional to file size, Bearer-inspired).
 # See: Bearer pkg/commands/process/filelist/timeout/timeout.go
@@ -585,6 +586,14 @@ class FrameRunner:
                 # expensive and the result is stable for the lifetime of the frame.
                 _frame_accepts_context = "context" in inspect.signature(frame.execute_async).parameters
 
+                # Compute frame source hash once per frame execution.
+                # Invalidates cached findings whenever the frame/detector code changes.
+                try:
+                    _frame_source_path = inspect.getfile(type(frame))
+                    _frame_code_hash = derive_file_hash(_frame_source_path)
+                except Exception:
+                    _frame_code_hash = ""
+
                 async def execute_single_file_async(c_file: CodeFile) -> CodeFrameResult | None:
                     file_context = context.file_contexts.get(c_file.path)
                     if file_context and getattr(file_context, "is_unchanged", False):
@@ -596,7 +605,7 @@ class FrameRunner:
                     # Cross-scan findings cache: skip LLM if content unchanged since last scan
                     if self._findings_cache is not None and c_file.content:
                         cached_findings: list[Finding] | None = self._findings_cache.get_findings(
-                            frame.frame_id, str(c_file.path), c_file.content
+                            frame.frame_id, str(c_file.path), c_file.content, _frame_code_hash
                         )
                         if cached_findings is not None:
                             logger.debug(
@@ -659,7 +668,7 @@ class FrameRunner:
                         # Persist findings to cross-scan cache on success
                         if self._findings_cache is not None and result is not None and c_file.content:
                             self._findings_cache.put_findings(
-                                frame.frame_id, str(c_file.path), c_file.content, result.findings or []
+                                frame.frame_id, str(c_file.path), c_file.content, result.findings or [], _frame_code_hash
                             )
 
                         self._report_progress("progress_update", {"increment": 1, "frame_id": frame.frame_id, "file": c_file.path})
@@ -792,7 +801,7 @@ class FrameRunner:
                                 for cf in files_to_scan:
                                     if self._findings_cache is not None and cf.content:
                                         cached = self._findings_cache.get_findings(
-                                            frame.frame_id, str(cf.path), cf.content
+                                            frame.frame_id, str(cf.path), cf.content, _frame_code_hash
                                         )
                                         if cached is not None:
                                             logger.debug(
@@ -857,6 +866,7 @@ class FrameRunner:
                                                         str(cf.path),
                                                         cf.content,
                                                         res.findings or [],
+                                                        _frame_code_hash,
                                                     )
                                         f_results.extend(chunk_results)
                                         self._report_progress("progress_update", {

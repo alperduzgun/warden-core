@@ -32,6 +32,21 @@ def derive_schema_version(cls: type) -> str:
     return hashlib.md5(raw).hexdigest()[:8]
 
 
+def derive_file_hash(path: "Path | str") -> str:  # noqa: F821
+    """Return an 8-char hex digest of a file's contents.
+
+    Used to invalidate cache entries when frame/detector source code changes.
+    Returns a constant on read error so a missing file doesn't crash the scan.
+    """
+    try:
+        from pathlib import Path as _Path
+
+        content = _Path(path).read_bytes()
+        return hashlib.md5(content).hexdigest()[:8]
+    except Exception:
+        return "00000000"
+
+
 def _extract_fields(cls: type) -> list[tuple[str, str]]:
     """Extract ``(name, type_repr)`` pairs from a dataclass or Pydantic model."""
     # 1. Try standard dataclass

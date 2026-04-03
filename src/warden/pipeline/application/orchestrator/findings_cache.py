@@ -30,7 +30,7 @@ from typing import Any
 
 import structlog
 
-from warden.shared.utils.schema_version import derive_schema_version
+from warden.shared.utils.schema_version import derive_file_hash, derive_schema_version
 from warden.validation.domain.frame import Finding
 
 logger = structlog.get_logger(__name__)
@@ -86,11 +86,18 @@ class FindingsCache:
         normalized = _os.path.normpath(file_path)
         return f"{frame_id}:{normalized}:{h}"
 
-    def get_findings(self, frame_id: str, file_path: str, content: str) -> list[Finding] | None:
+    def get_findings(
+        self, frame_id: str, file_path: str, content: str, frame_code_hash: str = ""
+    ) -> list[Finding] | None:
         """Return deserialized ``Finding`` objects on hit, or *None* on miss.
 
         Returns an empty list if the file was previously scanned clean.
         Returns *None* if there is no cache entry (uncached).
+
+        ``frame_code_hash`` is an 8-char digest of the frame's source file(s).
+        When the frame/detector code changes the hash changes, the stored
+        ``_schema_v`` no longer matches, and the entry is treated as a miss —
+        forcing a full re-analysis with the updated logic.
         """
         key = self.cache_key(frame_id, file_path, content)
         entry = self._store.get(key)
@@ -98,8 +105,11 @@ class FindingsCache:
             self._misses += 1
             return None
 
-        # Schema version guard — stale entries are silently evicted
-        if entry.get("_schema_v") != CACHE_SCHEMA_VERSION:
+        # Schema version guard — stale entries are silently evicted.
+        # Combines Finding-field hash with frame source hash so either change
+        # invalidates cached results automatically.
+        expected_schema_v = f"{CACHE_SCHEMA_VERSION}:{frame_code_hash}" if frame_code_hash else CACHE_SCHEMA_VERSION
+        if entry.get("_schema_v") != expected_schema_v:
             del self._store[key]
             self._dirty = True
             self._misses += 1
@@ -119,13 +129,16 @@ class FindingsCache:
                 logger.debug("findings_cache_deserialize_error", error=str(exc))
         return findings
 
-    def put_findings(self, frame_id: str, file_path: str, content: str, findings: list[Finding]) -> None:
+    def put_findings(
+        self, frame_id: str, file_path: str, content: str, findings: list[Finding], frame_code_hash: str = ""
+    ) -> None:
         """Serialize and store findings for a (frame, file) pair."""
         key = self.cache_key(frame_id, file_path, content)
+        schema_v = f"{CACHE_SCHEMA_VERSION}:{frame_code_hash}" if frame_code_hash else CACHE_SCHEMA_VERSION
         self._store[key] = {
             "findings": [_serialize_finding(f) for f in findings],
             "_ts": time.time(),
-            "_schema_v": CACHE_SCHEMA_VERSION,
+            "_schema_v": schema_v,
         }
         self._dirty = True
         self._evict_if_needed()
