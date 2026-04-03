@@ -210,14 +210,18 @@ class PipelineHandler(BaseHandler):
             # If it's a file, handle it directly
             if root_path.is_file():
                 try:
-                    code_files.append(
-                        CodeFile(
-                            path=str(root_path.absolute()),
-                            content=_read_file_capped(root_path),
-                            language=self._detect_language(root_path),
+                    content = _read_file_capped(root_path)
+                    if not content or not content.strip():
+                        logger.debug("skipping_empty_file", file=str(root_path))
+                    else:
+                        code_files.append(
+                            CodeFile(
+                                path=str(root_path.absolute()),
+                                content=content,
+                                language=self._detect_language(root_path),
+                            )
                         )
-                    )
-                    seen_paths.add(str(root_path.absolute()))
+                        seen_paths.add(str(root_path.absolute()))
                 except Exception as e:
                     logger.warning("file_read_error", file=str(root_path), error=str(e))
                 continue
@@ -259,10 +263,19 @@ class PipelineHandler(BaseHandler):
 
                 try:
                     p = Path(f.path)
+                    content = _read_file_capped(p)
+
+                    # Skip empty / whitespace-only files — they produce no findings
+                    # but enter the full LLM pipeline and timeout.
+                    if not content or not content.strip():
+                        logger.debug("skipping_empty_file", file=str(p))
+                        seen_paths.add(f.path)
+                        continue
+
                     code_files.append(
                         CodeFile(
                             path=str(p.absolute()),
-                            content=_read_file_capped(p),
+                            content=content,
                             language=f.file_type.value,
                             line_count=f.line_count or 0,
                             hash=f.hash,

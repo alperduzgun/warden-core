@@ -189,6 +189,10 @@ class ASTPreParser:
                 skipped_cached += 1
                 continue
 
+            if not code_file.content or not code_file.content.strip():
+                skipped_unsupported += 1
+                continue
+
             try:
                 lang = CodeLanguage(code_file.language.lower())
             except (ValueError, AttributeError):

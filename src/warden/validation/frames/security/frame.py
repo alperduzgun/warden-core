@@ -267,6 +267,20 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
         """
         start_time = time.perf_counter()
 
+        # Skip empty / whitespace-only files — defense-in-depth guard.
+        if not code_file.content or not code_file.content.strip():
+            logger.debug("security_frame_skipped_empty_file", file_path=code_file.path)
+            return FrameResult(
+                frame_id=self.frame_id,
+                frame_name=self.name,
+                status="passed",
+                duration=0.0,
+                issues_found=0,
+                is_blocker=False,
+                findings=[],
+                metadata={"skipped": True, "reason": "empty_file"},
+            )
+
         logger.info(
             "security_frame_started",
             file_path=code_file.path,

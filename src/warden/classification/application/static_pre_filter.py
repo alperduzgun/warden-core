@@ -163,6 +163,18 @@ class StaticPreFilter:
             logger.debug("static_prefilter_skip_large_file", path=file_path, size=len(source))
             return None
 
+        # ── Rule 0: Empty / whitespace-only files ─────────────────────────
+        # Route to orphan frame only — it's deterministic and fast.
+        # Keeps empty files out of LLM-heavy security/analysis frames.
+        if not source or not source.strip():
+            logger.debug("static_prefilter_hit_empty_file", path=file_path)
+            return {
+                "selected_frames": ["orphan"],
+                "confidence": 1.0,
+                "source": "static_prefilter",
+                "reason": "empty file — orphan check only, skip LLM analysis",
+            }
+
         path_obj = Path(file_path)
         filename = path_obj.name.lower()
         parts = [p.lower() for p in path_obj.parts]

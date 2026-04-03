@@ -282,6 +282,11 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 if def_name in ["main", "__init__", "__str__", "__repr__"]:
                     continue
 
+                # Skip exported schema/DTO classes defined in schema modules.
+                # Cross-file imports make single-file analysis blind to their usage (#632).
+                if def_type == "class" and self._is_exported_schema(def_name):
+                    continue
+
                 # Get accurate snippet including decorators
                 code_snippet = self._get_definition_snippet(node)
 
@@ -296,6 +301,26 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 )
 
         return findings
+
+    def _is_exported_schema(self, name: str) -> bool:
+        """Return True if class looks like an exported schema/DTO.
+
+        FastAPI/Django projects define Pydantic models in dedicated schema
+        modules and import them in router files. Single-file analysis cannot
+        see cross-file usage, so these would always appear as orphans (#632).
+        """
+        _SCHEMA_DIRS = {"schemas", "schema", "models", "dtos", "dto",
+                        "serializers", "types", "payloads", "forms", "views"}
+        _SCHEMA_SUFFIXES = (
+            "Request", "Response", "Schema", "DTO", "Dto",
+            "Payload", "Input", "Output", "Form", "View",
+            "Model", "Data", "Body", "Params",
+        )
+        import os as _os
+        parts = set(_os.path.normpath(self.file_path).split(_os.sep))
+        in_schema_dir = bool(parts & _SCHEMA_DIRS)
+        has_schema_suffix = name.endswith(_SCHEMA_SUFFIXES)
+        return in_schema_dir and has_schema_suffix
 
     def _get_definition_snippet(self, node: ast.AST) -> str:
         """

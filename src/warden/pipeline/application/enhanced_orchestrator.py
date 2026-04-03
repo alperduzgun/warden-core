@@ -217,6 +217,12 @@ class EnhancedPipelineOrchestrator(PhaseOrchestrator):
                 else:
                     content = file_path.read_text(encoding="utf-8")
 
+                # Skip empty / whitespace-only files — they produce no findings
+                # but still enter the full LLM pipeline and timeout at 15s.
+                if not content or not content.strip():
+                    logger.debug("skipping_empty_file", file=str(file_path))
+                    continue
+
                 # Determine language from file extension
                 language = self._get_language_from_extension(file_path.suffix)
 
