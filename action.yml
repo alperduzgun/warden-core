@@ -83,7 +83,14 @@ runs:
       shell: bash
       run: |
         pip install --upgrade pip
-        pip install warden-core
+        # Install from local source when running the action from a repo checkout
+        # (self-test via `uses: ./`). Fall back to PyPI for external consumers
+        # who reference the action via `uses: alperduzgun/warden-core@vX.Y`.
+        if [ -f "${{ github.action_path }}/pyproject.toml" ]; then
+          pip install "${{ github.action_path }}"
+        else
+          pip install warden-core
+        fi
 
     - name: Run Warden Scan
       id: scan

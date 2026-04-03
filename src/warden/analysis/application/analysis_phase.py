@@ -356,9 +356,11 @@ class AnalysisPhase:
                 self.analyzers["magic_numbers"].analyze_async(code_file, ast_tree=ast_tree)
             )
 
-        # DEEP level: extended analysis timeout for thorough inspection
+        # DEEP level: extended analysis timeout for thorough inspection.
+        # Use a local variable to avoid mutating shared config across concurrent tasks.
+        timeout = self.config.get("timeout", 15.0)
         if is_deep:
-            self.config["timeout"] = max(self.config.get("timeout", 15.0), 30.0)
+            timeout = max(timeout, 30.0)
 
         # Skip LSP in BASIC level (slow/external dependency)
         if not is_basic:
@@ -368,7 +370,6 @@ class AnalysisPhase:
 
         # Wait for all analyzers with timeout
         try:
-            timeout = self.config.get("timeout", 15.0)
             results = await asyncio.wait_for(asyncio.gather(*tasks.values(), return_exceptions=True), timeout=timeout)
 
             # Map results back to analyzer names

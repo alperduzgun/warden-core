@@ -230,11 +230,12 @@ Rules:
 
         import asyncio as _asyncio
 
+        files_by_path = {cf.path: cf for cf in files_to_process}
         chunk_results = await _asyncio.gather(*[_process_chunk(c) for c in chunks])
         for chunk_decisions in chunk_results:
             for path, decision in chunk_decisions.items():
                 decisions[path] = decision
-                cf_obj = next((f for f in files_to_process if f.path == path), None)
+                cf_obj = files_by_path.get(path)
                 if self._cache and cf_obj is not None:
                     self._cache.put(cf_obj.path, cf_obj.content, decision)
 
@@ -438,5 +439,3 @@ FILES:
             processing_time_ms=(time.time() - start_time) * 1000,
         )
 
-
-# ci-test-1772180239

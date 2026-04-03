@@ -182,7 +182,14 @@ class GitignoreFilter:
 
         # Anchored patterns (leading /) only match from the repo root.
         # Un-anchored patterns match anywhere in the path.
-        if is_anchored:
+        if is_directory:
+            # Directory-only patterns (trailing /) must be followed by /
+            # so `foo/` matches `foo/bar.txt` but not `foo.txt`.
+            if is_anchored:
+                regex = f"^{regex}/"
+            else:
+                regex = f"(^|/){regex}/"
+        elif is_anchored:
             regex = f"^{regex}(/|$)"
         else:
             regex = f"(^|/){regex}(/|$)"

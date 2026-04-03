@@ -13,7 +13,6 @@ on:
         options:
           - qwen2.5-coder:3b
           - qwen2.5-coder:1.5b
-          - qwen2.5-coder:3b
 
 jobs:
   check-hardware:

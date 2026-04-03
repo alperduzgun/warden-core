@@ -29,7 +29,14 @@ SINGLE_TIER_PROVIDERS: frozenset[LlmProvider] = frozenset(
 
 # Local providers support dual-tier (smart_model + fast_model are different binaries).
 # Cloud providers should not duplicate into fast tier — same API quota/rate limit.
-_LOCAL_PROVIDERS: frozenset[LlmProvider] = frozenset({LlmProvider.OLLAMA})
+# Must stay in sync with the per-call check at the bottom of this module.
+_LOCAL_PROVIDERS: frozenset[LlmProvider] = frozenset({
+    LlmProvider.OLLAMA,
+    LlmProvider.CLAUDE_CODE,
+    LlmProvider.CODEX,
+    LlmProvider.QWENCODE,
+    LlmProvider.QWEN_CLI,
+})
 
 _providers_lock = threading.Lock()
 _providers_imported = False

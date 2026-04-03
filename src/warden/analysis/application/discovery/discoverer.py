@@ -79,7 +79,13 @@ class FileDiscoverer:
 
         # Sort by mtime descending so recently modified files are analysed first.
         # Failures to stat a path are treated as mtime=0 (sort to end).
-        files.sort(key=lambda f: Path(f.path).stat().st_mtime if Path(f.path).exists() else 0.0, reverse=True)
+        def _mtime_or_zero(f: "DiscoveredFile") -> float:
+            try:
+                return Path(f.path).stat().st_mtime
+            except OSError:
+                return 0.0
+
+        files.sort(key=_mtime_or_zero, reverse=True)
 
         # Detect frameworks
         framework_detector = FrameworkDetector(self.root_path)
