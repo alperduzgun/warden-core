@@ -23,7 +23,7 @@ console = Console()
 def init_command(
     ctx: typer.Context,
     force: bool = typer.Option(False, "--force", "-f", help="Force initialization even if config exists"),
-    mode: str = typer.Option("normal", "--mode", "-m", help="Initialization mode (vibe, normal, strict)"),
+    mode: str = typer.Option("normal", "--mode", "-m", help="Initialization mode (vibe, normal, strict, minimal)"),
     ci: bool = typer.Option(False, "--ci", help="Generate GitHub Actions CI workflow"),
     skip_mcp: bool = typer.Option(False, "--skip-mcp", help="Skip MCP server registration"),
     agent: bool = typer.Option(
@@ -115,19 +115,21 @@ def init_command(
     generate_scaffolds(warden_dir, config_path, meta)
 
     # --- Steps 9 – 16: Post-setup (semantic, agent, baseline, intel, CI, grammars, context) ---
+    # Minimal + CI: skip heavy post-setup steps, only generate CI workflow
+    _is_minimal = mode_choice == "0"
     run_post_setup(
         config_path=config_path,
         meta=meta,
         llm_config=llm_config,
         context=context,
-        agent=agent,
-        skip_mcp=skip_mcp,
-        baseline=baseline,
-        intel=intel,
+        agent=agent and not _is_minimal,
+        skip_mcp=skip_mcp or _is_minimal,
+        baseline=baseline and not _is_minimal,
+        intel=intel and not _is_minimal,
         ci=ci,
         force=force,
         is_interactive=is_interactive,
-        grammars=grammars,
+        grammars=grammars and not _is_minimal,
     )
 
     # Init completed (with possible warnings) — remove marker

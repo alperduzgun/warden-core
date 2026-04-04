@@ -793,15 +793,15 @@ def detect_project(warden_dir: Path) -> tuple["MetaAdapter", object]:
 
 
 def select_mode(mode: str, is_interactive: bool, meta: "MetaAdapter") -> tuple[str, dict]:
-    """Select operation mode (vibe/normal/strict).
+    """Select operation mode (vibe/normal/strict/minimal).
 
     Returns (mode_choice, mode_config).
-    Note: mutates meta.suggested_frames when vibe mode is chosen.
+    Note: mutates meta.suggested_frames when vibe/minimal mode is chosen.
     """
-    mode_map = {"vibe": "1", "normal": "2", "strict": "3"}
+    mode_map = {"vibe": "1", "normal": "2", "strict": "3", "minimal": "0"}
     mode_choice = mode_map.get(mode.lower(), "2")
 
-    if is_interactive:
+    if is_interactive and mode_choice != "0":
         console.print("\n[bold cyan]🎚️  Select Operation Mode[/bold cyan]")
         console.print("1. [bold green]Vibe Mode[/bold green] (Silent, Critical Only) - Best for active dev")
         console.print("2. [bold yellow]Normal Mode[/bold yellow] (High+Critical) - Standard PR checks")
@@ -809,7 +809,10 @@ def select_mode(mode: str, is_interactive: bool, meta: "MetaAdapter") -> tuple[s
         mode_choice = Prompt.ask("Select Mode", choices=["1", "2", "3"], default=mode_choice)
 
     mode_config: dict = {}
-    if mode_choice == "1":  # Vibe
+    if mode_choice == "0":  # Minimal
+        mode_config = {"fail_fast": False, "min_severity": "high", "minimal": True}
+        meta.suggested_frames = ["security", "orphan"]
+    elif mode_choice == "1":  # Vibe
         mode_config = {"fail_fast": False, "min_severity": "critical", "quiet": True}
         meta.suggested_frames = [
             f for f in meta.suggested_frames if f in ["security", "env-security"]
@@ -909,107 +912,141 @@ def generate_config(
     Returns the resolved config_path (may be reassigned if new file created).
     """
     if not config_path.exists():
-        # Build frames_config based on detection
-        frames_config = {}
-        for frame in meta.suggested_frames:
-            frames_config[frame] = {"enabled": True}
-
-        # Add taint thresholds for security frame (import central defaults)
-        if "security" in frames_config:
-            from warden.validation.frames.security._internal.taint_analyzer import TAINT_DEFAULTS
-
-            taint_init = {
-                "confidence_threshold": TAINT_DEFAULTS["confidence_threshold"],
-                "sanitizer_penalty": TAINT_DEFAULTS["sanitizer_penalty"],
-            }
-            # Mode-based adjustment
-            if mode_choice == "3":  # Strict — catch more taint flows
-                taint_init["confidence_threshold"] = 0.7
-            elif mode_choice == "1":  # Vibe — only high-confidence
-                taint_init["confidence_threshold"] = 0.9
-            frames_config["security"]["taint"] = taint_init
-
-        # Apply mode settings
-        if mode_choice == "1":  # Vibe
-            for f in frames_config:
-                frames_config[f]["severity_threshold"] = "critical"
-
-        config_data = {
-            "version": "1.0.0",
-            "project": {
-                "name": Path.cwd().name,
-                "language": meta.language,
-                "type": meta.project_type,
-                "frameworks": meta.frameworks,
-            },
-            "dependencies": {"project_architecture": "latest"},
-            "llm": {
-                "provider": provider,
-                "model": model,
-                "smart_model": model,
-                # fast_model is only written when the provider explicitly sets one.
-                # When Ollama is the primary, fast-tier providers (Groq, Claude Code, etc.)
-                # use their own defaults — no shared fast_model should be written.
-                **({} if not llm_config.get("fast_model") else {"fast_model": llm_config["fast_model"]}),
-                "timeout": 300,
-            },
-            "frames": meta.suggested_frames,
-            "frames_config": frames_config,
-            "settings": {
-                "fail_fast": mode_config["fail_fast"],
-                "mode": ["vibe", "normal", "strict"][int(mode_choice) - 1],
-                "min_severity": mode_config.get("min_severity", "high"),
-                "timeout": 300,
-                "use_llm": provider != "none",
-                "use_local_llm": llm_config.get("use_local_llm", False),
-                "enable_pre_analysis": True,
-                "enable_analysis": True,
-                "enable_classification": True,
-                "enable_validation": True,
-                "enable_fortification": False,
-                "enable_cleaning": False,
-                "enable_suppression": True,
-                "enable_issue_validation": True,
-            },
-            "advanced": {
-                "max_workers": 4,
-                "frame_timeout": 300,
-                "output": [
-                    {"format": "markdown", "path": ".warden/reports/WARDEN_REPORT.md"},
-                    {"format": "json", "path": ".warden/reports/warden-report.json"},
-                    {"format": "sarif", "path": ".warden/reports/warden-report.sarif"},
-                ],
-            },
-            "semantic_search": vector_config,
-            "routing": {
-                # When Ollama is the primary (smart) provider, fast-tier is the
-                # other available providers (Groq, Claude Code, etc.), not Ollama again.
-                "fast_tier": "auto" if provider == "ollama" else "ollama",
-                "smart_tier": provider,
-            },
-            "baseline": {
-                "enabled": True,
-                "path": ".warden/baseline.json",
-                "auto_fetch": False,
-                "fetch_command": "gh run download -n warden-baseline",
-            },
-        }
-        # Preserve Azure details if selected
-        if provider == "azure":
-            config_data["llm"]["azure"] = {
-                "endpoint": "${AZURE_OPENAI_ENDPOINT}",
-                "api_key": "${AZURE_OPENAI_API_KEY}",
-                "deployment_name": "${AZURE_OPENAI_DEPLOYMENT_NAME}",
-                "api_version": "2024-02-15-preview",
-            }
-
-        # New root manifest (Standardized to .warden/config.yaml)
         root_config_path = warden_dir / "config.yaml"
-        with open(root_config_path, "w") as f:
-            yaml.dump(config_data, f, default_flow_style=False)
-        console.print(f"[green]Created project configuration: [bold]{root_config_path}[/bold][/green]")
 
-        config_path = root_config_path
+        if mode_choice == "0":  # Minimal — write a lean template, skip full generation
+            project_name = Path.cwd().name
+            language = meta.language or "python"
+            minimal_template = (
+                "# Warden minimal config — add sections as needed\n"
+                "# See: https://github.com/alperduzgun/warden-core/docs/configuration.md\n"
+                "\n"
+                "project:\n"
+                f"  name: \"{project_name}\"\n"
+                f"  language: \"{language}\"\n"
+                "\n"
+                "frames:\n"
+                "  - security\n"
+                "  - orphan\n"
+                "\n"
+                "# LLM Provider — remove section to run in offline mode\n"
+                "# Run: warden config llm use ollama\n"
+                "llm:\n"
+                f"  provider: {provider}\n"
+                f"  model: {model}\n"
+            )
+            with open(root_config_path, "w") as f:
+                f.write(minimal_template)
+            console.print(
+                f"[green]Created minimal configuration: [bold]{root_config_path}[/bold][/green]"
+            )
+            config_path = root_config_path
+        else:
+            # Build frames_config based on detection
+            frames_config = {}
+            for frame in meta.suggested_frames:
+                frames_config[frame] = {"enabled": True}
+
+            # Add taint thresholds for security frame (import central defaults)
+            if "security" in frames_config:
+                from warden.validation.frames.security._internal.taint_analyzer import TAINT_DEFAULTS
+
+                taint_init = {
+                    "confidence_threshold": TAINT_DEFAULTS["confidence_threshold"],
+                    "sanitizer_penalty": TAINT_DEFAULTS["sanitizer_penalty"],
+                }
+                # Mode-based adjustment
+                if mode_choice == "3":  # Strict — catch more taint flows
+                    taint_init["confidence_threshold"] = 0.7
+                elif mode_choice == "1":  # Vibe — only high-confidence
+                    taint_init["confidence_threshold"] = 0.9
+                frames_config["security"]["taint"] = taint_init
+
+            # Apply mode settings
+            if mode_choice == "1":  # Vibe
+                for f in frames_config:
+                    frames_config[f]["severity_threshold"] = "critical"
+
+            _mode_names = {
+                "1": "vibe",
+                "2": "normal",
+                "3": "strict",
+            }
+            config_data = {
+                "version": "1.0.0",
+                "project": {
+                    "name": Path.cwd().name,
+                    "language": meta.language,
+                    "type": meta.project_type,
+                    "frameworks": meta.frameworks,
+                },
+                "dependencies": {"project_architecture": "latest"},
+                "llm": {
+                    "provider": provider,
+                    "model": model,
+                    "smart_model": model,
+                    # fast_model is only written when the provider explicitly sets one.
+                    # When Ollama is the primary, fast-tier providers (Groq, Claude Code, etc.)
+                    # use their own defaults — no shared fast_model should be written.
+                    **({} if not llm_config.get("fast_model") else {"fast_model": llm_config["fast_model"]}),
+                    "timeout": 300,
+                },
+                "frames": meta.suggested_frames,
+                "frames_config": frames_config,
+                "settings": {
+                    "fail_fast": mode_config["fail_fast"],
+                    "mode": _mode_names.get(mode_choice, "normal"),
+                    "min_severity": mode_config.get("min_severity", "high"),
+                    "timeout": 300,
+                    "use_llm": provider != "none",
+                    "use_local_llm": llm_config.get("use_local_llm", False),
+                    "enable_pre_analysis": True,
+                    "enable_analysis": True,
+                    "enable_classification": True,
+                    "enable_validation": True,
+                    "enable_fortification": False,
+                    "enable_cleaning": False,
+                    "enable_suppression": True,
+                    "enable_issue_validation": True,
+                },
+                "advanced": {
+                    "max_workers": 4,
+                    "frame_timeout": 300,
+                    "output": [
+                        {"format": "markdown", "path": ".warden/reports/WARDEN_REPORT.md"},
+                        {"format": "json", "path": ".warden/reports/warden-report.json"},
+                        {"format": "sarif", "path": ".warden/reports/warden-report.sarif"},
+                    ],
+                },
+                "semantic_search": vector_config,
+                "routing": {
+                    # When Ollama is the primary (smart) provider, fast-tier is the
+                    # other available providers (Groq, Claude Code, etc.), not Ollama again.
+                    "fast_tier": "auto" if provider == "ollama" else "ollama",
+                    "smart_tier": provider,
+                },
+                "baseline": {
+                    "enabled": True,
+                    "path": ".warden/baseline.json",
+                    "auto_fetch": False,
+                    "fetch_command": "gh run download -n warden-baseline",
+                },
+            }
+            # Preserve Azure details if selected
+            if provider == "azure":
+                config_data["llm"]["azure"] = {
+                    "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+                    "api_key": "${AZURE_OPENAI_API_KEY}",
+                    "deployment_name": "${AZURE_OPENAI_DEPLOYMENT_NAME}",
+                    "api_version": "2024-02-15-preview",
+                }
+
+            # New root manifest (Standardized to .warden/config.yaml)
+            with open(root_config_path, "w") as f:
+                yaml.dump(config_data, f, default_flow_style=False)
+            console.print(f"[green]Created project configuration: [bold]{root_config_path}[/bold][/green]")
+
+            config_path = root_config_path
 
     else:
         # Config exists - Offer Update/Merge
@@ -1043,7 +1080,8 @@ def generate_config(
             if "settings" not in existing_config:
                 existing_config["settings"] = {}
             existing_config["settings"]["fail_fast"] = mode_config["fail_fast"]
-            existing_config["settings"]["mode"] = ["vibe", "normal", "strict"][int(mode_choice) - 1]
+            _mode_name_map = {"0": "minimal", "1": "vibe", "2": "normal", "3": "strict"}
+            existing_config["settings"]["mode"] = _mode_name_map.get(mode_choice, "normal")
             if "min_severity" in mode_config:
                 existing_config["settings"]["min_severity"] = mode_config["min_severity"]
 
