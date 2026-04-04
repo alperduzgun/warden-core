@@ -112,13 +112,19 @@ class TestConfirmDestructiveOperation:
         assert result is True
 
     def test_interactive_n_declines(self) -> None:
-        with patch("sys.stdin.isatty", return_value=True), \
+        ci_vars = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "TRAVIS"]
+        clean_env = {k: v for k, v in os.environ.items() if k not in ci_vars}
+        with patch.dict(os.environ, clean_env, clear=True), \
+             patch("sys.stdin.isatty", return_value=True), \
              patch("builtins.input", return_value="n"):
             result = confirm_destructive_operation("delete everything", yes=False)
         assert result is False
 
     def test_interactive_empty_input_defaults_to_no(self) -> None:
-        with patch("sys.stdin.isatty", return_value=True), \
+        ci_vars = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "TRAVIS"]
+        clean_env = {k: v for k, v in os.environ.items() if k not in ci_vars}
+        with patch.dict(os.environ, clean_env, clear=True), \
+             patch("sys.stdin.isatty", return_value=True), \
              patch("builtins.input", return_value=""):
             result = confirm_destructive_operation("delete everything", yes=False)
         assert result is False
