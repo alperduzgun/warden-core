@@ -139,9 +139,12 @@ class FrameExecutor:
             if not hasattr(context, "frame_results") or context.frame_results is None:
                 context.frame_results = {}
 
-            # Pre-parse ASTs for all files (centralized cache)
+            # Pre-parse ASTs for all files (centralized cache).
+            # Pass force=True when force_scan is set so --force bypasses the
+            # AST cache consistently with the findings-cache bypass.
             ast_pre_parser = ASTPreParser()
-            await ast_pre_parser.pre_parse_all_async(context, filtered_files)
+            _force_ast = getattr(self.config, "force_scan", False)
+            await ast_pre_parser.pre_parse_all_async(context, filtered_files, force=_force_ast)
 
             await self.rust_pre_filter.run_async(context, filtered_files)
 

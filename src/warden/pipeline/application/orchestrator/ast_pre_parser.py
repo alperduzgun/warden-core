@@ -111,12 +111,18 @@ class ASTPreParser:
         self,
         context: PipelineContext,
         code_files: list[CodeFile],
+        *,
+        force: bool = False,
     ) -> None:
         """
         Pre-parse all code files and store results in context.ast_cache.
 
         Skips files already in cache, unsupported languages, and handles
         timeouts/errors gracefully (log + continue).
+
+        When *force* is True the existing ast_cache is cleared before
+        parsing so that ``warden scan --force`` gets fully fresh ASTs,
+        consistent with the findings-cache bypass that force_scan enables.
 
         The ast_cache is an LRU cache with automatic eviction; when the
         cache is full the least-recently-used entry is silently dropped
@@ -130,6 +136,10 @@ class ASTPreParser:
         """
         if not code_files:
             return
+
+        if force:
+            context.ast_cache.clear()
+            logger.debug("ast_cache_cleared_for_force_scan")
 
         start = time.perf_counter()
         parsed = 0
