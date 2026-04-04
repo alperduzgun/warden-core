@@ -66,6 +66,7 @@ class ScanPlan:
     reasoning: str = ""
     project_root: str = ""
     analysis_level: str = "standard"
+    max_files: int = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +96,7 @@ class ScanPlanner:
         self,
         project_root: Path,
         config: Any | None = None,
+        max_files: int | None = None,
     ) -> ScanPlan:
         """
         Produce a ScanPlan for *project_root* using *config*.
@@ -135,6 +137,15 @@ class ScanPlanner:
         # ---- High-level reasoning ----
         reasoning = self._build_reasoning(analysis_level, file_count, frames, skipped_count)
 
+        # Resolve max_files: explicit arg > config > default
+        resolved_max_files = max_files
+        if resolved_max_files is None:
+            try:
+                from warden.pipeline.validators.input_validator import PipelineInput
+                resolved_max_files = PipelineInput().max_files
+            except Exception:
+                resolved_max_files = 1000
+
         return ScanPlan(
             frames=frames,
             file_count=file_count,
@@ -143,6 +154,7 @@ class ScanPlanner:
             reasoning=reasoning,
             project_root=str(project_root),
             analysis_level=analysis_level,
+            max_files=resolved_max_files,
         )
 
     # ------------------------------------------------------------------

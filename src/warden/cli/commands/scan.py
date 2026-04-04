@@ -178,7 +178,7 @@ def _attempt_self_healing_sync(error: Exception, level: str) -> bool:
         return False
 
 
-def _run_scan_plan(paths: list[str] | None, level: str) -> None:
+def _run_scan_plan(paths: list[str] | None, level: str, max_files: int | None = None) -> None:
     """
     Generate and display a pre-scan analysis plan using ScanPlanner.
 
@@ -205,7 +205,7 @@ def _run_scan_plan(paths: list[str] | None, level: str) -> None:
         use_gitignore = True
 
     planner = ScanPlanner()
-    scan_plan = _asyncio.run(planner.plan(project_root=project_root, config=_MinimalConfig()))
+    scan_plan = _asyncio.run(planner.plan(project_root=project_root, config=_MinimalConfig(), max_files=max_files))
 
     # --- Summary panel ---
     console.print(f"\n[dim]{scan_plan.reasoning}[/dim]\n")
@@ -215,7 +215,8 @@ def _run_scan_plan(paths: list[str] | None, level: str) -> None:
     summary_table.add_column("Key", style="bold")
     summary_table.add_column("Value", style="cyan")
     summary_table.add_row("Analysis level", scan_plan.analysis_level)
-    summary_table.add_row("Files to scan", str(scan_plan.file_count))
+    files_label = f"{scan_plan.file_count} / {scan_plan.max_files} max"
+    summary_table.add_row("Files to scan", files_label)
     summary_table.add_row("Files skipped", str(scan_plan.skipped_count))
     summary_table.add_row("Estimated LLM calls", str(scan_plan.estimated_llm_calls))
     summary_table.add_row("Frames selected", str(len(scan_plan.frames)))
@@ -286,6 +287,7 @@ def scan_command(
     ),
     provider: str | None = typer.Option(None, "--provider", help="LLM provider override (e.g., ollama, groq, qwen_cli, auto)"),
     plan: bool = typer.Option(False, "--plan", help="Print the analysis plan (frames, file count, LLM estimates) and exit without scanning"),
+    max_files: int | None = typer.Option(None, "--max-files", help="Override max files limit (default: 1000)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -368,7 +370,7 @@ def scan_command(
 
         # --plan: generate and display analysis plan then exit
         if plan:
-            _run_scan_plan(paths=paths, level=level)
+            _run_scan_plan(paths=paths, level=level, max_files=max_files)
             return
 
         # Auto-install scan dependencies based on analysis level
