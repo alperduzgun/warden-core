@@ -191,7 +191,7 @@ class TestScanExitCodes:
         r = run_warden(
             "scan",
             cwd=str(isolated_sample),
-            timeout=120,
+            timeout=360,  # qwen2.5-coder:3b needs ~130s on slower runners; give 3× buffer
         )
         # 0=clean, 1=pipeline error, 2=policy failure
         assert r.returncode in (0, 1, 2), f"Unexpected exit: {r.returncode}"
