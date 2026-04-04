@@ -228,14 +228,17 @@ def _run_scan_plan(paths: list[str] | None, level: str) -> None:
         frame_table.add_column("Frame ID", style="green", min_width=16)
         frame_table.add_column("Display Name", style="white")
         frame_table.add_column("LLM", style="cyan", justify="center")
+        frame_table.add_column("What it checks", style="dim", min_width=10, max_width=60, no_wrap=True)
         frame_table.add_column("Reason", style="dim")
 
         for frame in scan_plan.frames:
             llm_badge = "[cyan]yes[/cyan]" if frame.is_llm_powered else "[dim]no[/dim]"
+            description = getattr(frame, "description", "") or ""
             frame_table.add_row(
                 frame.frame_id,
                 frame.display_name,
                 llm_badge,
+                description[:60],
                 frame.reason,
             )
 

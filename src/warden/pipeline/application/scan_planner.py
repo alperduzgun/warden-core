@@ -41,6 +41,7 @@ class FramePlan:
     reason: str
     is_llm_powered: bool = False
     estimated_calls: int = 0
+    description: str = ""
 
 
 @dataclass
@@ -228,6 +229,7 @@ class ScanPlanner:
                 continue
 
             reason = self._frame_reason(frame_id, analysis_level)
+            description = getattr(frame_cls, "description", "") or ""
             plans.append(
                 FramePlan(
                     frame_id=frame_id,
@@ -235,6 +237,7 @@ class ScanPlanner:
                     reason=reason,
                     is_llm_powered=is_llm,
                     estimated_calls=1 if is_llm else 0,
+                    description=description,
                 )
             )
 
@@ -243,17 +246,17 @@ class ScanPlanner:
     def _static_frames(self, analysis_level: str) -> list[FramePlan]:
         """Curated fallback frame list when registry is unavailable."""
         base_frames = [
-            FramePlan("secrets", "Secret Detection", "Detects hardcoded secrets and API keys.", False, 0),
-            FramePlan("injection", "Injection Analysis", "Detects SQL, command, and code injection.", False, 0),
-            FramePlan("xss", "XSS Detection", "Detects cross-site scripting vulnerabilities.", False, 0),
-            FramePlan("auth", "Authentication Audit", "Reviews authentication and authorisation flows.", False, 0),
+            FramePlan("secrets", "Secret Detection", "Detects hardcoded secrets and API keys.", False, 0, "Detects hardcoded secrets and API keys."),
+            FramePlan("injection", "Injection Analysis", "Detects SQL, command, and code injection.", False, 0, "Detects SQL, command, and code injection vulnerabilities."),
+            FramePlan("xss", "XSS Detection", "Detects cross-site scripting vulnerabilities.", False, 0, "Detects cross-site scripting vulnerabilities."),
+            FramePlan("auth", "Authentication Audit", "Reviews authentication and authorisation flows.", False, 0, "Reviews authentication and authorisation flows."),
         ]
         llm_frames = [
-            FramePlan("semantic", "Semantic Analysis", "LLM-powered context-aware code review.", True, 1),
-            FramePlan("logic", "Logic Flow Analysis", "LLM-powered business logic validation.", True, 1),
+            FramePlan("semantic", "Semantic Analysis", "LLM-powered context-aware code review.", True, 1, "LLM-powered context-aware code review."),
+            FramePlan("logic", "Logic Flow Analysis", "LLM-powered business logic validation.", True, 1, "LLM-powered business logic validation."),
         ]
         deep_frames = [
-            FramePlan("taint", "Taint Analysis", "Deep data flow taint tracking.", True, 2),
+            FramePlan("taint", "Taint Analysis", "Deep data flow taint tracking.", True, 2, "Deep data flow taint tracking across files."),
         ]
 
         if analysis_level == "basic":
