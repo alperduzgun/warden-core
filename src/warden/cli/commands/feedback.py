@@ -394,6 +394,147 @@ def _print_feedback_summary(fp_findings: list[dict], tp_findings: list[dict]) ->
     )
 
 
+@feedback_app.command(name="review")
+def review_command(
+    project_dir: Optional[str] = typer.Option(
+        None,
+        "--project",
+        "-p",
+        help="Project root directory (defaults to current directory)",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force suppression of CRITICAL/HIGH severity findings (bypasses safety gate)",
+    ),
+) -> None:
+    """
+    Interactively review findings from the last scan and mark false positives.
+
+    Lists all findings and prompts you to select which ones are false positives.
+    Warden learns from your selections and suppresses them on future scans.
+
+    Example:
+
+        warden feedback review
+    """
+    project_root = Path(project_dir).resolve() if project_dir else Path.cwd()
+
+    try:
+        report = _load_report(project_root, scan_id=None)
+    except FileNotFoundError:
+        console.print(
+            "[red]Error:[/red] No scan report found. "
+            "Run 'warden scan' first to generate findings."
+        )
+        raise typer.Exit(code=1)
+
+    all_findings = _collect_all_findings(report)
+
+    if not all_findings:
+        console.print("[yellow]No findings in last scan.[/yellow]")
+        raise typer.Exit(code=0)
+
+    # --- Display findings table ---
+    console.print("\n[bold cyan]Findings from last scan:[/bold cyan]")
+    console.print("─" * 60)
+
+    SEV_COLORS = {
+        "critical": "bold red",
+        "high": "red",
+        "medium": "yellow",
+        "low": "cyan",
+        "info": "dim",
+    }
+
+    for idx, finding in enumerate(all_findings, start=1):
+        sev = finding.get("severity", "info").lower()
+        sev_color = SEV_COLORS.get(sev, "white")
+        sev_label = sev.upper().ljust(8)
+        fid = finding.get("id") or finding.get("rule_id") or "unknown"
+        file_path = finding.get("file_path") or finding.get("path") or "?"
+        line = finding.get("line") or finding.get("line_number") or ""
+        location = f"{file_path}:{line}" if line else file_path
+        message = (finding.get("message") or "")[:60]
+
+        console.print(
+            f"  [{sev_color}][{idx:>2}] {sev_label}[/{sev_color}]  "
+            f"[dim]{location}[/dim]  {message}"
+        )
+
+    console.print()
+    console.print(
+        "[dim]Enter numbers to mark as FALSE POSITIVE "
+        "(e.g. 1,3,5 or 'all' or 'q' to quit):[/dim]"
+    )
+    raw = typer.prompt(">", default="", show_default=False).strip()
+
+    if not raw or raw.lower() == "q":
+        console.print("[dim]No findings marked.[/dim]")
+        raise typer.Exit(code=0)
+
+    # Parse selection
+    if raw.lower() == "all":
+        selected_indices = list(range(len(all_findings)))
+    else:
+        selected_indices = []
+        for part in raw.split(","):
+            part = part.strip()
+            if part.isdigit():
+                idx = int(part) - 1
+                if 0 <= idx < len(all_findings):
+                    selected_indices.append(idx)
+                else:
+                    console.print(f"[yellow]Warning:[/yellow] Index {part} out of range, skipped.")
+            elif part:
+                console.print(f"[yellow]Warning:[/yellow] '{part}' is not a valid number, skipped.")
+
+    if not selected_indices:
+        console.print("[dim]No valid findings selected.[/dim]")
+        raise typer.Exit(code=0)
+
+    fp_findings = [all_findings[i] for i in selected_indices]
+    fp_ids = [f.get("id") or f.get("rule_id") or "" for f in fp_findings]
+
+    # Safety gate for CRITICAL/HIGH
+    if not force:
+        risky = [
+            f for f in fp_findings
+            if f.get("severity", "").lower() in ("critical", "high")
+        ]
+        if risky:
+            console.print(
+                f"\n[bold red]Safety gate:[/bold red] {len(risky)} CRITICAL/HIGH finding(s) "
+                "selected for false-positive suppression:"
+            )
+            for f in risky:
+                sev = f.get("severity", "unknown").upper()
+                fid = f.get("id") or f.get("rule_id", "?")
+                path = f.get("file_path") or f.get("path", "?")
+                console.print(f"  [bold red]•[/bold red] [{sev}] {fid} in {path}")
+            console.print(
+                "\n[dim]If these are genuine false positives, re-run with [bold]--force[/bold].[/dim]"
+            )
+            raise typer.Exit(code=1)
+
+    console.print(
+        f"\n[cyan]Processing feedback:[/cyan] "
+        f"{len(fp_findings)} false positive(s)"
+    )
+
+    asyncio.run(
+        _run_feedback_async(
+            fp_findings=fp_findings,
+            tp_findings=[],
+            fp_ids=fp_ids,
+            tp_ids=[],
+            all_findings=all_findings,
+            project_root=project_root,
+        )
+    )
+
+
 @feedback_app.command(name="list")
 def list_command(
     project_dir: Optional[str] = typer.Option(
