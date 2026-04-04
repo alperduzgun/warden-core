@@ -63,7 +63,7 @@ pdf = [
 ]
 grpc = [
     "grpcio>=1.64.0,<1.79.0",
-    "grpcio-tools>=1.64.0,<1.79.0",
+    "grpcio-tools>=1.64.0,<1.81.0",
 ]
 dev = [
     "pytest==8.2.2",
