@@ -225,22 +225,20 @@ def _run_scan_plan(paths: list[str] | None, level: str, max_files: int | None = 
     # --- Frame table ---
     if scan_plan.frames:
         console.print()
-        frame_table = Table(title="Frames", show_header=True, header_style="bold magenta")
-        frame_table.add_column("Frame ID", style="green", min_width=16)
-        frame_table.add_column("Display Name", style="white")
-        frame_table.add_column("LLM", style="cyan", justify="center")
-        frame_table.add_column("What it checks", style="dim", min_width=10, max_width=60, no_wrap=True)
-        frame_table.add_column("Reason", style="dim")
+        frame_table = Table(title="Frames", show_header=True, header_style="bold magenta", expand=False)
+        frame_table.add_column("Frame ID", style="green", min_width=14, no_wrap=True)
+        frame_table.add_column("Display Name", style="white", min_width=18, no_wrap=True)
+        frame_table.add_column("LLM", style="cyan", justify="center", min_width=3, no_wrap=True)
+        frame_table.add_column("What it checks", style="dim", min_width=20, max_width=55, no_wrap=True)
 
         for frame in scan_plan.frames:
             llm_badge = "[cyan]yes[/cyan]" if frame.is_llm_powered else "[dim]no[/dim]"
-            description = getattr(frame, "description", "") or ""
+            description = (getattr(frame, "description", "") or frame.reason or "")
             frame_table.add_row(
                 frame.frame_id,
                 frame.display_name,
                 llm_badge,
-                description[:60],
-                frame.reason,
+                description[:55],
             )
 
         console.print(frame_table)
