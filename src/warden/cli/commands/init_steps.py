@@ -1154,6 +1154,35 @@ rules:
     # Let's read the file as text and check if the comment exists, if not, append it.
     if config_path.exists():
         current_content = config_path.read_text()
+
+        # Prepend REQUIRED/OPTIONAL section annotations if not already present
+        _REQUIRED_OPTIONAL_HEADER = (
+            "# ── REQUIRED ─────────────────────────────────────────────────────────────\n"
+            "# These fields are required. Scan will fail without them.\n"
+            "#\n"
+            "#   project:   identifies the project (name, language, type)\n"
+            "#   frames:    list of analysis frames to run (e.g. security, orphan)\n"
+            "#\n"
+            "# ── OPTIONAL ─────────────────────────────────────────────────────────────\n"
+            "# Remove sections you don't need. Sensible defaults apply.\n"
+            "#\n"
+            "#   llm:            LLM provider config (required for AI-powered analysis)\n"
+            "#                   Run 'warden config llm list' to see available providers\n"
+            "#   settings:       scan behaviour (fail_fast, min_severity, timeouts)\n"
+            "#   advanced:       concurrency, output formats, worker count\n"
+            "#   frames_config:  per-frame overrides (severity threshold, taint config)\n"
+            "#   custom_rules:   paths to YAML rule files\n"
+            "#   baseline:       suppress known findings across CI runs\n"
+            "#   semantic_search: vector search index configuration\n"
+            "# ─────────────────────────────────────────────────────────────────────────\n"
+        )
+        if "── REQUIRED" not in current_content:
+            with open(config_path, "w") as f:
+                f.write(_REQUIRED_OPTIONAL_HEADER + "\n" + current_content)
+            console.print("[green]Added REQUIRED/OPTIONAL annotations to config[/green]")
+            # Re-read after rewrite
+            current_content = config_path.read_text()
+
         comment_block = """
 # --- Custom Rules Configuration ---
 custom_rules:
