@@ -136,10 +136,7 @@ class ConfigManager:
         Read rules from .warden/rules.yaml OR .warden/rules/ directory
 
         Returns:
-            Rules dictionary
-
-        Raises:
-            FileNotFoundError: If rules file doesn't exist
+            Rules dictionary, or empty dict if no rules file exists (rules are optional).
         """
         # If default rules.yaml doesn't exist, check for rules directory
         if not self.rules_path.exists():
@@ -148,7 +145,7 @@ class ConfigManager:
                 self.rules_path = rules_dir
 
         if not self.rules_path.exists():
-            raise FileNotFoundError(f"Rules path not found: {self.rules_path}")
+            return {}
 
         if self.rules_path.is_dir():
             # Use shared merger logic (DRY)
