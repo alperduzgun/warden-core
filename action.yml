@@ -279,11 +279,11 @@ runs:
 
         if [ -n "${EXISTING_ID}" ]; then
           gh api "repos/${{ github.repository }}/issues/comments/${EXISTING_ID}" \
-            -X PATCH -f body="${BODY}" > /dev/null 2>&1
+            -X PATCH -f body="${BODY}" > /dev/null 2>&1 || true
           echo "Updated existing PR comment (id: ${EXISTING_ID})"
         else
           gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            -f body="${BODY}" > /dev/null 2>&1
+            -f body="${BODY}" > /dev/null 2>&1 || true
           echo "Created new PR comment"
         fi
 
