@@ -242,6 +242,7 @@ class WardenBridge:
         ci_mode: bool = False,
         force: bool = False,
         contract_mode: bool = False,
+        max_files: int | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         # Validate inputs
@@ -262,7 +263,7 @@ class WardenBridge:
             self.orchestrator.config.contract_mode = True
 
         async for event in self.pipeline_handler.execute_pipeline_stream_async(
-            file_path, frames, analysis_level, force=force
+            file_path, frames, analysis_level, force=force, max_files=max_files
         ):
             if event.get("type") == "result":
                 result = event["result"]

@@ -290,6 +290,24 @@ def scan_command(
     """
     Run the full Warden pipeline on files or directories.
     """
+    # ── Input validation (#638) ───────────────────────────────────────────────
+    _valid_formats = {"text", "json", "sarif", "junit", "html", "pdf", "shield", "badge"}
+    _valid_levels = {"basic", "standard", "deep"}
+    _valid_severities = {"critical", "high", "medium", "low", "none"}
+
+    if format not in _valid_formats:
+        console.print(f"[red]Error:[/red] Invalid --format '{format}'. Choose from: {', '.join(sorted(_valid_formats))}")
+        raise typer.Exit(1)
+    if level and level not in _valid_levels:
+        console.print(f"[red]Error:[/red] Invalid --level '{level}'. Choose from: {', '.join(sorted(_valid_levels))}")
+        raise typer.Exit(1)
+    if fail_on_severity not in _valid_severities:
+        console.print(f"[red]Error:[/red] Invalid --fail-on-severity '{fail_on_severity}'. Choose from: {', '.join(sorted(_valid_severities))}")
+        raise typer.Exit(1)
+    if max_files is not None and not (1 <= max_files <= 10000):
+        console.print(f"[red]Error:[/red] --max-files must be between 1 and 10000, got {max_files}")
+        raise typer.Exit(1)
+
     # Provider CLI override → env var (picked up by load_llm_config_async)
     if provider:
         import os as _os
@@ -524,6 +542,7 @@ def scan_command(
                 resume=resume,
                 diff_changed_lines=diff_changed_lines,
                 fail_on_severity=fail_on_severity,
+                max_files=max_files,
             )
         )
 
@@ -601,6 +620,7 @@ async def _process_stream_events(
     force: bool,
     bench_collector: Any | None = None,
     contract_mode: bool = False,
+    max_files: int | None = None,
 ) -> tuple[dict | None, dict, int]:
     """Process pipeline streaming events with a live-updating display.
 
@@ -778,6 +798,7 @@ async def _process_stream_events(
                 ci_mode=ci_mode,
                 force=force,
                 contract_mode=contract_mode,
+                max_files=max_files,
             ):
                 event_type = event.get("type")
 
@@ -1017,6 +1038,7 @@ async def _run_scan_async(
     resume: bool = False,
     diff_changed_lines: dict | None = None,
     fail_on_severity: str = "critical",
+    max_files: int | None = None,
 ) -> int:
     """Async implementation of scan command."""
 
@@ -1083,6 +1105,7 @@ async def _run_scan_async(
             force,
             bench_collector=bench_collector,
             contract_mode=contract_mode,
+            max_files=max_files,
         )
         _scan_wall_duration = _time.monotonic() - _scan_wall_start
 

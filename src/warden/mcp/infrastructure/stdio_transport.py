@@ -23,6 +23,10 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 
+# Hard limit on incoming message size to prevent memory exhaustion (#642).
+_MAX_MESSAGE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
 class STDIOTransport(ITransport):
     """
     STDIO-based MCP transport.
@@ -43,6 +47,9 @@ class STDIOTransport(ITransport):
 
         Returns:
             Message string, or None on EOF
+
+        Raises:
+            MCPTransportError: If message exceeds _MAX_MESSAGE_BYTES or read fails.
         """
         if not self._is_open:
             return None
@@ -53,7 +60,18 @@ class STDIOTransport(ITransport):
                 line = await loop.run_in_executor(None, sys.stdin.readline)
                 if not line:
                     return None
+                if len(line.encode("utf-8")) > _MAX_MESSAGE_BYTES:
+                    logger.error(
+                        "mcp_message_too_large",
+                        size_bytes=len(line.encode("utf-8")),
+                        limit_bytes=_MAX_MESSAGE_BYTES,
+                    )
+                    raise MCPTransportError(
+                        f"Incoming message exceeds size limit ({_MAX_MESSAGE_BYTES // (1024 * 1024)} MB)"
+                    )
                 return line.strip()
+            except MCPTransportError:
+                raise
             except Exception as e:
                 logger.error("stdio_read_error", error=str(e))
                 raise MCPTransportError(f"Failed to read from stdin: {e}")

@@ -48,9 +48,17 @@ class ProviderConfig:
         if not self.default_model:
             errors.append(f"{provider_name}: Default model is required but not configured")
 
-        # Validate endpoint URL if provided
-        if self.endpoint and not self.endpoint.startswith(("http://", "https://")):
-            errors.append(f"{provider_name}: Endpoint must use HTTP or HTTPS protocol")
+        # Validate endpoint URL if provided — check protocol and SSRF safety (#640)
+        # Local providers (Ollama, claude_code, etc.) may use LAN addresses.
+        _is_local = provider_name.lower() in local_providers
+        if self.endpoint:
+            if not self.endpoint.startswith(("http://", "https://")):
+                errors.append(f"{provider_name}: Endpoint must use HTTP or HTTPS protocol")
+            elif not _is_safe_endpoint(self.endpoint, allow_lan=_is_local):
+                errors.append(
+                    f"{provider_name}: Endpoint targets a private/reserved address — "
+                    "SSRF protection blocked this endpoint"
+                )
 
         return errors
 
@@ -288,20 +296,64 @@ def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
         return asyncio.run(load_llm_config_async(config_override))
 
 
-def _validate_ollama_endpoint(url: str) -> bool:
-    """Block SSRF targets — only allow safe Ollama endpoints. (#310)"""
+def _is_safe_endpoint(url: str, allow_lan: bool = False) -> bool:
+    """Block SSRF targets for cloud provider endpoints. (#640)
+
+    Args:
+        url: Endpoint URL to validate.
+        allow_lan: If True, RFC1918 private LAN ranges are permitted (for local
+            providers like Ollama that legitimately run on a home/office network).
+            Metadata services (169.254.x.x) are always blocked regardless.
+
+    Blocked always: loopback (127/8), link-local/metadata (169.254/16),
+    IPv6 loopback (::1), ULA (fc00::/7), IPv6 link-local (fe80::/10).
+
+    Blocked when allow_lan=False (cloud providers):
+    RFC1918 (10/8, 172.16/12, 192.168/16) — prevents SSRF against internal services.
+    """
     try:
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme not in ("http", "https"):
             return False
         host = parsed.hostname or ""
-        # Block cloud metadata services and link-local addresses
-        blocked_prefixes = ("169.254.", "fd00:", "fe80:", "::ffff:169.254.")
-        if any(host.startswith(p) for p in blocked_prefixes):
+
+        # Always blocked: loopback, metadata services, IPv6 link-local/ULA
+        always_blocked = (
+            "127.",           # loopback (127.0.0.0/8)
+            "169.254.",       # link-local / AWS/GCP/Azure/GCP metadata
+            "::1",            # IPv6 loopback
+            "fd00:", "fc00:", # ULA (fc00::/7)
+            "fe80:",          # IPv6 link-local
+            "::ffff:169.254.", "::ffff:127.",
+        )
+        if any(host.startswith(p) for p in always_blocked):
             return False
+
+        # RFC1918 blocked for cloud providers only (not local LLMs like Ollama)
+        if not allow_lan:
+            rfc1918 = (
+                "10.",
+                "172.16.", "172.17.", "172.18.", "172.19.", "172.20.",
+                "172.21.", "172.22.", "172.23.", "172.24.", "172.25.",
+                "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.",
+                "192.168.",
+                "::ffff:10.", "::ffff:192.168.",
+            )
+            if any(host.startswith(p) for p in rfc1918):
+                return False
+
         return True
     except Exception:
         return False
+
+
+def _validate_ollama_endpoint(url: str) -> bool:
+    """Block SSRF targets for Ollama endpoints. (#310)
+
+    Ollama runs locally or on LAN — RFC1918 is permitted (allow_lan=True).
+    Cloud metadata services (169.254.x.x) are always blocked.
+    """
+    return _is_safe_endpoint(url, allow_lan=True)
 
 
 async def _check_ollama_availability(endpoint: str) -> bool:
