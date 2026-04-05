@@ -52,11 +52,8 @@ class WardenBridge:
         self.active_config_name = config_data["name"]
 
         # Load LLM Config with overrides from config.yaml
-        from warden.llm.config import load_llm_config
+        from warden.llm.config import _LOCAL_PROVIDERS, load_llm_config
         from warden.llm.factory import create_client
-
-        # Local providers that do not require an API key.
-        _LOCAL_PROVIDERS = frozenset({"ollama", "claude_code", "codex", "qwencode", "qwen_cli"})
 
         try:
             # Extract LLM config override from PipelineConfig (not a dict)

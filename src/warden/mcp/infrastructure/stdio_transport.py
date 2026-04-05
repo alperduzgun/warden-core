@@ -55,15 +55,16 @@ class STDIOTransport(ITransport):
             return None
 
         async with self._read_lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             try:
                 line = await loop.run_in_executor(None, sys.stdin.readline)
                 if not line:
                     return None
-                if len(line.encode("utf-8")) > _MAX_MESSAGE_BYTES:
+                encoded = line.encode("utf-8")
+                if len(encoded) > _MAX_MESSAGE_BYTES:
                     logger.error(
                         "mcp_message_too_large",
-                        size_bytes=len(line.encode("utf-8")),
+                        size_bytes=len(encoded),
                         limit_bytes=_MAX_MESSAGE_BYTES,
                     )
                     raise MCPTransportError(

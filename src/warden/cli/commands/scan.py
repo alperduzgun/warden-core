@@ -22,6 +22,11 @@ from warden.cli_bridge.bridge import WardenBridge
 console = Console()
 _logger = _structlog.get_logger(__name__)
 
+# Module-level constants — defined once, not recreated on every CLI invocation.
+_VALID_FORMATS: frozenset[str] = frozenset({"text", "json", "sarif", "junit", "html", "pdf", "shield", "badge"})
+_VALID_LEVELS: frozenset[str] = frozenset({"basic", "standard", "deep"})
+_VALID_SEVERITIES: frozenset[str] = frozenset({"critical", "high", "medium", "low", "none"})
+
 # Re-exports for backwards compatibility
 from warden.cli.commands.scan_preflight import _needs_ollama, _preflight_ollama_check, _ensure_scan_dependencies
 from warden.cli.commands.scan_output import (
@@ -291,18 +296,14 @@ def scan_command(
     Run the full Warden pipeline on files or directories.
     """
     # ── Input validation (#638) ───────────────────────────────────────────────
-    _valid_formats = {"text", "json", "sarif", "junit", "html", "pdf", "shield", "badge"}
-    _valid_levels = {"basic", "standard", "deep"}
-    _valid_severities = {"critical", "high", "medium", "low", "none"}
-
-    if format not in _valid_formats:
-        console.print(f"[red]Error:[/red] Invalid --format '{format}'. Choose from: {', '.join(sorted(_valid_formats))}")
+    if format not in _VALID_FORMATS:
+        console.print(f"[red]Error:[/red] Invalid --format '{format}'. Choose from: {', '.join(sorted(_VALID_FORMATS))}")
         raise typer.Exit(1)
-    if level and level not in _valid_levels:
-        console.print(f"[red]Error:[/red] Invalid --level '{level}'. Choose from: {', '.join(sorted(_valid_levels))}")
+    if level and level not in _VALID_LEVELS:
+        console.print(f"[red]Error:[/red] Invalid --level '{level}'. Choose from: {', '.join(sorted(_VALID_LEVELS))}")
         raise typer.Exit(1)
-    if fail_on_severity not in _valid_severities:
-        console.print(f"[red]Error:[/red] Invalid --fail-on-severity '{fail_on_severity}'. Choose from: {', '.join(sorted(_valid_severities))}")
+    if fail_on_severity not in _VALID_SEVERITIES:
+        console.print(f"[red]Error:[/red] Invalid --fail-on-severity '{fail_on_severity}'. Choose from: {', '.join(sorted(_VALID_SEVERITIES))}")
         raise typer.Exit(1)
     if max_files is not None and not (1 <= max_files <= 10000):
         console.print(f"[red]Error:[/red] --max-files must be between 1 and 10000, got {max_files}")

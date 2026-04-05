@@ -6,11 +6,20 @@ Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq
 """
 
 import contextlib
+import ipaddress
 import os
 import urllib.parse
 from dataclasses import dataclass, field
 
 from .types import LlmProvider
+
+# Providers that run locally or on a private LAN and do not require an API key.
+# Used for both SSRF allow_lan and API-key-required logic.
+_LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama", "claude_code", "codex", "qwencode", "qwen_cli"})
+
+# Hostnames that resolve to loopback but aren't raw IP literals —
+# `ipaddress.ip_address()` would raise ValueError for these, so we block them explicitly.
+_LOOPBACK_HOSTNAMES: frozenset[str] = frozenset({"localhost", "ip6-localhost", "ip6-loopback"})
 
 
 @dataclass
@@ -37,12 +46,11 @@ class ProviderConfig:
             List of validation errors (empty if valid)
         """
         errors = []
-        local_providers = {"ollama", "claude_code", "codex", "qwencode", "qwen_cli"}
 
         if not self.api_key:
-            if provider_name.lower() not in local_providers:
+            if provider_name.lower() not in _LOCAL_PROVIDERS:
                 errors.append(f"{provider_name}: API key is required but not configured")
-        elif len(self.api_key) < 10 and provider_name.lower() not in local_providers:
+        elif len(self.api_key) < 10 and provider_name.lower() not in _LOCAL_PROVIDERS:
             errors.append(f"{provider_name}: API key appears invalid (too short)")
 
         if not self.default_model:
@@ -50,7 +58,7 @@ class ProviderConfig:
 
         # Validate endpoint URL if provided — check protocol and SSRF safety (#640)
         # Local providers (Ollama, claude_code, etc.) may use LAN addresses.
-        _is_local = provider_name.lower() in local_providers
+        _is_local = provider_name.lower() in _LOCAL_PROVIDERS
         if self.endpoint:
             if not self.endpoint.startswith(("http://", "https://")):
                 errors.append(f"{provider_name}: Endpoint must use HTTP or HTTPS protocol")
@@ -297,50 +305,64 @@ def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
 
 
 def _is_safe_endpoint(url: str, allow_lan: bool = False) -> bool:
-    """Block SSRF targets for cloud provider endpoints. (#640)
+    """Block SSRF targets for LLM provider endpoints. (#640)
+
+    Uses the stdlib ``ipaddress`` module for accurate IP classification —
+    immune to decimal/hex/octal IP encoding and IPv4-mapped IPv6 bypasses
+    that fool naive ``startswith`` prefix checks.
 
     Args:
         url: Endpoint URL to validate.
-        allow_lan: If True, RFC1918 private LAN ranges are permitted (for local
-            providers like Ollama that legitimately run on a home/office network).
-            Metadata services (169.254.x.x) are always blocked regardless.
+        allow_lan: If True, RFC1918 private-LAN ranges are permitted (for
+            local providers like Ollama that legitimately run on a home or
+            office network). Loopback and link-local (metadata) services
+            are always blocked regardless of this flag.
 
-    Blocked always: loopback (127/8), link-local/metadata (169.254/16),
-    IPv6 loopback (::1), ULA (fc00::/7), IPv6 link-local (fe80::/10).
+    Always blocked:
+        loopback (127/8, ::1), link-local/metadata (169.254/16, fe80::/10),
+        ULA (fc00::/7), unspecified (0.0.0.0/::), localhost by name.
 
     Blocked when allow_lan=False (cloud providers):
-    RFC1918 (10/8, 172.16/12, 192.168/16) — prevents SSRF against internal services.
+        RFC1918 (10/8, 172.16/12, 192.168/16).
     """
     try:
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme not in ("http", "https"):
             return False
         host = parsed.hostname or ""
-
-        # Always blocked: loopback, metadata services, IPv6 link-local/ULA
-        always_blocked = (
-            "127.",           # loopback (127.0.0.0/8)
-            "169.254.",       # link-local / AWS/GCP/Azure/GCP metadata
-            "::1",            # IPv6 loopback
-            "fd00:", "fc00:", # ULA (fc00::/7)
-            "fe80:",          # IPv6 link-local
-            "::ffff:169.254.", "::ffff:127.",
-        )
-        if any(host.startswith(p) for p in always_blocked):
+        if not host:
             return False
 
-        # RFC1918 blocked for cloud providers only (not local LLMs like Ollama)
-        if not allow_lan:
-            rfc1918 = (
-                "10.",
-                "172.16.", "172.17.", "172.18.", "172.19.", "172.20.",
-                "172.21.", "172.22.", "172.23.", "172.24.", "172.25.",
-                "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.",
-                "192.168.",
-                "::ffff:10.", "::ffff:192.168.",
-            )
-            if any(host.startswith(p) for p in rfc1918):
+        # Block well-known loopback hostnames that won't be caught by IP parsing.
+        if host.lower() in _LOOPBACK_HOSTNAMES:
+            return False
+
+        # Parse as an IP address for accurate classification.
+        # Raises ValueError for hostnames — handled below.
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            # Not a raw IP literal — it's a hostname.
+            # We can't resolve DNS at config time; return True and let the
+            # HTTP client enforce network-level restrictions at request time.
+            return True
+
+        # Always block: loopback, unspecified (0.0.0.0 / ::), link-local
+        if ip.is_loopback or ip.is_unspecified or ip.is_link_local:
+            return False
+
+        # For IPv4-mapped IPv6 (::ffff:x.x.x.x) apply the same rules to the
+        # mapped IPv4 address — prevents ::ffff:127.0.0.1 style bypasses.
+        mapped: ipaddress.IPv4Address | None = getattr(ip, "ipv4_mapped", None)
+        if mapped is not None:
+            if mapped.is_loopback or mapped.is_unspecified or mapped.is_link_local:
                 return False
+            if not allow_lan and mapped.is_private:
+                return False
+
+        # RFC1918 — blocked for cloud providers, allowed for local providers
+        if not allow_lan and ip.is_private:
+            return False
 
         return True
     except Exception:
