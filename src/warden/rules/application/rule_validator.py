@@ -49,6 +49,9 @@ class CustomRuleValidator:
         """
         self.rules = [r for r in rules if r.enabled]
         self.llm_service = llm_service
+        # Populated during validation: blocker AI rules skipped due to missing LLM service.
+        # Callers should surface these to the user — a skipped blocker is not a silent pass.
+        self.skipped_ai_blockers: list[str] = []
         logger.info("custom_rule_validator_initialized", rule_count=len(self.rules), has_llm=llm_service is not None)
 
     async def validate_file_async(
@@ -155,7 +158,9 @@ class CustomRuleValidator:
                     ai_violations = await self._validate_ai_rule_async(rule, file_path, content)
                     violations.extend(ai_violations)
                 else:
-                    logger.warning("ai_rule_skipped_no_llm", rule_id=rule.id)
+                    logger.warning("ai_rule_skipped_no_llm", rule_id=rule.id, is_blocker=rule.is_blocker)
+                    if rule.is_blocker:
+                        self.skipped_ai_blockers.append(rule.id)
 
         logger.info(
             "file_validation_complete",
