@@ -140,6 +140,10 @@ class CustomRuleValidator:
             if rule.language and not self._is_language_match(file_path, rule.language):
                 continue
 
+            # Check file_pattern filter (glob)
+            if rule.file_pattern and not fnmatch.fnmatch(file_path.name, rule.file_pattern):
+                continue
+
             # Check exceptions
             if rule.exceptions and self._is_exception_match(file_path, rule.exceptions):
                 continue
@@ -857,6 +861,10 @@ RETURN ONLY A JSON OBJECT:
             from warden.shared.utils.json_parser import parse_json_from_llm
 
             result = parse_json_from_llm(response.content if hasattr(response, "content") else str(response))
+
+            if not result or not isinstance(result, dict):
+                logger.warning("ai_rule_invalid_response", rule_id=rule.id)
+                return []
 
             if result.get("violation_found"):
                 logger.info(

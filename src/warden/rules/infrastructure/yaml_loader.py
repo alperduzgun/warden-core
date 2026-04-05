@@ -232,6 +232,7 @@ class RulesYAMLLoader:
             examples=rule_data.get("examples"),
             message=rule_data.get("message"),
             language=rule_data.get("language"),
+            file_pattern=rule_data.get("file_pattern") or rule_data.get("filePattern"),
             exceptions=rule_data.get("exceptions"),
             script_path=rule_data.get("scriptPath"),
             timeout=rule_data.get("timeout"),
