@@ -258,6 +258,9 @@ frame_rules:
   orphan:
     on_fail: continue
 
+  architecture:
+    on_fail: continue
+
   fuzz:
     on_fail: continue
 
