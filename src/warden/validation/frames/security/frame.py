@@ -1302,6 +1302,7 @@ class SecurityFrame(ValidationFrame, BatchExecutable, TaintAware, CodeGraphAware
                     code=check_finding.code_snippet,
                     is_blocker=check_finding.is_blocker,
                     detection_source=detection_source,
+                    pattern_confidence=getattr(check_finding, "pattern_confidence", None),
                     remediation=Remediation(
                         description=check_finding.suggestion or "",
                         code="",
