@@ -107,7 +107,7 @@ class TestQwenSendAsyncSuccess:
 
     @pytest.mark.asyncio
     async def test_response_provider_set(self):
-        """provider field must be LlmProvider.QWEN."""
+        """provider field must be LlmProvider.QWEN_CLOUD."""
         QwenClient._rate_limited_until = 0.0
         client = QwenClient(_make_config())
         request = LlmRequest(system_prompt="sys", user_message="hi", max_tokens=50)
@@ -119,7 +119,7 @@ class TestQwenSendAsyncSuccess:
             with patch("httpx.AsyncClient", return_value=_mock_http_success()):
                 response = await client.send_async(request)
 
-        assert response.provider == LlmProvider.QWEN
+        assert response.provider == LlmProvider.QWEN_CLOUD
 
     @pytest.mark.asyncio
     async def test_token_counts_populated(self):
@@ -472,9 +472,9 @@ class TestQwenDefaultModel:
         assert captured_payload[0]["model"] == "qwen-coder-turbo"
 
     def test_provider_property_returns_qwen(self):
-        """provider property must return LlmProvider.QWEN."""
+        """provider property must return LlmProvider.QWEN_CLOUD."""
         client = QwenClient(_make_config())
-        assert client.provider == LlmProvider.QWEN
+        assert client.provider == LlmProvider.QWEN_CLOUD
 
 
 # ---------------------------------------------------------------------------
@@ -486,10 +486,10 @@ class TestQwenRegistration:
     """QwenClient must be registered with the ProviderRegistry on module import."""
 
     def test_provider_registered_in_registry(self):
-        """LlmProvider.QWEN must be registered after importing the module."""
+        """LlmProvider.QWEN_CLOUD must be registered after importing the module."""
         from warden.llm.registry import ProviderRegistry
 
         # Import triggers self-registration at module bottom
         import warden.llm.providers.qwen  # noqa: F401
 
-        assert ProviderRegistry.is_registered(LlmProvider.QWEN)
+        assert ProviderRegistry.is_registered(LlmProvider.QWEN_CLOUD)

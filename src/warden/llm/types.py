@@ -22,7 +22,7 @@ class LlmProvider(str, Enum):
     DEEPSEEK = "deepseek"
     QWENCODE = "qwencode"
     QWEN_CLI = "qwen_cli"  # Local Qwen CLI subprocess integration
-    QWEN = "qwen"  # Alibaba Cloud DashScope (OpenAI-compatible API)
+    QWEN_CLOUD = "qwen_cloud"  # Alibaba Cloud DashScope (OpenAI-compatible API)
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     AZURE_OPENAI = "azure_openai"

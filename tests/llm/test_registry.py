@@ -30,7 +30,7 @@ def test_ensure_providers_registered():
         LlmProvider.DEEPSEEK,
         LlmProvider.QWEN_CLI,
         LlmProvider.QWENCODE,
-        LlmProvider.QWEN,
+        LlmProvider.QWEN_CLOUD,
         LlmProvider.OPENAI,
         LlmProvider.AZURE_OPENAI,
         LlmProvider.GROQ,

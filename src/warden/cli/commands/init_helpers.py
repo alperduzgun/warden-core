@@ -113,8 +113,8 @@ LLM_PROVIDERS = {
         "ci_supported": False,
     },
     "10": {
-        "id": "qwen",
-        "name": "Qwen (Alibaba Cloud)",
+        "id": "qwen_cloud",
+        "name": "Qwen Cloud (Alibaba Cloud)",
         "description": "DashScope API, OpenAI-compatible, affordable",
         "emoji": "🌐",
         "requires_key": True,

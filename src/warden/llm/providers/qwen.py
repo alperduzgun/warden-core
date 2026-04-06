@@ -52,7 +52,7 @@ class QwenClient(ILlmClient):
 
     @property
     def provider(self) -> LlmProvider:
-        return LlmProvider.QWEN
+        return LlmProvider.QWEN_CLOUD
 
     @resilient(name="provider_send", timeout_seconds=90.0)
     async def send_async(self, request: LlmRequest) -> LlmResponse:
@@ -80,7 +80,7 @@ class QwenClient(ILlmClient):
 
             limiter = await GlobalRateLimiter.get_instance()
             try:
-                await limiter.acquire("qwen", tokens=request.max_tokens + request.estimated_prompt_tokens)
+                await limiter.acquire("qwen_cloud", tokens=request.max_tokens + request.estimated_prompt_tokens)
             except asyncio.TimeoutError:
                 return LlmResponse.error(
                     "Qwen rate-limit queue timeout — provider skipped",
@@ -176,4 +176,4 @@ class QwenClient(ILlmClient):
 
 
 # Self-register with the registry
-ProviderRegistry.register(LlmProvider.QWEN, QwenClient)
+ProviderRegistry.register(LlmProvider.QWEN_CLOUD, QwenClient)

@@ -44,7 +44,8 @@ class GlobalRateLimiter:
         # Provider-specific rate limiters
         self._limiters: dict[str, RateLimiter] = {
             # Fast tier providers (high limits)
-            "qwen": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
+            "qwen": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),      # qwencode (local DashScope)
+            "qwen_cloud": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),  # Qwen Cloud (OpenAI-compat)
             "ollama": RateLimiter(RateLimitConfig(rpm=60, tpm=100000)),
             # Smart tier providers (conservative limits)
             "groq": RateLimiter(RateLimitConfig(rpm=30, tpm=6000)),
