@@ -62,24 +62,37 @@ class WardenBridge:
             self.llm_config = load_llm_config(config_override=llm_override)
 
             # --- Fail-fast config validation ---
-            # validate() checks the default provider + all fallbacks for missing
-            # API keys, invalid endpoints, etc.  Cloud providers must have a key;
-            # local providers (ollama, qwen_cli, claude_code, codex) get a soft
-            # warning so the scan can still proceed.
-            validation_errors = self.llm_config.validate()
-            if validation_errors:
-                provider_name = self.llm_config.default_provider.value
-                is_local = provider_name in _LOCAL_PROVIDERS
+            # Only the default provider's errors are hard-failures for cloud providers.
+            # Fallback provider errors are soft warnings — invalid fallbacks are dropped
+            # from the chain so the scan can still proceed with the default provider.
+            provider_name = self.llm_config.default_provider.value
+            is_local = provider_name in _LOCAL_PROVIDERS
+
+            default_cfg = self.llm_config.get_provider_config(self.llm_config.default_provider)
+            default_errors = default_cfg.validate(provider_name) if default_cfg and default_cfg.enabled else []
+
+            if default_errors:
                 if is_local:
-                    for err in validation_errors:
+                    for err in default_errors:
                         logger.warning("llm_config_warning", warning=err, provider=provider_name)
                 else:
-                    # Cloud provider with missing/invalid credentials — hard fail.
-                    error_summary = "; ".join(validation_errors)
                     raise RuntimeError(
-                        f"LLM configuration invalid for cloud provider '{provider_name}': {error_summary}. "
+                        f"LLM configuration invalid for cloud provider '{provider_name}': "
+                        f"{'; '.join(default_errors)}. "
                         "Set the required API key environment variable or switch to a local provider."
                     )
+
+            # Validate fallbacks — warn and drop invalid ones, never hard-fail.
+            valid_fallbacks = []
+            for fb_provider in self.llm_config.fallback_providers:
+                fb_cfg = self.llm_config.get_provider_config(fb_provider)
+                fb_errors = fb_cfg.validate(fb_provider.value) if fb_cfg and fb_cfg.enabled else []
+                if fb_errors:
+                    for err in fb_errors:
+                        logger.warning("llm_fallback_invalid", provider=fb_provider.value, warning=err)
+                else:
+                    valid_fallbacks.append(fb_provider)
+            self.llm_config.fallback_providers = valid_fallbacks
 
             llm_service = create_client(self.llm_config.default_provider)
             if llm_service:
