@@ -106,6 +106,92 @@ async def _generate_async(root: Path, llm_service, force: bool) -> None:
         )
 
 
+@rules_app.command(name="refine")
+def refine_command(
+    path: Path = typer.Option(Path("."), "--path", "-p", help="Project directory (default: cwd)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show proposed changes without writing"),
+    rule_id: list[str] = typer.Option([], "--rule", "-r", help="Limit to specific rule IDs (repeatable)"),
+) -> None:
+    """Refine AI rule context fields by analyzing recent scan findings for false positives.
+
+    Reads the findings cache from the last scan, classifies each finding using
+    the configured LLM, and appends acceptable-pattern guidance to the context
+    field of rules that produced false positives.
+
+    Examples:
+        warden rules refine
+        warden rules refine --dry-run
+        warden rules refine --rule no-bare-except --rule no-hardcoded-secrets
+        warden rules refine --path /path/to/project
+    """
+    root = path.resolve()
+    warden_dir = root / ".warden"
+
+    if not warden_dir.exists():
+        console.print("[red]Error: Warden not initialized. Run 'warden init' first.[/red]")
+        raise typer.Exit(1)
+
+    console.print("\n[bold cyan]⚙  Warden Rules Refine[/bold cyan]")
+
+    llm_service = _load_llm_service()
+    if llm_service is None:
+        raise typer.Exit(1)
+
+    asyncio.run(_refine_async(root, llm_service, list(rule_id) or None, dry_run))
+
+
+async def _refine_async(
+    root: Path,
+    llm_service,
+    rule_ids: list[str] | None,
+    dry_run: bool,
+) -> None:
+    from rich.table import Table
+
+    from warden.rules.application.rule_refiner import refine_rules
+
+    try:
+        result = await refine_rules(
+            project_path=root,
+            llm_service=llm_service,
+            rule_ids=rule_ids,
+            dry_run=dry_run,
+        )
+    except Exception as exc:
+        console.print(f"[red]Refine failed: {exc}[/red]")
+        raise typer.Exit(1)
+
+    # Summary table
+    if result.analyzed > 0:
+        table = Table(title="Refinement Results", show_lines=True)
+        table.add_column("Rule ID", style="cyan")
+        table.add_column("Verdict", style="green")
+        table.add_column("Pattern")
+
+        for upd in result.updates:
+            table.add_row(upd["rule_id"], "false_positive", upd["pattern"])
+
+        console.print(table)
+
+    # Status line
+    console.print(
+        f"\nAnalyzed: [bold]{result.analyzed}[/bold]  "
+        f"Real: [bold]{result.skipped_real}[/bold]  "
+        f"Duplicates skipped: [bold]{result.skipped_duplicate}[/bold]"
+    )
+
+    if result.updates:
+        if dry_run:
+            console.print(f"\n[yellow][dry-run] Would update {len(result.updates)} rules[/yellow]")
+            for upd in result.updates:
+                console.print(f"\n  [bold]{upd['rule_id']}[/bold] proposed context addition:")
+                console.print(f"  [dim]Acceptable: {upd['pattern']} — {upd['reason']}[/dim]")
+        else:
+            console.print(f"\n[green]✓ Updated context for {len(result.updates)} rules[/green]")
+    else:
+        console.print("\n[dim]No context updates needed.[/dim]")
+
+
 async def _dry_run_async(root: Path, llm_service) -> None:
     from warden.analysis.application.discovery.framework_detector import detect_frameworks_async
     from warden.rules.application.rule_generator import (
