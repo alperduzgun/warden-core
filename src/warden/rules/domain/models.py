@@ -59,6 +59,10 @@ class CustomRule(BaseDomainModel):
     file_pattern: str | None = Field(None, alias="filePattern")
     excluded_paths: list[str] | None = Field(None, alias="excludedPaths")
     auto_fix: dict[str, Any] | None = Field(None, alias="autoFix")
+    # Optional architectural context injected into AI rule prompts to reduce FPs.
+    # Describes framework conventions, exception propagation model, out-of-scope
+    # components, etc. so the LLM can reason about the full call chain.
+    context: str | None = None
 
     def __hash__(self):
         return hash(self.id)

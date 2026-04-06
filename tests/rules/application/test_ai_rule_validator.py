@@ -303,3 +303,156 @@ class TestRuleGeneratorWritesFile:
         rule = written["rules"][0]
         missing = REQUIRED_FIELDS - set(rule.keys())
         assert missing == set(), f"Missing fields in written rule: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Test 9 — CustomRule accepts optional context field
+# ---------------------------------------------------------------------------
+
+class TestCustomRuleContextField:
+    def test_context_field_optional_none_by_default(self) -> None:
+        """CustomRule without context → context is None."""
+        rule = _make_ai_rule()
+        assert rule.context is None
+
+    def test_context_field_stored_when_provided(self) -> None:
+        """CustomRule with context string → context is preserved."""
+        rule = CustomRule(
+            id="ctx-rule",
+            name="Context Rule",
+            category=RuleCategory.SECURITY,
+            severity=RuleSeverity.MEDIUM,
+            is_blocker=False,
+            description="Some directive.",
+            enabled=True,
+            type="ai",
+            conditions={},
+            context="FastAPI project. Background workers are out of scope.",
+        )
+        assert rule.context == "FastAPI project. Background workers are out of scope."
+
+
+# ---------------------------------------------------------------------------
+# Test 10 — YAML loader reads context field
+# ---------------------------------------------------------------------------
+
+class TestYamlLoaderReadsContext:
+    def test_yaml_loader_reads_context_field(self, tmp_path: Path) -> None:
+        """context: field in YAML → populated on CustomRule object."""
+        from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
+
+        (tmp_path / ".warden").mkdir()
+        rules_yaml = tmp_path / ".warden" / "rules.yaml"
+        rules_yaml.write_text(
+            """
+rules:
+  - id: ctx-test
+    name: Context Test
+    category: security
+    severity: medium
+    isBlocker: false
+    description: "Flag insecure patterns."
+    enabled: true
+    type: ai
+    context: "FastAPI project. Global exception handler catches FreeMCPError. Workers are out of scope."
+""",
+            encoding="utf-8",
+        )
+
+        config = RulesYAMLLoader.load_rules_sync(tmp_path)
+
+        assert len(config.rules) == 1
+        rule = config.rules[0]
+        assert rule.context == "FastAPI project. Global exception handler catches FreeMCPError. Workers are out of scope."
+
+    def test_yaml_loader_context_absent_is_none(self, tmp_path: Path) -> None:
+        """Rule without context: field → context is None (not KeyError)."""
+        from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
+
+        (tmp_path / ".warden").mkdir()
+        rules_yaml = tmp_path / ".warden" / "rules.yaml"
+        rules_yaml.write_text(
+            """
+rules:
+  - id: no-ctx
+    name: No Context Rule
+    category: convention
+    severity: low
+    isBlocker: false
+    description: "Some rule."
+    enabled: true
+    type: ai
+""",
+            encoding="utf-8",
+        )
+
+        config = RulesYAMLLoader.load_rules_sync(tmp_path)
+        assert config.rules[0].context is None
+
+
+# ---------------------------------------------------------------------------
+# Test 11 — context injected into LLM prompt when present
+# ---------------------------------------------------------------------------
+
+class TestContextInjectedIntoPrompt:
+    @pytest.mark.asyncio
+    async def test_context_appears_in_llm_prompt_when_set(self, tmp_path: Path) -> None:
+        """Rule with context → LLM prompt contains RULE CONTEXT block."""
+        rule = CustomRule(
+            id="ctx-rule",
+            name="Context Rule",
+            category=RuleCategory.SECURITY,
+            severity=RuleSeverity.HIGH,
+            is_blocker=False,
+            description="Flag eval() usage.",
+            enabled=True,
+            type="ai",
+            conditions={},
+            context="FastAPI project. Background workers are out of scope. Only flag HTTP handlers.",
+        )
+        captured_prompts: list[str] = []
+
+        async def capture(*args, **kwargs):
+            captured_prompts.append(kwargs.get("prompt") or (args[0] if args else ""))
+            return json.dumps({"violation_found": False, "line_number": 0, "explanation": "", "suggestion": ""})
+
+        llm = AsyncMock()
+        llm.complete_async = AsyncMock(side_effect=capture)
+        llm.config = MagicMock()
+        llm.config.smart_model = None
+
+        validator = CustomRuleValidator([rule], llm_service=llm)
+        target = tmp_path / "code.py"
+        target.write_text("x = 1\n", encoding="utf-8")
+
+        await validator.validate_file_async(target)
+
+        assert len(captured_prompts) == 1
+        assert "RULE CONTEXT" in captured_prompts[0]
+        assert "Background workers are out of scope" in captured_prompts[0]
+
+    @pytest.mark.asyncio
+    async def test_no_context_block_when_context_is_none(self, tmp_path: Path) -> None:
+        """Rule without context → prompt does NOT contain RULE CONTEXT block."""
+        rule = _make_ai_rule()
+        assert rule.context is None
+
+        captured_prompts: list[str] = []
+
+        async def capture(*args, **kwargs):
+            captured_prompts.append(kwargs.get("prompt") or (args[0] if args else ""))
+            return json.dumps({"violation_found": False, "line_number": 0, "explanation": "", "suggestion": ""})
+
+        llm = AsyncMock()
+        llm.complete_async = AsyncMock(side_effect=capture)
+        llm.config = MagicMock()
+        llm.config.smart_model = None
+
+        validator = CustomRuleValidator([rule], llm_service=llm)
+        target = tmp_path / "code.py"
+        target.write_text("x = 1\n", encoding="utf-8")
+
+        await validator.validate_file_async(target)
+
+        assert len(captured_prompts) == 1
+        assert "RULE CONTEXT" not in captured_prompts[0]

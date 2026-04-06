@@ -31,26 +31,36 @@ Each rule MUST have exactly these fields:
   category: (one of: security, convention, performance, custom, architectural, consistency, backend-ipc, logic)
   severity: (one of: critical, high, medium, low)
   isBlocker: (true or false)
-  description: (specific, actionable directive — not vague. Tells the LLM auditor exactly what to flag.)
+  description: "quoted string — specific, actionable directive. Tells the LLM auditor exactly what to flag. MUST be quoted because it may contain colons."
   enabled: true
   type: "ai"
   language: [list of applicable languages, e.g. [python] or [javascript, typescript]]
-  file_pattern: (glob pattern limiting which files to check, e.g. "*.py" or "src/**/*.ts")
+  file_pattern: "glob pattern limiting which files to check, e.g. *.py or src/**/*.ts"
+  context: "quoted string — architectural guidance for the LLM auditor to AVOID FALSE POSITIVES.
+    Describe: (1) how exceptions propagate in this framework (e.g. global handler, middleware),
+    (2) which file types or components are OUT OF SCOPE for this rule (e.g. background workers,
+    startup/lifespan code, test files), (3) any known safe patterns that look like violations
+    but are not (e.g. bare awaits in service layer where errors propagate to HTTP middleware),
+    (4) what actually constitutes a REAL violation vs an acceptable pattern.
+    MUST be quoted. Be specific to the framework: {framework}."
+
+IMPORTANT: ALL string values that may contain colons, commas, or special characters MUST be wrapped in double quotes.
 
 Return ONLY a valid YAML block starting with `rules:` — no markdown, no explanation, no code fences.
 
 Example output:
 rules:
   - id: no-raw-sql-concat
-    name: No Raw SQL Concatenation
+    name: "No Raw SQL Concatenation"
     category: security
     severity: critical
     isBlocker: true
-    description: Detect SQL queries built via string concatenation or f-strings containing SELECT/INSERT/UPDATE/DELETE. Flag any occurrence regardless of context.
+    description: "Detect SQL queries built via string concatenation or f-strings containing SELECT/INSERT/UPDATE/DELETE. Flag any occurrence regardless of context."
     enabled: true
     type: ai
     language: [python]
     file_pattern: "*.py"
+    context: "Django/FastAPI project. ORM queries via .filter()/.get() are safe — flag only raw cursor.execute() or string-interpolated SQL. Test files are out of scope. Migration files are out of scope."
 """
 
 _PY_FRAMEWORKS: frozenset[str] = frozenset(

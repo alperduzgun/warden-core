@@ -236,6 +236,7 @@ class RulesYAMLLoader:
             exceptions=rule_data.get("exceptions"),
             script_path=rule_data.get("scriptPath"),
             timeout=rule_data.get("timeout"),
+            context=rule_data.get("context"),
         )
 
     @staticmethod
