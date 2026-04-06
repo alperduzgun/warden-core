@@ -112,6 +112,7 @@ class LlmConfiguration:
     ollama: ProviderConfig = field(default_factory=ProviderConfig)
     claude_code: ProviderConfig = field(default_factory=ProviderConfig)  # Local Claude Code CLI/SDK
     codex: ProviderConfig = field(default_factory=ProviderConfig)  # Local Codex CLI
+    qwen: ProviderConfig = field(default_factory=ProviderConfig)  # Alibaba Cloud DashScope (OpenAI-compatible)
 
     # Model Tiering (Optional)
     smart_model: str | None = None  # High-reasoning model (e.g. gpt-4o)
@@ -156,6 +157,7 @@ class LlmConfiguration:
             LlmProvider.DEEPSEEK: self.deepseek,
             LlmProvider.QWENCODE: self.qwencode,
             LlmProvider.QWEN_CLI: self.qwencode,  # CLI shares DashScope config
+            LlmProvider.QWEN: self.qwen,
             LlmProvider.ANTHROPIC: self.anthropic,
             LlmProvider.OPENAI: self.openai,
             LlmProvider.AZURE_OPENAI: self.azure_openai,
@@ -206,6 +208,7 @@ DEFAULT_MODELS = {
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.3-70b-versatile",
+    LlmProvider.QWEN: "qwen-turbo",
     LlmProvider.OLLAMA: "qwen2.5-coder:3b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
     LlmProvider.CODEX: "codex-local",  # Placeholder - actual model controlled by ~/.codex/config.toml
@@ -503,6 +506,7 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             "DEEPSEEK_API_KEY",
             "QWENCODE_API_KEY",
             "GROQ_API_KEY",
+            "QWEN_API_KEY",
             "WARDEN_SMART_MODEL",
             "WARDEN_FAST_MODEL",
             "WARDEN_LLM_CONCURRENCY",
@@ -602,6 +606,13 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.groq.enabled = True
         configured_providers.append(LlmProvider.GROQ)
 
+    # Configure Qwen (Alibaba Cloud DashScope)
+    qwen_secret = secrets.get("QWEN_API_KEY")
+    if qwen_secret and qwen_secret.found:
+        config.qwen.api_key = qwen_secret.value
+        config.qwen.enabled = True
+        configured_providers.append(LlmProvider.QWEN)
+
     # Configure Ollama (Local)
     try:
         ollama_host_secret = secrets.get("OLLAMA_HOST")
@@ -662,6 +673,11 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         if not auto_provider and LlmProvider.GROQ in configured_providers:
             auto_provider = LlmProvider.GROQ
             logger.info("auto_detect_provider", provider="groq", reason="GROQ_API_KEY set")
+
+        # Priority 2b: Qwen (cloud, affordable)
+        if not auto_provider and LlmProvider.QWEN in configured_providers:
+            auto_provider = LlmProvider.QWEN
+            logger.info("auto_detect_provider", provider="qwen", reason="QWEN_API_KEY set")
 
         # Priority 3: Ollama (local, free) — only if running
         if not auto_provider and await _check_ollama_availability(ollama_endpoint):
