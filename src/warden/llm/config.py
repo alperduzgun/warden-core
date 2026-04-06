@@ -208,7 +208,7 @@ DEFAULT_MODELS = {
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.3-70b-versatile",
-    LlmProvider.QWEN: "qwen-turbo",
+    LlmProvider.QWEN: "qwen-coder-turbo",
     LlmProvider.OLLAMA: "qwen2.5-coder:3b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
     LlmProvider.CODEX: "codex-local",  # Placeholder - actual model controlled by ~/.codex/config.toml
