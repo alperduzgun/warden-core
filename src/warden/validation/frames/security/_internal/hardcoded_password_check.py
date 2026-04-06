@@ -184,6 +184,8 @@ class HardcodedPasswordCheck(ValidationCheck):
                                 "❌ BAD: password = 'hardcoded_secret'"  # warden-ignore
                             ),
                             documentation_url="https://cwe.mitre.org/data/definitions/798.html",
+                            # High confidence: check already filters env vars, comments, docstrings
+                            pattern_confidence=0.88,
                         )
                     )
                     break  # Only report once per line
