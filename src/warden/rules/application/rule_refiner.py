@@ -105,13 +105,84 @@ def _parse_llm_json(raw: str) -> dict | None:
         return None
 
 
+def _collect_findings_from_cache(
+    cache_path: Path,
+    ai_rule_ids: set[str],
+) -> list[tuple[str, Path | None, int]]:
+    """Read findings_cache.json and return (rule_id, source_file, line) tuples."""
+    if not cache_path.exists():
+        return []
+    try:
+        cache: dict[str, Any] = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("findings_cache_read_error", path=str(cache_path), error=str(exc))
+        return []
+
+    collected = []
+    for cache_key, entry in cache.items():
+        findings: list[dict] = entry.get("findings", [])
+        if not findings:
+            continue
+        _frame_id, file_path_str, _hash = _parse_cache_key(cache_key)
+        source_file = Path(file_path_str) if file_path_str else None
+        for finding in findings:
+            rule_id = finding.get("id", "")
+            if rule_id in ai_rule_ids:
+                collected.append((rule_id, source_file, finding.get("line", 0)))
+    return collected
+
+
+def _collect_findings_from_baseline(
+    baseline_dir: Path,
+    ai_rule_ids: set[str],
+) -> list[tuple[str, Path | None, int]]:
+    """Read .warden/baseline/*.json and return (rule_id, source_file, line) tuples.
+
+    Custom rule violations (frame_id=global_script_rules) are stored in the
+    baseline after each scan but NOT in findings_cache.json.
+    """
+    if not baseline_dir.exists():
+        return []
+
+    collected = []
+    for baseline_file in sorted(baseline_dir.glob("*.json")):
+        if baseline_file.name == "_meta.json":
+            continue
+        try:
+            data: dict = json.loads(baseline_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        for finding in data.get("findings", []):
+            rule_id = finding.get("id", "")
+            if rule_id not in ai_rule_ids:
+                continue
+            location: str = finding.get("location", "")
+            source_file: Path | None = None
+            line = finding.get("line", 0)
+            if location:
+                # location format: "/abs/path/to/file:lineno"
+                parts = location.rsplit(":", 1)
+                if len(parts) == 2 and parts[1].isdigit():
+                    source_file = Path(parts[0])
+                    if line == 0:
+                        line = int(parts[1])
+                else:
+                    source_file = Path(location)
+            collected.append((rule_id, source_file, line))
+    return collected
+
+
 async def refine_rules(
     project_path: Path,
     llm_service: Any,
     rule_ids: list[str] | None = None,
     dry_run: bool = False,
 ) -> RefinementResult:
-    """Classify cached findings with an LLM and update AI rule context fields.
+    """Classify scan findings with an LLM and update AI rule context fields.
+
+    Reads from both findings_cache.json (structural frames) and the baseline
+    (custom AI rule violations, stored under .warden/baseline/).
 
     Args:
         project_path: Root of the project (must contain .warden/).
@@ -126,19 +197,7 @@ async def refine_rules(
 
     result = RefinementResult()
 
-    # 1. Load findings cache
-    cache_path = project_path / ".warden" / "cache" / "findings_cache.json"
-    if not cache_path.exists():
-        logger.warning("findings_cache_missing", path=str(cache_path))
-        return result
-
-    try:
-        cache: dict[str, Any] = json.loads(cache_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.error("findings_cache_read_error", path=str(cache_path), error=str(exc))
-        return result
-
-    # 2. Load AI rules
+    # 1. Load AI rules
     rule_config = RulesYAMLLoader.load_rules_sync(project_path)
     ai_rules: dict[str, Any] = {
         r.id: r
@@ -153,92 +212,103 @@ async def refine_rules(
         logger.info("no_ai_rules_to_refine")
         return result
 
-    # 3. Collect false-positive patterns per rule
-    # fp_by_rule: {rule_id: [{pattern, reason}]}
+    ai_rule_ids = set(ai_rules.keys())
+
+    # 2. Collect findings from all sources, deduplicate by (rule_id, path, line)
+    raw_findings: list[tuple[str, Path | None, int]] = []
+    raw_findings += _collect_findings_from_cache(
+        project_path / ".warden" / "cache" / "findings_cache.json",
+        ai_rule_ids,
+    )
+    raw_findings += _collect_findings_from_baseline(
+        project_path / ".warden" / "baseline",
+        ai_rule_ids,
+    )
+
+    # Deduplicate: same (rule_id, resolved_path, line) counted once
+    seen: set[tuple[str, str, int]] = set()
+    deduped: list[tuple[str, Path | None, int]] = []
+    for rule_id, src, line in raw_findings:
+        key = (rule_id, str(src), line)
+        if key not in seen:
+            seen.add(key)
+            deduped.append((rule_id, src, line))
+
+    if not deduped:
+        warden_dir = project_path / ".warden"
+        if not warden_dir.exists():
+            logger.warning("no_findings_found", reason="no .warden directory")
+        else:
+            logger.info("no_ai_rule_findings_found", hint="Run 'warden scan' first")
+        return result
+
+    # 3. Classify each unique finding with LLM
     fp_by_rule: dict[str, list[dict[str, str]]] = {rid: [] for rid in ai_rules}
 
-    for cache_key, entry in cache.items():
-        findings: list[dict] = entry.get("findings", [])
-        if not findings:
+    for finding_rule_id, source_file, line in deduped:
+        rule = ai_rules[finding_rule_id]
+        snippet = _read_code_snippet(source_file, line) if source_file else ""
+
+        context_block = (
+            f"Existing context:\n{rule.context}\n" if rule.context else ""
+        )
+
+        prompt = _FP_CLASSIFY_PROMPT.format(
+            rule_name=rule.name,
+            rule_description=rule.description,
+            context_block=context_block,
+            filename=source_file.name if source_file else "unknown",
+            line=line if line > 0 else "unknown",
+            code_snippet=snippet or "(source not available)",
+        )
+
+        logger.debug(
+            "classifying_finding",
+            rule_id=finding_rule_id,
+            file=str(source_file),
+            line=line,
+        )
+
+        try:
+            response = await llm_service.complete_async(
+                prompt=prompt,
+                system_prompt=(
+                    "You are a security code reviewer. "
+                    "Respond only in JSON as instructed."
+                ),
+            )
+            raw: str = response.content if hasattr(response, "content") else str(response)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "llm_classify_error",
+                rule_id=finding_rule_id,
+                error=str(exc),
+            )
             continue
 
-        _frame_id, file_path_str, _hash = _parse_cache_key(cache_key)
-        source_file = Path(file_path_str) if file_path_str else None
-
-        for finding in findings:
-            finding_rule_id: str = finding.get("id", "")
-            if finding_rule_id not in ai_rules:
-                continue
-
-            rule = ai_rules[finding_rule_id]
-            line: int = finding.get("line", 0)
-
-            # Read code context
-            snippet = ""
-            if source_file:
-                snippet = _read_code_snippet(source_file, line)
-
-            context_block = (
-                f"Existing context:\n{rule.context}\n" if rule.context else ""
-            )
-
-            prompt = _FP_CLASSIFY_PROMPT.format(
-                rule_name=rule.name,
-                rule_description=rule.description,
-                context_block=context_block,
-                filename=source_file.name if source_file else "unknown",
-                line=line if line > 0 else "unknown",
-                code_snippet=snippet or "(source not available)",
-            )
-
-            logger.debug(
-                "classifying_finding",
+        parsed = _parse_llm_json(raw)
+        if parsed is None:
+            logger.warning(
+                "llm_json_parse_failed",
                 rule_id=finding_rule_id,
-                file=str(source_file),
-                line=line,
+                raw=raw[:200],
             )
+            continue
 
-            try:
-                response = await llm_service.complete_async(
-                    prompt=prompt,
-                    system_prompt=(
-                        "You are a security code reviewer. "
-                        "Respond only in JSON as instructed."
-                    ),
-                )
-                raw: str = response.content if hasattr(response, "content") else str(response)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "llm_classify_error",
-                    rule_id=finding_rule_id,
-                    error=str(exc),
-                )
-                continue
+        result.analyzed += 1
+        verdict: str = parsed.get("verdict", "real")
+        pattern: str = parsed.get("pattern", "")
+        reason: str = parsed.get("reason", "")
 
-            parsed = _parse_llm_json(raw)
-            if parsed is None:
-                logger.warning(
-                    "llm_json_parse_failed",
-                    rule_id=finding_rule_id,
-                    raw=raw[:200],
-                )
-                continue
+        if verdict != "false_positive":
+            result.skipped_real += 1
+            continue
 
-            result.analyzed += 1
-            verdict: str = parsed.get("verdict", "real")
-            pattern: str = parsed.get("pattern", "")
-            reason: str = parsed.get("reason", "")
+        if not pattern:
+            result.skipped_real += 1
+            continue
 
-            if verdict != "false_positive":
-                result.skipped_real += 1
-                continue
-
-            if not pattern:
-                # LLM returned false_positive but no pattern; treat as real
-                result.skipped_real += 1
-                continue
-
-            fp_by_rule[finding_rule_id].append({"pattern": pattern, "reason": reason})
+        fp_by_rule[finding_rule_id].append({"pattern": pattern, "reason": reason})
 
     # 4. Build context updates, skipping duplicates
     context_updates: dict[str, str] = {}
