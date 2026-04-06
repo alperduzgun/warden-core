@@ -59,11 +59,14 @@ _PARAMETERIZATION_PATTERNS: list[re.Pattern] = [
     # .execute(query, (params,)) or .execute("...", [params])
     re.compile(r'\.execute\s*\(\s*\w+,\s*[\(\[]', re.IGNORECASE),
     re.compile(r'\.execute\s*\(\s*["\'][^"\']*["\'],\s*[\(\[]', re.IGNORECASE),
+    # asyncpg: pool.execute(sql, *params) / pool.fetch(sql, *params)
+    re.compile(r'\._pool\.(execute|fetch|fetchrow|fetchval|executemany)\s*\(\s*\w+,\s*\*', re.IGNORECASE),
+    re.compile(r'\.(execute|fetch|fetchrow|fetchval)\s*\(\s*\w+,\s*\*\w+', re.IGNORECASE),
     # cursor.execute("... %s", ...) — psycopg2 style
     re.compile(r'cursor\.execute\s*\(["\'][^"\']*%s', re.IGNORECASE),
     # cursor.execute("... ?", ...) — SQLite style
     re.compile(r'cursor\.execute\s*\(["\'][^"\']*\?', re.IGNORECASE),
-    # PostgreSQL $1, $2 positional params
+    # PostgreSQL $1, $2 positional params (asyncpg style)
     re.compile(r'\$[1-9]\b'),
     # Java PreparedStatement
     re.compile(r'\bPreparedStatement\b'),
@@ -73,6 +76,9 @@ _PARAMETERIZATION_PATTERNS: list[re.Pattern] = [
     re.compile(r'\bparams\s*=\s*[\(\[{]'),
     # SQLAlchemy text() with named params
     re.compile(r'text\s*\(["\'][^"\']*:[a-z_]+', re.IGNORECASE),
+    # params list building (conditions array pattern)
+    re.compile(r'\bparams\.append\s*\(', re.IGNORECASE),
+    re.compile(r'\bparams\.extend\s*\(', re.IGNORECASE),
 ]
 
 
@@ -125,6 +131,10 @@ _LIBRARY_SAFE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r'\bmark_safe\s*\(\s*["\']', re.IGNORECASE),
         # Pattern definitions inside security check files
         re.compile(r'\bDANGEROUS_PATTERNS\s*[=:\[]'),
+        # Redis eval() executes Lua scripts server-side, not browser-side — not XSS
+        re.compile(r'\bredis[\w_]*\.eval\s*\(', re.IGNORECASE),
+        re.compile(r'\bself\._client\.eval\s*\(', re.IGNORECASE),
+        re.compile(r'\._client\.eval\s*\(', re.IGNORECASE),
     ],
     "path-traversal": [
         # Pattern definitions
