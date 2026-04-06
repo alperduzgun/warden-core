@@ -148,15 +148,19 @@ Return ONLY a JSON object:
                 verified_findings.append(finding)
                 continue
 
-            # Exempt high-precision findings from LLM verification.
-            # Regex, AST, and rust_engine produce exact structural matches — LLM adds
-            # no value and only risks suppressing real issues.
-            # Taint findings are probabilistic and benefit from LLM FP reduction.
+            # Exempt high-precision findings from LLM verification when they have
+            # full confidence.  If a finding from these sources carries a reduced
+            # pattern_confidence (set by context-aware checks), route it to LLM
+            # for a second opinion rather than accepting it unconditionally.
             det_source = (
                 self._get(finding, "detection_source")
                 or self._get(finding, "detectionSource")
             )
-            if det_source in _HIGH_PRECISION_SOURCES:
+            pattern_conf = self._get(finding, "pattern_confidence") or self._get(finding, "patternConfidence")
+            has_reduced_confidence = (
+                pattern_conf is not None and float(pattern_conf) < 0.75
+            )
+            if det_source in _HIGH_PRECISION_SOURCES and not has_reduced_confidence:
                 self._set(finding, "confidence", 1.0)
                 self._set(finding, "is_true_positive", True)
                 self._set(finding, "verification_source", "deterministic_exempt")
