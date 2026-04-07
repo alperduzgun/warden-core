@@ -308,8 +308,8 @@ warden scan adapters/ --frame security --auto-improve --auto-improve-corpus /pat
 # Limit to a single check
 warden scan adapters/ --frame security --auto-improve --auto-improve-check sql-injection
 
-# Control iteration count (default: 5)
-warden scan adapters/ --frame security --auto-improve --auto-improve-iterations 3
+# Control iteration count (default: 3)
+warden scan adapters/ --frame security --auto-improve --auto-improve-iterations 5
 ```
 
 **Auto-FP corpus (Scenario 2):** When findings with `patternConfidence < threshold` exist, Warden automatically generates `.warden/corpus/<project>_auto_fp.py` and runs autoimprove against it. This catches low-confidence pattern matches that are likely noise in your specific codebase.
@@ -377,6 +377,19 @@ Warden reduces false positives by implementing a "Trust but Verify" approach:
 3.  **Result:**
     -   **True Positives:** Passed to Fortification for fixing.
     -   **False Positives:** (e.g., Type Hints mistaken for arrays) are silently filtered out BEFORE consuming tokens on auto-fix generation.
+4.  **Verification Cache:** LLM decisions are cached in `.warden/memory/knowledge_graph.json`. The same finding is never sent to the LLM twice — subsequent scans resolve from cache instantly.
+
+#### Custom Verifier Prompt
+Override the LLM verifier's system prompt at the project level — no code changes needed:
+
+```bash
+mkdir -p .warden/prompts
+cp $(python -c "import warden; print(warden.__file__.replace('__init__.py', 'analysis/prompts/verifier_system.md'))") \
+   .warden/prompts/verifier_system.md
+# Edit .warden/prompts/verifier_system.md to your liking
+```
+
+Warden resolves `.warden/prompts/verifier_system.md` first; falls back to the built-in prompt when absent.
 
 #### Actionable Output
 Each verified finding includes:
@@ -514,6 +527,9 @@ AI Agents working in a Warden project follow this strict protocol:
 | `warden scan --plan` | Preview the scan strategy (frames, file count, LLM estimates) without running. |
 | `warden scan --diff` | Incremental scan — checks only files changed relative to main branch. |
 | `warden scan --diff` (with baseline) | Smart Autopilot. Baseline is auto-loaded from `.warden/baseline.json` when present. |
+| `warden scan --report-fp <id>` | Instantly suppress a false positive by ID — writes to local corpus and runs autoimprove. |
+| `warden scan --auto-improve` | After scan, auto-generate FP corpus from low-confidence findings and run autoimprove. |
+| `warden rules autoimprove <corpus>` | Keep-or-revert loop: LLM proposes FP exclusion patterns, validated against corpus F1. |
 | `warden feedback mark` | Mark findings as false positives or true positives to train the learning loop. |
 | `warden feedback list` | List all learned suppression patterns and their confidence scores. |
 | `warden feedback unmark <id>` | Remove a learned pattern — finding reappears on next scan. |
