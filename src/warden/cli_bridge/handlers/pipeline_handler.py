@@ -289,7 +289,7 @@ class PipelineHandler(BaseHandler):
 
         # Apply max_files limit (#639): CLI --max-files now enforced here.
         # Default 1000 if not specified; hard cap at 10000 for safety.
-        effective_limit = min(max_files, 10000) if max_files is not None else 1000
+        effective_limit = min(max(max_files, 1), 10000) if max_files is not None else 1000
         if len(code_files) > effective_limit:
             logger.info(
                 "max_files_limit_applied",

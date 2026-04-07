@@ -62,11 +62,21 @@ class STDIOTransport(ITransport):
                     return None
                 encoded = line.encode("utf-8")
                 if len(encoded) > _MAX_MESSAGE_BYTES:
-                    logger.error(
-                        "mcp_message_too_large",
-                        size_bytes=len(encoded),
-                        limit_bytes=_MAX_MESSAGE_BYTES,
-                    )
+                    _limit_mb = _MAX_MESSAGE_BYTES // (1024 * 1024)
+                    _size_mb = len(encoded) / (1024 * 1024)
+                    try:
+                        logger.error(
+                            "mcp_message_too_large",
+                            size_bytes=len(encoded),
+                            limit_bytes=_MAX_MESSAGE_BYTES,
+                        )
+                    except TypeError:
+                        # Fallback stdlib logger doesn't accept keyword fields
+                        logger.error(
+                            "mcp_message_too_large: size=%.1f MB limit=%d MB",
+                            _size_mb,
+                            _limit_mb,
+                        )
                     raise MCPTransportError(
                         f"Incoming message exceeds size limit ({_MAX_MESSAGE_BYTES // (1024 * 1024)} MB)"
                     )

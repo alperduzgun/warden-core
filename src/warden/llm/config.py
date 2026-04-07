@@ -208,7 +208,7 @@ DEFAULT_MODELS = {
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.3-70b-versatile",
-    LlmProvider.QWEN_CLOUD: "qwen-coder-turbo",
+    LlmProvider.QWEN_CLOUD: "qwen-coder-plus",
     LlmProvider.OLLAMA: "qwen2.5-coder:3b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
     LlmProvider.CODEX: "codex-local",  # Placeholder - actual model controlled by ~/.codex/config.toml
@@ -336,9 +336,9 @@ def _is_safe_endpoint(url: str, allow_lan: bool = False) -> bool:
         if not host:
             return False
 
-        # Block well-known loopback hostnames that won't be caught by IP parsing.
+        # Loopback hostnames: allowed for local providers (Ollama), blocked for cloud.
         if host.lower() in _LOOPBACK_HOSTNAMES:
-            return False
+            return allow_lan
 
         # Parse as an IP address for accurate classification.
         # Raises ValueError for hostnames — handled below.
@@ -350,16 +350,22 @@ def _is_safe_endpoint(url: str, allow_lan: bool = False) -> bool:
             # HTTP client enforce network-level restrictions at request time.
             return True
 
-        # Always block: loopback, unspecified (0.0.0.0 / ::), link-local
-        if ip.is_loopback or ip.is_unspecified or ip.is_link_local:
+        # Always block: link-local/metadata (169.254/16, fe80::/10) and unspecified
+        if ip.is_link_local or ip.is_unspecified:
             return False
+
+        # Loopback (127/8, ::1): allowed for local providers, blocked for cloud
+        if ip.is_loopback:
+            return allow_lan
 
         # For IPv4-mapped IPv6 (::ffff:x.x.x.x) apply the same rules to the
         # mapped IPv4 address — prevents ::ffff:127.0.0.1 style bypasses.
         mapped: ipaddress.IPv4Address | None = getattr(ip, "ipv4_mapped", None)
         if mapped is not None:
-            if mapped.is_loopback or mapped.is_unspecified or mapped.is_link_local:
+            if mapped.is_link_local or mapped.is_unspecified:
                 return False
+            if mapped.is_loopback:
+                return allow_lan
             if not allow_lan and mapped.is_private:
                 return False
 
@@ -612,6 +618,10 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.qwen_cloud.api_key = qwen_secret.value
         config.qwen_cloud.enabled = True
         configured_providers.append(LlmProvider.QWEN_CLOUD)
+        # Allow overriding endpoint via env var (e.g. international: dashscope-intl.aliyuncs.com)
+        qwen_endpoint = os.environ.get("QWEN_ENDPOINT", "").strip()
+        if qwen_endpoint:
+            config.qwen_cloud.endpoint = qwen_endpoint
 
     # Configure Ollama (Local)
     try:
