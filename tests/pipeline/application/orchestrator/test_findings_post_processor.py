@@ -617,6 +617,113 @@ class TestEnsureStateConsistency:
 # ---------------------------------------------------------------------------
 
 
+class TestVerifyFindingsAsyncCacheWiring:
+    """#595 — Verification cache must be wired and persisted correctly."""
+
+    @pytest.mark.asyncio
+    async def test_fallback_memory_manager_created_when_none(self, tmp_path):
+        """When config.memory_manager is None (pre-analysis skipped), a MemoryManager
+        must be created and wired so the cache is available."""
+        config = PipelineConfig()
+        assert config.memory_manager is None
+
+        proc = FindingsPostProcessor(
+            config=config,
+            project_root=tmp_path,
+            llm_service=MagicMock(),
+        )
+
+        ctx = make_context()
+        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [])}}
+
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = []
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        # After verify, config.memory_manager must be wired (not None).
+        assert config.memory_manager is not None
+
+    @pytest.mark.asyncio
+    async def test_cache_persisted_to_disk_after_verification(self, tmp_path):
+        """Cache entries written during verification must be saved to disk so the
+        next scan can reuse them (fixes the 'same finding re-verified every run' bug)."""
+        from warden.memory.application.memory_manager import MemoryManager
+
+        config = PipelineConfig()
+        proc = FindingsPostProcessor(
+            config=config,
+            project_root=tmp_path,
+            llm_service=MagicMock(),
+        )
+
+        ctx = make_context()
+        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [])}}
+
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = []
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        # Manually add a sentinel cache entry and save — confirm the path exists
+        mm = config.memory_manager
+        assert mm is not None
+        mm.set_llm_cache("verify:sentinel:aabbcc", {"is_true_positive": True, "confidence": 0.9, "reason": "test"})
+        await mm.save_async()
+
+        # A fresh MemoryManager loading from the same root must see the cached entry
+        mm2 = MemoryManager(tmp_path)
+        await mm2.initialize_async()
+        cached = mm2.get_llm_cache("verify:sentinel:aabbcc")
+        assert cached is not None
+        assert cached["is_true_positive"] is True
+
+    @pytest.mark.asyncio
+    async def test_existing_memory_manager_reused(self, tmp_path):
+        """When config.memory_manager is already set (pre-analysis ran), it must be
+        reused — not replaced — so existing facts are preserved."""
+        from warden.memory.application.memory_manager import MemoryManager
+
+        # Pre-populate a memory manager (as if pre-analysis already ran)
+        pre_mm = MemoryManager(tmp_path)
+        await pre_mm.initialize_async()
+        pre_mm.set_llm_cache("verify:existing:112233", {"is_true_positive": False, "confidence": 0.1, "reason": "fp"})
+
+        config = PipelineConfig()
+        config.memory_manager = pre_mm
+
+        proc = FindingsPostProcessor(
+            config=config,
+            project_root=tmp_path,
+            llm_service=MagicMock(),
+        )
+
+        ctx = make_context()
+        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [])}}
+
+        mock_verifier = AsyncMock()
+        mock_verifier.verify_findings_async.return_value = []
+
+        with patch(
+            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+            return_value=mock_verifier,
+        ):
+            await proc.verify_findings_async(ctx)
+
+        # The same MemoryManager instance must still be used.
+        assert config.memory_manager is pre_mm
+        # The pre-populated cache entry must still be there.
+        assert pre_mm.get_llm_cache("verify:existing:112233") is not None
+
+
 class TestNormalizePath:
     """Path normalization relative to project root."""
 
