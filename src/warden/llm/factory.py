@@ -224,6 +224,16 @@ def create_client(provider_or_config: LlmProvider | LlmConfiguration | str | Non
                 fast_cfg = config.get_provider_config(fast_provider)
                 if fast_cfg and fast_cfg.enabled:
                     client = create_provider_client(fast_provider, fast_cfg)
+                    # Skip providers that self-report as unavailable at startup
+                    # (e.g. ClaudeCodeClient in a nested Claude Code session).
+                    # Avoids wasting circuit-breaker budget (5 min open) on a
+                    # provider that will fail every single call for this process.
+                    if getattr(client, "_nested_session", False):
+                        _factory_logger.info(
+                            "fast_tier_skipped_nested_session",
+                            provider=fast_provider.value,
+                        )
+                        continue
                     fast_clients.append(client)
                     _factory_logger.debug("fast_tier_client_added", provider=fast_provider.value)
             except Exception as e:

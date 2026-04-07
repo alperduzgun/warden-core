@@ -225,8 +225,16 @@ class LSPManager:
 
         logger.info("lsp_binaries_discovered", available=available, missing=missing, total=len(LSP_SERVER_CONFIG))
 
-        # Auto-install critical LSP servers for detected project languages
-        if missing and self._auto_install_enabled:
+        # Auto-install critical LSP servers for detected project languages.
+        # Skip when called from an async context — subprocess.run blocks the
+        # event loop, preventing asyncio timeouts from firing.
+        import asyncio as _asyncio
+        _in_async = False
+        try:
+            _in_async = _asyncio.get_running_loop() is not None
+        except RuntimeError:
+            pass
+        if missing and self._auto_install_enabled and not _in_async:
             self._auto_install_lsp_servers(missing)
 
     def _auto_install_lsp_servers(self, missing_languages: list[str]) -> None:

@@ -67,6 +67,8 @@ class ClaudeCodeClient(ILlmClient):
         self._default_model = config.default_model or DEFAULT_MODEL
         self._timeout = DEFAULT_TIMEOUT_SECONDS
         self._cli_path = shutil.which("claude") or "claude"
+        # Pre-compute at init so factory can filter without async overhead.
+        self._nested_session = self._is_nested_session()
 
         logger.info(
             "claude_code_client_initialized",
