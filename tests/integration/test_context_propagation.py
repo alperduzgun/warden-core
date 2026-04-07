@@ -44,9 +44,32 @@ async def test_classification_phase_propagates_context_to_llm():
 
     # Populate context as if Pre-Analysis ran
     # Using Enum values to simulate real context
+    substantive_content = (
+        "from fastapi import FastAPI, Depends\n"
+        "from fastapi.security import OAuth2PasswordBearer\n"
+        "import httpx\n\n"
+        "app = FastAPI()\n"
+        "oauth2_scheme = OAuth2PasswordBearer(tokenUrl='token')\n\n"
+        "async def get_current_user(token: str = Depends(oauth2_scheme)):\n"
+        "    async with httpx.AsyncClient() as client:\n"
+        "        r = await client.get('https://auth.example.com/verify',\n"
+        "                             headers={'Authorization': f'Bearer {token}'})\n"
+        "    return r.json()\n\n"
+        "@app.get('/users/me')\n"
+        "async def read_users_me(current_user=Depends(get_current_user)):\n"
+        "    return current_user\n"
+    )
     context.project_type = ProjectType.MICROSERVICE
     context.framework = Framework.FASTAPI
-    context.file_contexts = {"main.py": {"context": "PRODUCTION", "summary": "Main entry point"}}
+    # file_contexts must include "content" so the static pre-filter
+    # uses the real source instead of falling back to empty string.
+    context.file_contexts = {
+        "main.py": {
+            "context": "PRODUCTION",
+            "summary": "Main entry point",
+            "content": substantive_content,
+        }
+    }
     context.quality_score_before = 8.5
 
     # 3. Initialize Executor with mock frames (empty list prevents LLM call)
@@ -63,16 +86,25 @@ async def test_classification_phase_propagates_context_to_llm():
     )
 
     # 4. Execute Phase
-    code_files = [CodeFile(path="main.py", content="print('hello')", language="python")]
+    code_files = [CodeFile(path="main.py", content=substantive_content, language="python")]
 
     # We need to mock the internal LLMClassificationPhase import/init
     # to capture the instance or properly spy on it.
     # But since we modified the Executor to pass context, we can just run it
     # and check the calls to mock_llm.
 
-    with patch(
-        "warden.pipeline.application.executors.classification_cache.ClassificationCache.get",
-        return_value=None,
+    with (
+        patch(
+            "warden.pipeline.application.executors.classification_cache.ClassificationCache.get",
+            return_value=None,
+        ),
+        # Bypass the static pre-filter so the LLM is always invoked.
+        # This test verifies context propagation to the LLM prompt, not
+        # the static pre-filter routing logic (covered separately).
+        patch(
+            "warden.classification.application.static_pre_filter.StaticPreFilter.batch_classify",
+            return_value=({}, ["main.py"]),  # nothing pre-classified, all go to LLM
+        ),
     ):
         await executor.execute_async(context, code_files)
 
