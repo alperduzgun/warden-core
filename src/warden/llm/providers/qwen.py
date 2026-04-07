@@ -47,7 +47,7 @@ class QwenClient(ILlmClient):
             raise ValueError("Qwen API key is required")
 
         self._api_key = config.api_key
-        self._default_model = config.default_model or "qwen-coder-turbo"
+        self._default_model = config.default_model or "qwen-coder-plus"
         self._base_url = config.endpoint or "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
     @property

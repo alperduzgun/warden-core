@@ -6,6 +6,7 @@ corpus_labels:
   xss: 0
   hardcoded-password: 0
   weak-crypto: 0
+  taint-analysis: 0
   command-injection: 0
 """
 

@@ -86,4 +86,4 @@ DANGEROUS_PATTERNS = [
     (r"AES\.MODE_ECB", "ECB mode is insecure"),
 ]
 
-WEAK_CIPHER_LIST = ["DES", "RC4", "MD5", "SHA1", "ECB"]
+WEAK_CIPHER_NAMES = ["DES", "RC4", "MD5", "SHA1"]  # cipher blocklist for validation

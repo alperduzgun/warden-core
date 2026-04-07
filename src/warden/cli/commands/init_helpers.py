@@ -120,7 +120,7 @@ LLM_PROVIDERS = {
         "requires_key": True,
         "key_var": "QWEN_API_KEY",
         "key_prefix": "sk-",
-        "default_model": "qwen-turbo",
+        "default_model": "qwen-coder-plus",
         "ci_supported": True,
     },
 }
@@ -201,6 +201,23 @@ def select_llm_provider() -> dict:
     # Check Ollama availability
     if shutil.which("ollama"):
         detected_providers["1"] = " [dim](Available)[/dim]"
+
+    # Detect cloud providers whose API key is already set in the environment
+    _KEY_TO_SLOT = {
+        "ANTHROPIC_API_KEY": "2",
+        "OPENAI_API_KEY": "3",
+        "GROQ_API_KEY": "4",
+        "AZURE_OPENAI_API_KEY": "5",
+        "DEEPSEEK_API_KEY": "6",
+        "GEMINI_API_KEY": "7",
+        "QWEN_API_KEY": "10",
+    }
+    for env_var, slot in _KEY_TO_SLOT.items():
+        if os.environ.get(env_var, "").strip() and slot in available:
+            detected_providers[slot] = " [green](API Key ✓)[/green]"
+            # Prefer the first detected cloud key as default when no local tool found
+            if default_choice == "1" and not shutil.which("ollama"):
+                default_choice = slot
 
     # Build selection table with detection status (only show available providers)
     table = Table(show_header=False, box=None, padding=(0, 2))

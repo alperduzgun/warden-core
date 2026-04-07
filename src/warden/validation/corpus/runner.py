@@ -141,7 +141,13 @@ def _infer_labels_from_filename(path: Path, check_ids: list[str]) -> dict[str, i
 
 class CorpusRunner:
     """
-    Run a SecurityFrame over a labeled corpus directory and compute metrics.
+    Run any Warden validation frame over a labeled corpus directory and compute metrics.
+
+    Works with SecurityFrame, OrphanFrame, AntiPatternFrame, or any custom frame.
+    The ``corpus_labels:`` block maps check/pattern IDs to expected finding counts.
+    Findings are matched by checking whether the label key appears as a substring of
+    ``Finding.id`` — e.g. ``"sql-injection"`` matches ``"security-sql-injection-0"``;
+    ``"bare-except"`` matches ``"bare-except-0"``.
 
     Usage::
 
@@ -151,6 +157,11 @@ class CorpusRunner:
         runner = CorpusRunner(Path("verify/corpus"), SecurityFrame())
         result = await runner.evaluate(check_id="sql-injection")
         print(result.metrics["sql-injection"].f1)
+
+        # Any other frame works the same way:
+        from warden.validation.frames.antipattern.antipattern_frame import AntiPatternFrame
+        runner = CorpusRunner(Path("verify/corpus/antipattern"), AntiPatternFrame())
+        result = await runner.evaluate(check_id="bare-except")
     """
 
     _SUPPORTED_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".java"}
@@ -159,9 +170,9 @@ class CorpusRunner:
         ".jsx": "javascript", ".tsx": "typescript", ".go": "go", ".java": "java",
     }
 
-    def __init__(self, corpus_dir: Path, security_frame) -> None:
+    def __init__(self, corpus_dir: Path, frame: object) -> None:
         self._corpus_dir = corpus_dir
-        self._frame = security_frame
+        self._frame = frame
 
     # Findings with pattern_confidence below this are LLM-routed and not counted
     # as FPs — they would be dropped by the LLM in a full scan.

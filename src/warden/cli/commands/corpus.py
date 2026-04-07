@@ -29,7 +29,11 @@ def eval_command(
     ),
     check: str | None = typer.Option(
         None, "--check", "-c",
-        help="Evaluate only this check (e.g. sql-injection)",
+        help="Evaluate only this check (e.g. sql-injection, bare-except)",
+    ),
+    frame_id: str = typer.Option(
+        "security", "--frame", "-f",
+        help="Frame to evaluate (security, orphan, antipattern, resilience, …)",
     ),
     format: str = typer.Option(
         "table", "--format",
@@ -45,7 +49,7 @@ def eval_command(
     ),
 ) -> None:
     """
-    Evaluate security checks against a labeled FP/TP corpus.
+    Evaluate any Warden frame against a labeled FP/TP corpus.
 
     Files in CORPUS_DIR must contain a corpus_labels: block:
 
@@ -53,44 +57,61 @@ def eval_command(
         corpus_labels:
           sql-injection: 2    # expected finding count (0 = FP file)
           xss: 0
+          bare-except: 1      # for --frame antipattern
 
     Exit codes:
       0 — evaluation passed (or no --min-f1 set)
       1 — F1 below --min-f1 threshold
-      2 — corpus directory not found or no labeled files
+      2 — corpus directory not found, no labeled files, or unknown frame
     """
     if not corpus_dir.exists():
         console.print(f"[red]Corpus directory not found:[/red] {corpus_dir}")
         raise typer.Exit(2)
 
-    exit_code = asyncio.run(_run_eval(corpus_dir, check, format, min_f1, fast))
+    exit_code = asyncio.run(_run_eval(corpus_dir, check, frame_id, format, min_f1, fast))
     raise typer.Exit(exit_code)
 
 
 async def _run_eval(
     corpus_dir: Path,
     check_id: str | None,
+    frame_id: str,
     fmt: str,
     min_f1: float | None,
     fast: bool,
 ) -> int:
     from warden.validation.corpus.runner import CorpusRunner, format_metrics_table
-    from warden.validation.frames.security.security_frame import SecurityFrame
+    from warden.validation.infrastructure.frame_registry import get_registry
 
-    frame = SecurityFrame()
+    registry = get_registry()
+    registry.discover_all()  # populate registered_frames if not already done
+    frame_class = registry.get_frame_by_id(frame_id)
+    if frame_class is None:
+        available = ", ".join(sorted(registry.registered_frames))
+        console.print(f"[red]Unknown frame:[/red] {frame_id!r}")
+        console.print(f"[dim]Available: {available}[/dim]")
+        return 2
+
+    frame = frame_class()
 
     if fast:
-        # Disable LLM in the frame for deterministic-only evaluation
-        try:
-            frame._llm_client = None  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        # Disable LLM client if the frame exposes one (duck-typed, frame-agnostic).
+        for attr in ("_llm_client", "_llm", "_verifier"):
+            if hasattr(frame, attr):
+                try:
+                    object.__setattr__(frame, attr, None)
+                except Exception:
+                    try:
+                        setattr(frame, attr, None)
+                    except Exception:
+                        pass
 
     runner = CorpusRunner(corpus_dir, frame)
 
-    console.print(f"\n[bold]Corpus:[/bold] {corpus_dir.resolve()}")
+    console.print(f"\n[bold]Frame:[/bold]  {frame_id}")
+    console.print(f"[bold]Corpus:[/bold] {corpus_dir.resolve()}")
     if check_id:
-        console.print(f"[bold]Check:[/bold] {check_id}")
+        console.print(f"[bold]Check:[/bold]  {check_id}")
     console.print()
 
     with console.status("Scanning corpus files…"):

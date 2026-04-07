@@ -39,16 +39,15 @@ class RuleExecutor:
         pattern_rules = [r for r in rules if r.type == "pattern"]
         other_rules = [r for r in rules if r.type != "pattern"]
 
+        # --- PATTERN rules: fast in-memory evaluation per file ---
         for code_file in code_files:
             file_path = code_file.path
             content = code_file.content or ""
 
-            # Evaluate PATTERN rules in-memory (no disk access needed)
             for rule in pattern_rules:
                 if not rule.enabled:
                     continue
 
-                # file_pattern filter (glob match on filename)
                 if rule.file_pattern:
                     if not fnmatch.fnmatch(Path(file_path).name, rule.file_pattern):
                         continue
@@ -56,7 +55,6 @@ class RuleExecutor:
                 if not rule.pattern:
                     continue
 
-                # Match against file path first, then content
                 matched = bool(re.search(rule.pattern, file_path)) or bool(
                     re.search(rule.pattern, content, re.MULTILINE)
                 )
@@ -78,21 +76,27 @@ class RuleExecutor:
                         )
                     )
 
-            # Delegate non-pattern rules to the file-based validator (if file exists)
-            if other_rules and self.rule_validator:
-                file_path_obj = Path(file_path)
-                if file_path_obj.exists():
+        # --- Non-pattern rules via CustomRuleValidator ---
+        if other_rules and self.rule_validator:
+            ai_rules = [r for r in other_rules if r.type == "ai"]
+            det_rules = [r for r in other_rules if r.type != "ai"]
+
+            # Deterministic rules: per-file (fast, no LLM)
+            for code_file in code_files:
+                file_path_obj = Path(code_file.path)
+                if det_rules and file_path_obj.exists():
                     file_violations = await self.rule_validator.validate_file_async(
-                        file_path_obj,
-                        other_rules,
+                        file_path_obj, det_rules
                     )
                     violations.extend(file_violations)
-                else:
-                    logger.debug(
-                        "rule_executor_file_not_found_skipping_non_pattern_rules",
-                        file=file_path,
-                        rule_count=len(other_rules),
-                    )
+
+            # AI rules: batch all files at once → concurrent execution with budget cap
+            if ai_rules:
+                all_paths = [Path(cf.path) for cf in code_files if Path(cf.path).exists()]
+                batch_violations = await self.rule_validator.validate_batch_async(
+                    all_paths, ai_rules
+                )
+                violations.extend(batch_violations)
 
         return violations
 

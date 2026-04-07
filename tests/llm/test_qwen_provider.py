@@ -26,7 +26,7 @@ def _make_config(api_key: str = "sk-test-key-1234567890", model: str | None = No
     return cfg
 
 
-def _openai_response(content: str = "Hello from Qwen", model: str = "qwen-coder-turbo") -> dict:
+def _openai_response(content: str = "Hello from Qwen", model: str = "qwen-coder-plus") -> dict:
     """Build a minimal OpenAI-format response dict."""
     return {
         "choices": [{"message": {"content": content}}],
@@ -420,13 +420,13 @@ class TestQwenJsonModePayload:
 
 
 class TestQwenDefaultModel:
-    """QwenClient must use 'qwen-coder-turbo' when no model override is provided."""
+    """QwenClient must use 'qwen-coder-plus' when no model override is provided."""
 
     def test_default_model_is_qwen_turbo_from_config(self):
-        """When config.default_model is None, _default_model must be 'qwen-coder-turbo'."""
+        """When config.default_model is None, _default_model must be 'qwen-coder-plus'."""
         config = _make_config(model=None)
         client = QwenClient(config)
-        assert client._default_model == "qwen-coder-turbo"
+        assert client._default_model == "qwen-coder-plus"
 
     def test_config_model_overrides_default(self):
         """When config.default_model is set, it must be used."""
@@ -469,7 +469,7 @@ class TestQwenDefaultModel:
             with patch("httpx.AsyncClient", return_value=mock_ctx):
                 await client.send_async(request)
 
-        assert captured_payload[0]["model"] == "qwen-coder-turbo"
+        assert captured_payload[0]["model"] == "qwen-coder-plus"
 
     def test_provider_property_returns_qwen(self):
         """provider property must return LlmProvider.QWEN_CLOUD."""
