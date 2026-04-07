@@ -423,9 +423,10 @@ def _collect_fp_examples(corpus_dir: Path, check_id: str | None) -> list[dict]:
                         "check_id": cid,
                     })
 
-            # Limit to avoid overwhelming LLM
-            if len(examples) >= 20:
-                break
+        # Per-file soft cap: don't let one file dominate when check_id is None
+        # and multiple checks are being collected across the whole corpus.
+        if len(examples) >= 40:
+            break
 
     return examples[:20]
 
@@ -515,13 +516,38 @@ def _apply_pattern_to_exclusions(
     insert_at = search_from + close_match.start() + 1  # after the newline before ']'
     content = content[:insert_at] + new_line + content[insert_at:]
 
-    fp_exclusions_file.write_text(content, encoding="utf-8")
+    # Atomic write: temp file + rename so a crash never leaves a partial file.
+    import os as _os
+    import tempfile as _tempfile
+    fd, tmp = _tempfile.mkstemp(dir=fp_exclusions_file.parent, prefix=".fp_tmp_", suffix=".py")
+    try:
+        with _os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        _os.replace(tmp, fp_exclusions_file)
+    except Exception:
+        try:
+            _os.unlink(tmp)
+        except OSError:
+            pass
+        raise
     return original
 
 
 def _revert_file(fp_exclusions_file: Path, original_content: str) -> None:
-    """Restore fp_exclusions.py to its original content."""
-    fp_exclusions_file.write_text(original_content, encoding="utf-8")
+    """Restore fp_exclusions.py to its original content (atomic)."""
+    import os as _os
+    import tempfile as _tempfile
+    fd, tmp = _tempfile.mkstemp(dir=fp_exclusions_file.parent, prefix=".fp_revert_", suffix=".py")
+    try:
+        with _os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(original_content)
+        _os.replace(tmp, fp_exclusions_file)
+    except Exception:
+        try:
+            _os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 async def _ask_llm_for_pattern(
@@ -678,6 +704,19 @@ async def _autoimprove_loop(
                 console.print("  [yellow]LLM returned no pattern. Skipping iteration.[/yellow]")
                 continue
             console.print(f"  LLM proposed: [cyan]{pattern}[/cyan]")
+
+        # Validate the pattern before writing it to fp_exclusions.py.
+        # A bad LLM response (e.g. ".*") could suppress all security findings.
+        import re as _re
+        try:
+            compiled = _re.compile(pattern, _re.IGNORECASE)
+        except _re.error as regex_err:
+            console.print(f"  [red]Pattern is not valid regex — skipping: {regex_err}[/red]")
+            continue
+        # Reject trivially broad patterns that would suppress everything
+        if compiled.pattern in (".*", ".+", "."):
+            console.print("  [red]Pattern is dangerously broad — skipping.[/red]")
+            continue
 
         if dry_run:
             console.print(

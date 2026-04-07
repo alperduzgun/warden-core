@@ -87,6 +87,8 @@ class PromptLoader:
 
     def has_override(self, prompt_name: str) -> bool:
         """Return True if a project-level override exists for *prompt_name*."""
+        if not _SAFE_NAME_RE.match(prompt_name):
+            return False  # Fail safe — invalid names never have overrides
         override = self._override_path(prompt_name)
         return override is not None and override.exists()
 
@@ -130,8 +132,11 @@ class PromptLoader:
             return None
         expected_dir = (self._project_root / ".warden" / "prompts").resolve()
         candidate = (expected_dir / f"{prompt_name}.md").resolve()
-        # Ensure the resolved path stays within the expected directory
-        if not str(candidate).startswith(str(expected_dir)):
+        # is_relative_to() is exact — avoids the startswith prefix-collision bug
+        # where /tmp/foo would be considered a parent of /tmp/foobar.
+        try:
+            candidate.relative_to(expected_dir)
+        except ValueError:
             raise ValueError(
                 f"Prompt path escapes the allowed directory: {candidate}"
             )

@@ -122,6 +122,13 @@ class FindingsPostProcessor:
                             findings_count=len(findings_to_verify),
                         )
 
+                        # Nothing to verify via LLM — all findings were llm_independent or absent.
+                        if not findings_to_verify:
+                            verified_count += len(auto_verified)
+                            result_obj.findings = list(auto_verified)
+                            result_obj.issues_found = len(auto_verified)
+                            continue
+
                         # #595 — Lazy init: create MemoryManager and verifier only when we
                         # actually have findings to verify, to avoid unnecessary filesystem I/O.
                         if verifier is None:

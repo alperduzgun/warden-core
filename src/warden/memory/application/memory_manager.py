@@ -5,6 +5,8 @@ Manages the persistent knowledge graph (Warden Memory).
 """
 
 import json
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -37,7 +39,10 @@ class MemoryManager:
         self._dirty = False
 
     async def initialize_async(self) -> None:
-        """Initialize memory system (ensure dirs exist, load existing)."""
+        """Initialize memory system (ensure dirs exist, load existing). Idempotent."""
+        if self._is_loaded:
+            return  # Already initialized — skip redundant disk I/O
+
         if not self.memory_dir.exists():
             try:
                 self.memory_dir.mkdir(parents=True, exist_ok=True)
@@ -51,6 +56,7 @@ class MemoryManager:
         """Load knowledge graph from disk."""
         if not self.memory_file.exists():
             logger.info("no_existing_memory_found", path=str(self.memory_file))
+            self._is_loaded = True  # Fresh start — guard still fires
             return
 
         try:
@@ -58,7 +64,6 @@ class MemoryManager:
                 content = await f.read()
                 data = json.loads(content)
                 self.knowledge_graph = KnowledgeGraph.from_json(data)
-                self._is_loaded = True
 
             logger.debug(
                 "memory_loaded",
@@ -69,6 +74,10 @@ class MemoryManager:
             logger.error("memory_load_failed", error=str(e))
             # Start with fresh graph on error
             self.knowledge_graph = KnowledgeGraph()
+        finally:
+            # Mark as loaded regardless — idempotency guard must fire even on error
+            # to prevent repeated failed disk reads on every subsequent initialize call.
+            self._is_loaded = True
 
     async def save_async(self, force: bool = False) -> None:
         """Save knowledge graph to disk.
@@ -85,11 +94,25 @@ class MemoryManager:
 
         try:
             data = self.knowledge_graph.to_json()
-            # Ensure pretty print for human readability/debug
             content = json.dumps(data, indent=2)
 
-            async with aiofiles.open(self.memory_file, mode="w") as f:
-                await f.write(content)
+            # Atomic write: write to a temp file in the same directory, then
+            # rename — rename is atomic on POSIX, so a crash mid-write never
+            # leaves a corrupt knowledge_graph.json.
+            fd, tmp_path = tempfile.mkstemp(
+                dir=self.memory_dir, prefix=".kg_tmp_", suffix=".json"
+            )
+            try:
+                async with aiofiles.open(fd, mode="w", encoding="utf-8") as f:
+                    await f.write(content)
+                os.replace(tmp_path, self.memory_file)  # atomic on POSIX
+            except Exception:
+                # Clean up temp file if rename fails
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
 
             self._dirty = False
             logger.debug("memory_saved", fact_count=len(self.knowledge_graph.facts), path=str(self.memory_file))
