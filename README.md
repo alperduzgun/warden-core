@@ -272,6 +272,50 @@ Warden gives you granular control over what to check:
 *   **Global Config:** Define suppressions in `.warden/suppressions.yaml`.
 *   **File Exclusion:** Respects `.gitignore` and supports `.warden/ignore.yaml`.
 
+#### ⚡ Instant FP Suppression — `--report-fp`
+
+The fastest way to eliminate a false positive. Pass the finding ID directly to the scan command — Warden writes it to a local corpus, runs the autoimprove loop, and updates `fp_exclusions.py` so the pattern never fires again:
+
+```bash
+# Report one or more findings as false positives
+warden scan adapters/postgres/ --frame security --report-fp security-sql-injection-3
+warden scan adapters/postgres/ --frame security --report-fp security-sql-injection-3 --report-fp security-sql-injection-5
+```
+
+**What happens under the hood:**
+1. Finding looked up in current scan results (falls back to `.warden/cache/` if not in scope)
+2. Code snippet written to `.warden/corpus/<project>_reported_fp.py` with `corpus_labels: {check_id: 0}`
+3. Autoimprove loop runs against `.warden/corpus/` — LLM proposes a suppression pattern
+4. Pattern validated against the full corpus (F1 must not drop) → written to `fp_exclusions.py`
+5. Next scan: finding is suppressed at the pattern layer, before it ever reaches the report
+
+> Finding IDs appear in the scan output (e.g. `security-sql-injection-3`). Copy, paste, done.
+
+#### 🔁 Auto-Improve After Scan — `--auto-improve`
+
+Warden can self-tune after every scan. When enabled, it evaluates the corpus and proposes FP suppression patterns for any low-confidence findings automatically:
+
+```bash
+# Run autoimprove after scan (uses verify/corpus or auto-detected corpus)
+warden scan adapters/ --frame security --auto-improve
+
+# Tune sensitivity: only treat findings with confidence < 0.85 as FP candidates
+warden scan adapters/ --frame security --auto-improve --auto-improve-threshold 0.85
+
+# Point to a specific corpus directory
+warden scan adapters/ --frame security --auto-improve --auto-improve-corpus /path/to/corpus
+
+# Limit to a single check
+warden scan adapters/ --frame security --auto-improve --auto-improve-check sql-injection
+
+# Control iteration count (default: 5)
+warden scan adapters/ --frame security --auto-improve --auto-improve-iterations 3
+```
+
+**Auto-FP corpus (Scenario 2):** When findings with `patternConfidence < threshold` exist, Warden automatically generates `.warden/corpus/<project>_auto_fp.py` and runs autoimprove against it. This catches low-confidence pattern matches that are likely noise in your specific codebase.
+
+> `--auto-improve` never affects the scan exit code — all autoimprove errors surface as warnings only.
+
 #### 🔁 Learning Loop — Teach Warden from Your Feedback
 Warden learns from your feedback and automatically suppresses known noise on future scans:
 

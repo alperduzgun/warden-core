@@ -37,8 +37,11 @@ class LSPDiagnosticsAnalyzer:
 
         try:
             lsp_manager = LSPManager.get_instance()
-            # Need project root for LSP. Assuming 2 levels up for now or cwd
-            client = await lsp_manager.get_client_async(language, str(path.cwd()))
+            # Use the file's parent directory resolved to absolute path.
+            # path.cwd() returned the process CWD regardless of file location,
+            # which caused wrong rootUri when scanning relative paths.
+            project_root = str(path.resolve().parent)
+            client = await lsp_manager.get_client_async(language, project_root)
 
             if not client:
                 return {"diagnostics": [], "score": 10.0}

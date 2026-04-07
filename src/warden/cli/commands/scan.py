@@ -291,6 +291,12 @@ def scan_command(
     provider: str | None = typer.Option(None, "--provider", help="LLM provider override (e.g., ollama, groq, qwen_cli, auto)"),
     plan: bool = typer.Option(False, "--plan", help="Print the analysis plan (frames, file count, LLM estimates) and exit without scanning"),
     max_files: int | None = typer.Option(None, "--max-files", help="Override max files limit (default: 1000)"),
+    auto_improve: bool = typer.Option(False, "--auto-improve", help="After scan, run autoimprove loop against corpus to reduce false positives"),
+    auto_improve_corpus: str = typer.Option("verify/corpus", "--auto-improve-corpus", help="Corpus directory for --auto-improve (default: verify/corpus)"),
+    auto_improve_iterations: int = typer.Option(5, "--auto-improve-iterations", help="Max autoimprove iterations (default: 5)", min=1, max=100),
+    auto_improve_check: str | None = typer.Option(None, "--auto-improve-check", help="Limit autoimprove to a single check ID (e.g. sql-injection)"),
+    auto_improve_threshold: float = typer.Option(0.75, "--auto-improve-threshold", help="pattern_confidence threshold for auto-FP corpus (default: 0.75)", min=0.0, max=1.0),
+    report_fp: list[str] = typer.Option([], "--report-fp", help="Report a finding ID as false positive and auto-suppress (e.g. --report-fp security-sql-injection-3)"),
 ) -> None:
     """
     Run the full Warden pipeline on files or directories.
@@ -544,6 +550,12 @@ def scan_command(
                 diff_changed_lines=diff_changed_lines,
                 fail_on_severity=fail_on_severity,
                 max_files=max_files,
+                auto_improve=auto_improve,
+                auto_improve_corpus=auto_improve_corpus,
+                auto_improve_iterations=auto_improve_iterations,
+                auto_improve_check=auto_improve_check,
+                auto_improve_threshold=auto_improve_threshold,
+                report_fp=report_fp,
             )
         )
 
@@ -589,6 +601,12 @@ def scan_command(
                         resume=resume,
                         diff_changed_lines=diff_changed_lines,
                         fail_on_severity=fail_on_severity,
+                        auto_improve=auto_improve,
+                        auto_improve_corpus=auto_improve_corpus,
+                        auto_improve_iterations=auto_improve_iterations,
+                        auto_improve_check=auto_improve_check,
+                        auto_improve_threshold=auto_improve_threshold,
+                        report_fp=report_fp,
                     )
                 )
                 if exit_code != 0:
@@ -1013,6 +1031,234 @@ def _update_baseline(
             traceback.print_exc()
 
 
+def _build_fp_corpus_from_findings(
+    final_result_data: dict,
+    project_root: Path,
+    threshold: float = 0.75,
+    verbose: bool = False,
+) -> Path | None:
+    """
+    Build a .warden/corpus/<slug>_auto_fp.py file from low-confidence findings.
+
+    Findings with pattern_confidence < threshold are treated as likely FPs and
+    written as corpus stubs so autoimprove can add suppression patterns for them.
+
+    Returns the path to the written file, or None if no qualifying findings found.
+    """
+    import re as _re
+
+    frame_results = final_result_data.get("frameResults", [])
+    low_conf: dict[str, list[dict]] = {}  # check_id → findings
+
+    for frame in frame_results:
+        for finding in frame.get("findings", []):
+            conf = finding.get("patternConfidence")
+            if conf is None or conf >= threshold:
+                continue
+            # Extract check_id from finding ID: "<frame>-<check>-<n>"
+            fid = finding.get("id", "")
+            m = _re.match(r"^[^-]+-(.+)-\d+$", fid)
+            if not m:
+                continue
+            check_id = m.group(1)
+            low_conf.setdefault(check_id, []).append(finding)
+
+    if not low_conf:
+        return None
+
+    corpus_dir = project_root / ".warden" / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+
+    # Remove stale auto-fp files from previous runs
+    for stale in corpus_dir.glob("*_auto_fp.py"):
+        stale.unlink()
+
+    slug = project_root.name.lower().replace("-", "_").replace(".", "_")
+    out_path = corpus_dir / f"{slug}_auto_fp.py"
+
+    lines = ['"""']
+    lines.append("Auto-generated FP corpus from low-confidence scan findings.")
+    lines.append("corpus_labels:")
+    for check_id in sorted(low_conf):
+        lines.append(f"  {check_id}: 0")
+    lines.append('"""')
+    lines.append("")
+
+    for check_id, findings in sorted(low_conf.items()):
+        for i, finding in enumerate(findings):
+            fn_name = f"fp_{check_id.replace('-', '_')}_{i}"
+            snippet = (finding.get("code") or "# (no code snippet)").strip()
+            # Strip >>> prompt markers from interactive snippets
+            snippet = _re.sub(r"^>>> ?", "", snippet, flags=_re.MULTILINE)
+            lines.append(f"def {fn_name}():")
+            lines.append(f"    # low-confidence ({finding.get('patternConfidence', '?'):.2f}) — likely FP")
+            lines.append(f"    # finding: {finding.get('title', check_id)}")
+            for code_line in snippet.splitlines():
+                lines.append(f"    # {code_line}" if code_line.strip() else "    #")
+            lines.append("    pass")
+            lines.append("")
+
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+
+    if verbose:
+        total = sum(len(v) for v in low_conf.values())
+        console.print(f"[dim]Auto-FP corpus: {total} low-confidence findings → {out_path.name}[/dim]")
+
+    return out_path
+
+
+def _build_reported_fp_corpus(
+    finding_ids: list[str],
+    final_result_data: dict | None,
+    project_root: Path,
+    verbose: bool = False,
+) -> Path | None:
+    """
+    Build .warden/corpus/<slug>_reported_fp.py from explicitly reported finding IDs.
+
+    Looks up each ID in final_result_data first, then falls back to the
+    findings cache. Returns the corpus file path, or None if no IDs matched.
+    """
+    import re as _re
+
+    # Build a flat ID → finding map from scan results
+    id_map: dict[str, dict] = {}
+    if final_result_data:
+        for f in final_result_data.get("findings", []):
+            if isinstance(f, dict) and f.get("id"):
+                id_map[f["id"]] = f
+
+    # Fall back to findings cache for IDs not in scan results
+    cache_path = project_root / ".warden" / "cache" / "findings_cache.json"
+    if cache_path.exists():
+        try:
+            import json as _json
+            cache = _json.loads(cache_path.read_text())
+            for v in cache.values():
+                if not isinstance(v, dict):
+                    continue
+                for f in v.get("findings", []):
+                    if isinstance(f, dict) and f.get("id") and f["id"] not in id_map:
+                        id_map[f["id"]] = f
+        except Exception:
+            pass
+
+    matched: dict[str, list[dict]] = {}  # check_id → findings
+    missing: list[str] = []
+
+    for fid in finding_ids:
+        finding = id_map.get(fid)
+        if not finding:
+            missing.append(fid)
+            continue
+        raw_id = finding.get("id", fid)
+        m = _re.match(r"^[^-]+-(.+)-\d+$", raw_id)
+        check_id = m.group(1) if m else raw_id
+        matched.setdefault(check_id, []).append(finding)
+
+    if missing:
+        console.print(f"[yellow]⚠️  --report-fp: finding ID(s) not found: {', '.join(missing)}[/yellow]")
+
+    if not matched:
+        return None
+
+    corpus_dir = project_root / ".warden" / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+
+    # Remove stale reported-fp file from previous runs
+    for stale in corpus_dir.glob("*_reported_fp.py"):
+        stale.unlink()
+
+    slug = project_root.name.lower().replace("-", "_").replace(".", "_")
+    out_path = corpus_dir / f"{slug}_reported_fp.py"
+
+    lines = ['"""']
+    lines.append("User-reported false positives.")
+    lines.append("corpus_labels:")
+    for cid in sorted(matched):
+        lines.append(f"  {cid}: 0")
+    lines.append('"""')
+    lines.append("")
+
+    for cid, findings in sorted(matched.items()):
+        for i, finding in enumerate(findings):
+            fn_name = f"reported_fp_{cid.replace('-', '_')}_{i}"
+            snippet = (finding.get("code") or finding.get("codeSnippet") or "# (no snippet)").strip()
+            snippet = _re.sub(r"^>>> ?", "", snippet, flags=_re.MULTILINE)
+            lines.append(f"def {fn_name}():")
+            lines.append(f"    # reported FP: {finding.get('id', cid)}")
+            lines.append(f"    # {finding.get('message', '') or finding.get('title', '')}")
+            for code_line in snippet.splitlines():
+                lines.append(f"    # {code_line}" if code_line.strip() else "    #")
+            lines.append("    pass")
+            lines.append("")
+
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+
+    if verbose:
+        total = sum(len(v) for v in matched.values())
+        console.print(f"[dim]Reported-FP corpus: {total} finding(s) → {out_path.name}[/dim]")
+
+    return out_path
+
+
+async def _run_autoimprove_post_scan(
+    corpus_dir: Path,
+    check_id: str | None,
+    iterations: int,
+    dry_run: bool,
+    fast: bool,
+    verbose: bool,
+    final_result_data: dict | None,
+) -> None:
+    """
+    Run autoimprove loop after a scan completes.
+
+    Never raises — all errors are printed as warnings so the scan exit code
+    is never affected by autoimprove failures.
+    """
+    try:
+        if not corpus_dir.exists():
+            console.print(f"[yellow]⚠️  --auto-improve: corpus dir not found: {corpus_dir}[/yellow]")
+            return
+
+        from warden.cli.commands.rules import (
+            _autoimprove_loop,
+            _load_llm_service,
+            _resolve_fp_exclusions_path,
+        )
+
+        fp_exclusions_file = _resolve_fp_exclusions_path()
+        if not fp_exclusions_file.exists():
+            console.print(f"[yellow]⚠️  --auto-improve: fp_exclusions.py not found at {fp_exclusions_file}[/yellow]")
+            return
+
+        llm_service = None
+        effective_fast = fast
+        if not fast:
+            try:
+                llm_service = _load_llm_service()
+            except Exception:
+                effective_fast = True
+
+        console.print("\n[bold blue]🔄 Auto-Improve (post-scan)...[/bold blue]")
+        await _autoimprove_loop(
+            corpus_dir=corpus_dir,
+            fp_exclusions_file=fp_exclusions_file,
+            check_id=check_id,
+            iterations=iterations,
+            min_improvement=0.005,
+            dry_run=dry_run,
+            fast=effective_fast,
+            llm_service=llm_service,
+        )
+    except Exception as e:
+        console.print(f"[yellow]⚠️  --auto-improve failed: {e}[/yellow]")
+        if verbose:
+            import traceback
+            traceback.print_exc()
+
+
 # ---------------------------------------------------------------------------
 # Main async scan orchestrator
 # ---------------------------------------------------------------------------
@@ -1040,6 +1286,12 @@ async def _run_scan_async(
     diff_changed_lines: dict | None = None,
     fail_on_severity: str = "critical",
     max_files: int | None = None,
+    auto_improve: bool = False,
+    auto_improve_corpus: str = "verify/corpus",
+    auto_improve_iterations: int = 5,
+    auto_improve_check: str | None = None,
+    auto_improve_threshold: float = 0.75,
+    report_fp: list[str] | None = None,
 ) -> int:
     """Async implementation of scan command."""
 
@@ -1246,6 +1498,75 @@ async def _run_scan_async(
                     console.print("\n[dim]No auto-fixable items found.[/dim]")
             except Exception as e:
                 console.print(f"[yellow]⚠️  Auto-fix failed: {e}[/yellow]")
+
+        # 6.6 Auto-improve: build FP corpus from low-confidence findings (S2),
+        # then run autoimprove loop against the best available corpus (S1).
+        if auto_improve and final_result_data:
+            _auto_fp_path = _build_fp_corpus_from_findings(
+                final_result_data,
+                project_root=Path.cwd(),
+                threshold=auto_improve_threshold,
+                verbose=verbose,
+            )
+            if _auto_fp_path:
+                console.print(f"\n[dim]Auto-FP corpus → {_auto_fp_path.relative_to(Path.cwd())}[/dim]")
+                _corpus_to_use = _auto_fp_path.parent
+            else:
+                # Resolve the corpus path: try as-is first, then relative to warden package.
+                _corpus_candidate = Path(auto_improve_corpus)
+                if not _corpus_candidate.is_absolute():
+                    # Absolute form relative to CWD
+                    _corpus_candidate_abs = Path.cwd() / _corpus_candidate
+                    if _corpus_candidate_abs.exists():
+                        _corpus_candidate = _corpus_candidate_abs
+                    else:
+                        # Try to resolve from the warden package location (warden-core repo)
+                        try:
+                            import warden as _w
+                            _pkg_root = Path(_w.__file__).parent.parent.parent
+                            _pkg_corpus = _pkg_root / auto_improve_corpus
+                            if _pkg_corpus.exists():
+                                _corpus_candidate = _pkg_corpus
+                        except Exception:
+                            pass
+                _corpus_to_use = _corpus_candidate
+
+            if _auto_fp_path or _corpus_to_use.exists():
+                await _run_autoimprove_post_scan(
+                    corpus_dir=_corpus_to_use,
+                    check_id=auto_improve_check,
+                    iterations=auto_improve_iterations,
+                    dry_run=dry_run,
+                    fast=(level == "basic"),
+                    verbose=verbose,
+                    final_result_data=final_result_data,
+                )
+            else:
+                console.print(
+                    "[dim]--auto-improve: no low-confidence findings and corpus not found "
+                    f"({_corpus_to_use}). Pass --auto-improve-corpus <path> to specify one.[/dim]"
+                )
+
+        # 6.7 --report-fp: build reported-FP corpus and run autoimprove immediately.
+        if report_fp:
+            _reported_path = _build_reported_fp_corpus(
+                finding_ids=report_fp,
+                final_result_data=final_result_data,
+                project_root=Path.cwd(),
+                verbose=verbose,
+            )
+            if _reported_path:
+                console.print(f"\n[dim]Reported-FP corpus → {_reported_path.relative_to(Path.cwd())}[/dim]")
+                console.print(f"[bold blue]🔄 Auto-suppress ({len(report_fp)} finding(s))...[/bold blue]")
+                await _run_autoimprove_post_scan(
+                    corpus_dir=_reported_path.parent,
+                    check_id=None,
+                    iterations=5,
+                    dry_run=dry_run,
+                    fast=True,
+                    verbose=verbose,
+                    final_result_data=final_result_data,
+                )
 
         # 7. Exit code decision
         status_val = final_result_data.get("status") if final_result_data else None
