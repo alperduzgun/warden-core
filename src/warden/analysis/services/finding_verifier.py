@@ -2,10 +2,12 @@ import asyncio
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import psutil
 
+from warden.analysis.services.prompt_loader import PromptLoader
 from warden.llm.providers.base import ILlmClient
 from warden.memory.application.memory_manager import MemoryManager
 from warden.shared.infrastructure.logging import get_logger
@@ -58,6 +60,7 @@ class FindingVerificationService:
         memory_manager: MemoryManager | None = None,
         enabled: bool = True,
         confidence_threshold: float | None = None,
+        project_root: Path | None = None,
     ):
         self.llm = llm_client
         self.memory_manager = memory_manager
@@ -79,39 +82,10 @@ class FindingVerificationService:
             or "0:0:0:0:0:0:0:1" in endpoint
         )
 
-        self.system_prompt = """
-You are a Senior Code Auditor. Your task is to verify if a reported static analysis finding is a TRUE POSITIVE or a FALSE POSITIVE.
-
-Input:
-- Code Snippet: The code where the issue was found.
-- Rule: The rule that was violated.
-- Finding: The message reported by the tool.
-
-Instructions:
-1. Analyze the Context: Is this actual code or just a string/comment/stub?
-2. Analyze the Logic: Does the code actually violate the rule in a dangerous way?
-3. Ignore "Test" files unless the issue is critical.
-4. Ignore "Type Hints" (e.g. Optional[str]) flagged as array access.
-5. If a CRITICAL issue is in a 'test' file, classify it as False Positive (Intentional) unless it poses a risk to the production build or developer environment.
-
-LOGIC-LEVEL VULNERABILITY AWARENESS (these ARE real vulnerabilities — do NOT reject):
-- Timing attack: == used to compare hash/secret/token values (should use hmac.compare_digest)
-- JWT alg:none bypass: JWT decode accepting "none" algorithm
-- JWT long expiry: token expiry >7 days
-- Role from JWT: trusting role/permission from JWT payload without server-side lookup
-- Weak crypto: MD5/SHA1 with static salt
-- format_map injection: format()/format_map() with user-controlled input
-- Predictable tokens: random module for security tokens/session IDs
-- Bypassable sanitizer: HTML sanitizer using replace() blocklist
-- Weak regex: validation regex using .* or trivially bypassable patterns
-
-Return ONLY a JSON object:
-{
-    "is_true_positive": boolean,
-    "confidence": float (0.0-1.0),
-    "reason": "Short explanation why"
-}
-"""
+        # Load system prompt via PromptLoader — supports project-level override at
+        # .warden/prompts/verifier_system.md, falls back to the package default.
+        self._prompt_loader = PromptLoader(project_root=project_root)
+        self.system_prompt = self._prompt_loader.load("verifier_system")
 
     async def verify_findings_async(self, findings: list[dict[str, Any]], context: Any = None) -> list[dict[str, Any]]:
         """
@@ -569,27 +543,12 @@ FINDING #{i}:
                 logger.error("VERIFIER_BATCH_ITEM_PROCESSING_FAILED", error=str(e), trace=traceback.format_exc())
                 continue
 
-        prompt = f"""
-You are a Senior Security Engineer. Verify a BATCH of {len(batch)} potential findings.
-For each finding, determine if it is a TRUE POSITIVE (actual runtime risk) or FALSE POSITIVE.
-
-PROJECT CONTEXT:
-{context_prompt}
-
-BATCH TO VERIFY:
-{findings_summary}
-
-DECISION RULES:
-1. REJECT if code is a Type Hint, Comment, or Import.
-2. REJECT if in a TEST file/context unless it's an extreme risk.
-3. ACCEPT only if the code actually performs a dangerous operation or leaks sensitive production data.
-
-Return ONLY a JSON array of objects in the EXACT order:
-[
-  {{"idx": 0, "is_true_positive": bool, "confidence": float, "reason": "..."}},
-  ...
-]
-"""
+        prompt = self._prompt_loader.load(
+            "verifier_batch",
+            batch_size=str(len(batch)),
+            context_prompt=context_prompt,
+            findings_summary=findings_summary,
+        )
         # Call LLM
         model = None
         if context and hasattr(context, "llm_config") and context.llm_config:
