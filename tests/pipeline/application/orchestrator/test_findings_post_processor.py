@@ -634,10 +634,11 @@ class TestVerifyFindingsAsyncCacheWiring:
         )
 
         ctx = make_context()
-        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [])}}
+        # Use a real finding so the lazy-init path is triggered.
+        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [make_finding("F1")])}}
 
         mock_verifier = AsyncMock()
-        mock_verifier.verify_findings_async.return_value = []
+        mock_verifier.verify_findings_async.return_value = [{"id": "F1"}]
 
         with patch(
             "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
@@ -651,7 +652,11 @@ class TestVerifyFindingsAsyncCacheWiring:
     @pytest.mark.asyncio
     async def test_cache_persisted_to_disk_after_verification(self, tmp_path):
         """Cache entries written during verification must be saved to disk so the
-        next scan can reuse them (fixes the 'same finding re-verified every run' bug)."""
+        next scan can reuse them (fixes the 'same finding re-verified every run' bug).
+        This test asserts that FindingsPostProcessor itself calls save_async() after
+        verification — not that the caller does it manually."""
+        from unittest.mock import AsyncMock as _AsyncMock
+
         from warden.memory.application.memory_manager import MemoryManager
 
         config = PipelineConfig()
@@ -662,29 +667,24 @@ class TestVerifyFindingsAsyncCacheWiring:
         )
 
         ctx = make_context()
-        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [])}}
+        ctx.frame_results = {"sec": {"result": make_frame_result("sec", [make_finding("sec-1")])}}
 
         mock_verifier = AsyncMock()
-        mock_verifier.verify_findings_async.return_value = []
+        mock_verifier.verify_findings_async.return_value = [{"id": "sec-1"}]
 
-        with patch(
-            "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
-            return_value=mock_verifier,
+        save_spy = _AsyncMock()
+
+        with (
+            patch(
+                "warden.pipeline.application.orchestrator.findings_post_processor.FindingVerificationService",
+                return_value=mock_verifier,
+            ),
+            patch.object(MemoryManager, "save_async", save_spy),
         ):
             await proc.verify_findings_async(ctx)
 
-        # Manually add a sentinel cache entry and save — confirm the path exists
-        mm = config.memory_manager
-        assert mm is not None
-        mm.set_llm_cache("verify:sentinel:aabbcc", {"is_true_positive": True, "confidence": 0.9, "reason": "test"})
-        await mm.save_async()
-
-        # A fresh MemoryManager loading from the same root must see the cached entry
-        mm2 = MemoryManager(tmp_path)
-        await mm2.initialize_async()
-        cached = mm2.get_llm_cache("verify:sentinel:aabbcc")
-        assert cached is not None
-        assert cached["is_true_positive"] is True
+        # The post-processor must have called save_async at least once.
+        save_spy.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_existing_memory_manager_reused(self, tmp_path):

@@ -34,6 +34,7 @@ class MemoryManager:
 
         self.knowledge_graph = KnowledgeGraph()
         self._is_loaded = False
+        self._dirty = False
 
     async def initialize_async(self) -> None:
         """Initialize memory system (ensure dirs exist, load existing)."""
@@ -69,8 +70,16 @@ class MemoryManager:
             # Start with fresh graph on error
             self.knowledge_graph = KnowledgeGraph()
 
-    async def save_async(self) -> None:
-        """Save knowledge graph to disk."""
+    async def save_async(self, force: bool = False) -> None:
+        """Save knowledge graph to disk.
+
+        Skips the write when no facts were added/updated since the last load or
+        save, unless *force=True* is passed.
+        """
+        if not force and not self._dirty:
+            logger.debug("memory_save_skipped", reason="no_changes")
+            return
+
         if not self.memory_dir.exists():
             self.memory_dir.mkdir(parents=True, exist_ok=True)
 
@@ -82,6 +91,7 @@ class MemoryManager:
             async with aiofiles.open(self.memory_file, mode="w") as f:
                 await f.write(content)
 
+            self._dirty = False
             logger.debug("memory_saved", fact_count=len(self.knowledge_graph.facts), path=str(self.memory_file))
         except Exception as e:
             logger.error("memory_save_failed", error=str(e))
@@ -89,6 +99,7 @@ class MemoryManager:
     def add_fact(self, fact: Fact) -> None:
         """Add a fact to memory."""
         self.knowledge_graph.add_fact(fact)
+        self._dirty = True
 
     def get_facts_by_category(self, category: str) -> list[Fact]:
         """Get facts by category."""
