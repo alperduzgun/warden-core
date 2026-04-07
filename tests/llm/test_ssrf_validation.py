@@ -13,7 +13,7 @@ def test_function_exists_and_is_callable():
 def test_rejects_everything_guard():
     dangerous_inputs = [
         "http://169.254.169.254/latest/meta-data",
-        "http://[fd00::1]:11434",
+        "http://[fe80::1]:11434",
         "ftp://localhost:11434",
     ]
     results = [_validate_ollama_endpoint(url) for url in dangerous_inputs]
@@ -26,10 +26,13 @@ def test_rejects_everything_guard():
 @pytest.mark.parametrize(
     "url",
     [
+        # Cloud metadata — always blocked regardless of allow_lan
         "http://169.254.169.254/latest/meta-data",
-        "http://[fd00::1]:11434",
+        # Link-local IPv6 (fe80::/10) — always blocked
         "http://[fe80::1]:11434",
+        # IPv4-mapped link-local — always blocked
         "http://[::ffff:169.254.169.254]:11434",
+        # Non-HTTP scheme — always blocked
         "ftp://localhost:11434",
     ],
 )
@@ -42,7 +45,12 @@ def test_ssrf_vectors_are_rejected(url):
 @pytest.mark.parametrize(
     "url",
     [
+        # Loopback — allowed for local providers (allow_lan=True)
         "http://localhost:11434",
+        "http://127.0.0.1:11434",
+        # ULA (fd00::/7) — IPv6 private range, allowed for LAN providers
+        "http://[fd00::1]:11434",
+        # RFC1918 and internal hostnames — allowed for LAN
         "https://ollama.internal:11434",
         "http://192.168.1.100:11434",
     ],

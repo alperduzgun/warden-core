@@ -6,11 +6,20 @@ Providers: DeepSeek, QwenCode, Anthropic, OpenAI, Azure OpenAI, Groq
 """
 
 import contextlib
+import ipaddress
 import os
 import urllib.parse
 from dataclasses import dataclass, field
 
 from .types import LlmProvider
+
+# Providers that run locally or on a private LAN and do not require an API key.
+# Used for both SSRF allow_lan and API-key-required logic.
+_LOCAL_PROVIDERS: frozenset[str] = frozenset({"ollama", "claude_code", "codex", "qwencode", "qwen_cli"})
+
+# Hostnames that resolve to loopback but aren't raw IP literals —
+# `ipaddress.ip_address()` would raise ValueError for these, so we block them explicitly.
+_LOOPBACK_HOSTNAMES: frozenset[str] = frozenset({"localhost", "ip6-localhost", "ip6-loopback"})
 
 
 @dataclass
@@ -37,20 +46,27 @@ class ProviderConfig:
             List of validation errors (empty if valid)
         """
         errors = []
-        local_providers = {"ollama", "claude_code", "codex", "qwencode", "qwen_cli"}
 
         if not self.api_key:
-            if provider_name.lower() not in local_providers:
+            if provider_name.lower() not in _LOCAL_PROVIDERS:
                 errors.append(f"{provider_name}: API key is required but not configured")
-        elif len(self.api_key) < 10 and provider_name.lower() not in local_providers:
+        elif len(self.api_key) < 10 and provider_name.lower() not in _LOCAL_PROVIDERS:
             errors.append(f"{provider_name}: API key appears invalid (too short)")
 
         if not self.default_model:
             errors.append(f"{provider_name}: Default model is required but not configured")
 
-        # Validate endpoint URL if provided
-        if self.endpoint and not self.endpoint.startswith(("http://", "https://")):
-            errors.append(f"{provider_name}: Endpoint must use HTTP or HTTPS protocol")
+        # Validate endpoint URL if provided — check protocol and SSRF safety (#640)
+        # Local providers (Ollama, claude_code, etc.) may use LAN addresses.
+        _is_local = provider_name.lower() in _LOCAL_PROVIDERS
+        if self.endpoint:
+            if not self.endpoint.startswith(("http://", "https://")):
+                errors.append(f"{provider_name}: Endpoint must use HTTP or HTTPS protocol")
+            elif not _is_safe_endpoint(self.endpoint, allow_lan=_is_local):
+                errors.append(
+                    f"{provider_name}: Endpoint targets a private/reserved address — "
+                    "SSRF protection blocked this endpoint"
+                )
 
         return errors
 
@@ -96,6 +112,7 @@ class LlmConfiguration:
     ollama: ProviderConfig = field(default_factory=ProviderConfig)
     claude_code: ProviderConfig = field(default_factory=ProviderConfig)  # Local Claude Code CLI/SDK
     codex: ProviderConfig = field(default_factory=ProviderConfig)  # Local Codex CLI
+    qwen_cloud: ProviderConfig = field(default_factory=ProviderConfig)  # Alibaba Cloud DashScope (OpenAI-compatible)
 
     # Model Tiering (Optional)
     smart_model: str | None = None  # High-reasoning model (e.g. gpt-4o)
@@ -140,6 +157,7 @@ class LlmConfiguration:
             LlmProvider.DEEPSEEK: self.deepseek,
             LlmProvider.QWENCODE: self.qwencode,
             LlmProvider.QWEN_CLI: self.qwencode,  # CLI shares DashScope config
+            LlmProvider.QWEN_CLOUD: self.qwen_cloud,
             LlmProvider.ANTHROPIC: self.anthropic,
             LlmProvider.OPENAI: self.openai,
             LlmProvider.AZURE_OPENAI: self.azure_openai,
@@ -190,6 +208,7 @@ DEFAULT_MODELS = {
     LlmProvider.OPENAI: "gpt-4o",
     LlmProvider.AZURE_OPENAI: "gpt-4o",
     LlmProvider.GROQ: "llama-3.3-70b-versatile",
+    LlmProvider.QWEN_CLOUD: "qwen-coder-plus",
     LlmProvider.OLLAMA: "qwen2.5-coder:3b",
     LlmProvider.CLAUDE_CODE: "claude-code-default",  # Placeholder - actual model controlled by `claude config`
     LlmProvider.CODEX: "codex-local",  # Placeholder - actual model controlled by ~/.codex/config.toml
@@ -288,20 +307,84 @@ def load_llm_config(config_override: dict | None = None) -> LlmConfiguration:
         return asyncio.run(load_llm_config_async(config_override))
 
 
-def _validate_ollama_endpoint(url: str) -> bool:
-    """Block SSRF targets — only allow safe Ollama endpoints. (#310)"""
+def _is_safe_endpoint(url: str, allow_lan: bool = False) -> bool:
+    """Block SSRF targets for LLM provider endpoints. (#640)
+
+    Uses the stdlib ``ipaddress`` module for accurate IP classification —
+    immune to decimal/hex/octal IP encoding and IPv4-mapped IPv6 bypasses
+    that fool naive ``startswith`` prefix checks.
+
+    Args:
+        url: Endpoint URL to validate.
+        allow_lan: If True, RFC1918 private-LAN ranges are permitted (for
+            local providers like Ollama that legitimately run on a home or
+            office network). Loopback and link-local (metadata) services
+            are always blocked regardless of this flag.
+
+    Always blocked:
+        loopback (127/8, ::1), link-local/metadata (169.254/16, fe80::/10),
+        ULA (fc00::/7), unspecified (0.0.0.0/::), localhost by name.
+
+    Blocked when allow_lan=False (cloud providers):
+        RFC1918 (10/8, 172.16/12, 192.168/16).
+    """
     try:
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme not in ("http", "https"):
             return False
         host = parsed.hostname or ""
-        # Block cloud metadata services and link-local addresses
-        blocked_prefixes = ("169.254.", "fd00:", "fe80:", "::ffff:169.254.")
-        if any(host.startswith(p) for p in blocked_prefixes):
+        if not host:
             return False
+
+        # Loopback hostnames: allowed for local providers (Ollama), blocked for cloud.
+        if host.lower() in _LOOPBACK_HOSTNAMES:
+            return allow_lan
+
+        # Parse as an IP address for accurate classification.
+        # Raises ValueError for hostnames — handled below.
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            # Not a raw IP literal — it's a hostname.
+            # We can't resolve DNS at config time; return True and let the
+            # HTTP client enforce network-level restrictions at request time.
+            return True
+
+        # Always block: link-local/metadata (169.254/16, fe80::/10) and unspecified
+        if ip.is_link_local or ip.is_unspecified:
+            return False
+
+        # Loopback (127/8, ::1): allowed for local providers, blocked for cloud
+        if ip.is_loopback:
+            return allow_lan
+
+        # For IPv4-mapped IPv6 (::ffff:x.x.x.x) apply the same rules to the
+        # mapped IPv4 address — prevents ::ffff:127.0.0.1 style bypasses.
+        mapped: ipaddress.IPv4Address | None = getattr(ip, "ipv4_mapped", None)
+        if mapped is not None:
+            if mapped.is_link_local or mapped.is_unspecified:
+                return False
+            if mapped.is_loopback:
+                return allow_lan
+            if not allow_lan and mapped.is_private:
+                return False
+
+        # RFC1918 — blocked for cloud providers, allowed for local providers
+        if not allow_lan and ip.is_private:
+            return False
+
         return True
     except Exception:
         return False
+
+
+def _validate_ollama_endpoint(url: str) -> bool:
+    """Block SSRF targets for Ollama endpoints. (#310)
+
+    Ollama runs locally or on LAN — RFC1918 is permitted (allow_lan=True).
+    Cloud metadata services (169.254.x.x) are always blocked.
+    """
+    return _is_safe_endpoint(url, allow_lan=True)
 
 
 async def _check_ollama_availability(endpoint: str) -> bool:
@@ -429,6 +512,7 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
             "DEEPSEEK_API_KEY",
             "QWENCODE_API_KEY",
             "GROQ_API_KEY",
+            "QWEN_API_KEY",
             "WARDEN_SMART_MODEL",
             "WARDEN_FAST_MODEL",
             "WARDEN_LLM_CONCURRENCY",
@@ -528,6 +612,17 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         config.groq.enabled = True
         configured_providers.append(LlmProvider.GROQ)
 
+    # Configure Qwen Cloud (Alibaba Cloud DashScope)
+    qwen_secret = secrets.get("QWEN_API_KEY")
+    if qwen_secret and qwen_secret.found:
+        config.qwen_cloud.api_key = qwen_secret.value
+        config.qwen_cloud.enabled = True
+        configured_providers.append(LlmProvider.QWEN_CLOUD)
+        # Allow overriding endpoint via env var (e.g. international: dashscope-intl.aliyuncs.com)
+        qwen_endpoint = os.environ.get("QWEN_ENDPOINT", "").strip()
+        if qwen_endpoint:
+            config.qwen_cloud.endpoint = qwen_endpoint
+
     # Configure Ollama (Local)
     try:
         ollama_host_secret = secrets.get("OLLAMA_HOST")
@@ -588,6 +683,11 @@ async def load_llm_config_async(config_override: dict | None = None) -> LlmConfi
         if not auto_provider and LlmProvider.GROQ in configured_providers:
             auto_provider = LlmProvider.GROQ
             logger.info("auto_detect_provider", provider="groq", reason="GROQ_API_KEY set")
+
+        # Priority 2b: Qwen Cloud (Alibaba Cloud DashScope, affordable)
+        if not auto_provider and LlmProvider.QWEN_CLOUD in configured_providers:
+            auto_provider = LlmProvider.QWEN_CLOUD
+            logger.info("auto_detect_provider", provider="qwen_cloud", reason="QWEN_API_KEY set")
 
         # Priority 3: Ollama (local, free) — only if running
         if not auto_provider and await _check_ollama_availability(ollama_endpoint):

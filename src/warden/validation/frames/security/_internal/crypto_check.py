@@ -352,6 +352,8 @@ class WeakCryptoCheck(ValidationCheck):
                             "  BAD:  hashlib.md5(password).hexdigest()"
                         ),
                         documentation_url="https://cwe.mitre.org/data/definitions/328.html",
+                        # High confidence: check already verifies password context
+                        pattern_confidence=0.87,
                     )
                 )
 
@@ -404,6 +406,8 @@ class WeakCryptoCheck(ValidationCheck):
                             "  BAD:  DES, RC4, ECB mode (broken/insecure)"
                         ),
                         documentation_url="https://cwe.mitre.org/data/definitions/327.html",
+                        # Very high confidence: DES/RC4/ECB usage is always insecure
+                        pattern_confidence=0.92,
                     )
                 )
 

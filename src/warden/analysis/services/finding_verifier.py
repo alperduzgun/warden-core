@@ -37,6 +37,10 @@ class FindingVerificationService:
 
     DEFAULT_RETRIES = 3
     FALLBACK_CONFIDENCE = 0.5
+    # Minimum LLM-returned confidence to accept a verified finding as true positive.
+    # Findings with confidence below this threshold are treated as false positives
+    # and dropped. Configurable via constructor kwarg ``confidence_threshold``.
+    DEFAULT_CONFIDENCE_THRESHOLD = 0.55
 
     def _get(self, obj: Any, key: str, default: Any = None) -> Any:
         """Helper to get values from Finding objects or dicts (Deprecated: Use finding_utils)."""
@@ -48,10 +52,21 @@ class FindingVerificationService:
 
         set_finding_attribute(obj, key, value)
 
-    def __init__(self, llm_client: ILlmClient, memory_manager: MemoryManager | None = None, enabled: bool = True):
+    def __init__(
+        self,
+        llm_client: ILlmClient,
+        memory_manager: MemoryManager | None = None,
+        enabled: bool = True,
+        confidence_threshold: float | None = None,
+    ):
         self.llm = llm_client
         self.memory_manager = memory_manager
         self.enabled = enabled
+        self.confidence_threshold = (
+            confidence_threshold
+            if confidence_threshold is not None
+            else self.DEFAULT_CONFIDENCE_THRESHOLD
+        )
 
         # Detect Local LLM (Ollama / Local HTTP)
         provider = str(getattr(llm_client, "provider", "")).upper()
@@ -133,15 +148,19 @@ Return ONLY a JSON object:
                 verified_findings.append(finding)
                 continue
 
-            # Exempt high-precision findings from LLM verification.
-            # Regex, AST, and rust_engine produce exact structural matches — LLM adds
-            # no value and only risks suppressing real issues.
-            # Taint findings are probabilistic and benefit from LLM FP reduction.
+            # Exempt high-precision findings from LLM verification when they have
+            # full confidence.  If a finding from these sources carries a reduced
+            # pattern_confidence (set by context-aware checks), route it to LLM
+            # for a second opinion rather than accepting it unconditionally.
             det_source = (
                 self._get(finding, "detection_source")
                 or self._get(finding, "detectionSource")
             )
-            if det_source in _HIGH_PRECISION_SOURCES:
+            pattern_conf = self._get(finding, "pattern_confidence") or self._get(finding, "patternConfidence")
+            has_reduced_confidence = (
+                pattern_conf is not None and float(pattern_conf) < 0.75
+            )
+            if det_source in _HIGH_PRECISION_SOURCES and not has_reduced_confidence:
                 self._set(finding, "confidence", 1.0)
                 self._set(finding, "is_true_positive", True)
                 self._set(finding, "verification_source", "deterministic_exempt")
@@ -330,8 +349,18 @@ Return ONLY a JSON object:
                         self._save_cache(cache_key, result)
                     is_tp = self._get(result, "is_true_positive", True)
                     if is_tp:
-                        self._set(finding, "verification_metadata", result)
                         result_confidence = self._get(result, "confidence")
+                        # Drop findings that are true-positive but below confidence threshold.
+                        # This filters low-signal pattern matches that LLM is uncertain about.
+                        if result_confidence is not None and float(result_confidence) < self.confidence_threshold:
+                            logger.info(
+                                "finding_dropped_low_confidence",
+                                finding_id=self._get(finding, "id"),
+                                confidence=float(result_confidence),
+                                threshold=self.confidence_threshold,
+                            )
+                            continue
+                        self._set(finding, "verification_metadata", result)
                         if result_confidence is not None:
                             self._set(finding, "verification_confidence", float(result_confidence))
                         verified.append(finding)

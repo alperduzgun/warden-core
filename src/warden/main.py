@@ -21,6 +21,7 @@ from warden.cli.commands.doctor import doctor as doctor_command
 from warden.cli.commands.init import init_command
 from warden.cli.commands.install import install as install_command
 from warden.cli.commands.refresh import refresh_command
+from warden.cli.commands.rules import rules_app
 from warden.cli.commands.scan import scan_command
 from warden.cli.commands.search import index_command, search_command
 from warden.cli.commands.serve import serve_app
@@ -95,6 +96,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(context_app, name="context")
 app.add_typer(codex_app, name="codex")
 app.add_typer(workflow_app, name="workflow")
+app.add_typer(rules_app, name="rules")
 
 # Register Top-Level Commands
 app.command(name="version")(version_command)

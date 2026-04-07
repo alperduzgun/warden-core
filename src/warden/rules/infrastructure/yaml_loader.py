@@ -232,9 +232,11 @@ class RulesYAMLLoader:
             examples=rule_data.get("examples"),
             message=rule_data.get("message"),
             language=rule_data.get("language"),
+            file_pattern=rule_data.get("file_pattern") or rule_data.get("filePattern"),
             exceptions=rule_data.get("exceptions"),
             script_path=rule_data.get("scriptPath"),
             timeout=rule_data.get("timeout"),
+            context=rule_data.get("context"),
         )
 
     @staticmethod
@@ -326,6 +328,87 @@ class RulesYAMLLoader:
         if not any(field in condition for field in valid_fields):
             raise ValueError(
                 "naming condition requires at least one of: asyncMethodSuffix, interfacePrefix, privateFieldPrefix"
+            )
+
+    @staticmethod
+    def update_rule_contexts(project_root: Path, updates: dict[str, str]) -> None:
+        """Update context fields for rules in-place.
+
+        Scans ``.warden/rules.yaml`` and any YAML files under ``.warden/rules/``,
+        sets the ``context`` field for each rule whose ID appears in *updates*,
+        and writes the file back while preserving any leading comment header.
+
+        Args:
+            project_root: Root directory of the project.
+            updates: Mapping of ``{rule_id: new_context_string}`` to apply.
+        """
+        if not updates:
+            return
+
+        candidate_files: list[Path] = []
+        single_file = project_root / ".warden" / "rules.yaml"
+        if single_file.exists():
+            candidate_files.append(single_file)
+
+        rules_dir = project_root / ".warden" / "rules"
+        if rules_dir.is_dir():
+            candidate_files.extend(
+                p for p in rules_dir.iterdir() if p.suffix in (".yaml", ".yml")
+            )
+
+        remaining = dict(updates)
+
+        for rules_file in candidate_files:
+            if not remaining:
+                break
+
+            try:
+                raw_text = rules_file.read_text(encoding="utf-8")
+            except OSError as exc:
+                logger.warning("update_rule_contexts_read_error", path=str(rules_file), error=str(exc))
+                continue
+
+            # Preserve leading comment header
+            header_lines: list[str] = []
+            for line in raw_text.splitlines():
+                if line.startswith("#"):
+                    header_lines.append(line)
+                else:
+                    break
+            header = "\n".join(header_lines) + "\n" if header_lines else ""
+
+            try:
+                data: dict = yaml.safe_load(raw_text) or {}
+            except yaml.YAMLError as exc:
+                logger.warning("update_rule_contexts_yaml_error", path=str(rules_file), error=str(exc))
+                continue
+
+            rules_list: list = data.get("rules", [])
+            matched = False
+            for rule_dict in rules_list:
+                if not isinstance(rule_dict, dict):
+                    continue
+                rid = rule_dict.get("id")
+                if rid in remaining:
+                    rule_dict["context"] = remaining.pop(rid)
+                    matched = True
+
+            if not matched:
+                continue
+
+            try:
+                rules_file.write_text(
+                    header + yaml.dump(data, default_flow_style=False, allow_unicode=True),
+                    encoding="utf-8",
+                )
+                logger.info("update_rule_contexts_written", path=str(rules_file))
+            except OSError as exc:
+                logger.error("update_rule_contexts_write_error", path=str(rules_file), error=str(exc))
+
+        if remaining:
+            logger.warning(
+                "update_rule_contexts_ids_not_found",
+                missing_ids=list(remaining.keys()),
             )
 
     @staticmethod

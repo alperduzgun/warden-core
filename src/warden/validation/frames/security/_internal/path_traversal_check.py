@@ -157,6 +157,18 @@ class PathTraversalCheck(ValidationCheck):
                 else f"Suspicious path variable in {sink_label}"
             )
 
+            # Direct user source is higher confidence than suspicious var name alone.
+            confidence = 0.82 if has_user_source else 0.65
+
+            # Build multi-line snippet with context
+            ctx_start = max(0, idx - 4)
+            ctx_end = min(len(lines), idx + 5)
+            snippet_parts: list[str] = []
+            for i, ctx_line in enumerate(lines[ctx_start:ctx_end], start=ctx_start + 1):
+                marker = ">>>" if i == line_num else "   "
+                snippet_parts.append(f"{marker} {i:4d}: {ctx_line}")
+            code_snippet = "\n".join(snippet_parts)
+
             findings.append(
                 CheckFinding(
                     check_id=self.id,
@@ -164,7 +176,7 @@ class PathTraversalCheck(ValidationCheck):
                     severity=self.severity,
                     message=f"Path traversal risk: {reason}",
                     location=f"{code_file.path}:{line_num}",
-                    code_snippet=line.strip(),
+                    code_snippet=code_snippet,
                     suggestion=(
                         "Sanitize file paths before using them:\n"
                         "✅ GOOD: safe = os.path.basename(user_input)  # strip directory components\n"
@@ -173,6 +185,7 @@ class PathTraversalCheck(ValidationCheck):
                         "❌ BAD:  open(request.args['file'])  # no sanitization"
                     ),
                     documentation_url="https://cwe.mitre.org/data/definitions/22.html",
+                    pattern_confidence=confidence,
                 )
             )
 

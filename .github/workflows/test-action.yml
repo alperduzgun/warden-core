@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -31,6 +32,7 @@ jobs:
           format: "sarif"
           output-file: "warden-test.sarif"
           upload-sarif: "false"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify SARIF output exists
         run: |

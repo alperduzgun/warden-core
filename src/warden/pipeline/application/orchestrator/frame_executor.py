@@ -7,6 +7,7 @@ Handles frame execution strategies and validation orchestration.
 import asyncio
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from warden.pipeline.domain.enums import ExecutionStrategy
@@ -148,18 +149,10 @@ class FrameExecutor:
 
             await self.rust_pre_filter.run_async(context, filtered_files)
 
-            if frames_to_execute:
-                if self.config.strategy == ExecutionStrategy.SEQUENTIAL:
-                    await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
-                elif self.config.strategy == ExecutionStrategy.PARALLEL:
-                    await self._execute_frames_parallel_async(context, filtered_files, frames_to_execute, pipeline)
-                elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
-                    await self._execute_frames_fail_fast_async(context, filtered_files, frames_to_execute, pipeline)
-                elif self.config.strategy == ExecutionStrategy.PIPELINE:
-                    await self._execute_frames_pipeline_async(context, filtered_files, frames_to_execute, pipeline)
-                else:
-                    await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
-
+            # Run global custom rules BEFORE frames so they always execute within
+            # the phase budget regardless of how long LLM frames take. If a blocker
+            # violation is found and fail_fast is set, frames are skipped entirely.
+            _global_has_blocker = False
             if self.rule_validator and self.rule_validator.rules:
                 logger.info("executing_global_rules", rule_count=len(self.rule_validator.rules))
                 if self.progress_callback:
@@ -167,26 +160,12 @@ class FrameExecutor:
                         "progress_update",
                         {"phase": "Validating Rules", "increment": 0},
                     )
-                # Parallel rule validation — files are independent (no shared state)
-                _sem = asyncio.Semaphore(10)
-                _rule_validator = self.rule_validator  # capture to avoid None narrowing loss in closure
-
-                async def _validate_file(cf):
-                    async with _sem:
-                        return await _rule_validator.validate_file_async(cf.path)
-
-                _validation_results = await asyncio.gather(
-                    *[_validate_file(cf) for cf in filtered_files],
-                    return_exceptions=True,
-                )
-                global_violations = []
-                for _result in _validation_results:
-                    if isinstance(_result, BaseException):
-                        logger.warning("rule_validation_file_failed", error=str(_result))
-                        continue
-                    global_violations.extend(_result)
-                    if self.progress_callback:
-                        self.progress_callback("progress_update", {"increment": 1})
+                # Batch validation: AI rules use concurrent execution with budget cap
+                # inside validate_batch_async; deterministic rules run sequentially per file.
+                _all_paths = [Path(cf.path) for cf in filtered_files]
+                global_violations = await self.rule_validator.validate_batch_async(_all_paths)
+                if self.progress_callback:
+                    self.progress_callback("progress_update", {"increment": len(filtered_files)})
 
                 if global_violations:
                     logger.info("global_rules_found_violations", count=len(global_violations))
@@ -203,14 +182,32 @@ class FrameExecutor:
                         metadata={"engine": "python_rules"},
                     )
 
-                    if not hasattr(context, "frame_results") or context.frame_results is None:
-                        context.frame_results = {}
-
                     context.frame_results[frame_id] = {
                         "result": frame_result,
                         "pre_violations": [],
                         "post_violations": [],
                     }
+
+                    _global_has_blocker = frame_result.is_blocker
+
+            if frames_to_execute:
+                # Skip frames when a blocker was already found by global rules and fail_fast is on
+                if _global_has_blocker and getattr(self.config, "fail_fast", True):
+                    logger.info(
+                        "skipping_frames_global_blocker",
+                        blocker_rule="global_script_rules",
+                        skipped_frames=len(frames_to_execute),
+                    )
+                elif self.config.strategy == ExecutionStrategy.SEQUENTIAL:
+                    await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
+                elif self.config.strategy == ExecutionStrategy.PARALLEL:
+                    await self._execute_frames_parallel_async(context, filtered_files, frames_to_execute, pipeline)
+                elif self.config.strategy == ExecutionStrategy.FAIL_FAST:
+                    await self._execute_frames_fail_fast_async(context, filtered_files, frames_to_execute, pipeline)
+                elif self.config.strategy == ExecutionStrategy.PIPELINE:
+                    await self._execute_frames_pipeline_async(context, filtered_files, frames_to_execute, pipeline)
+                else:
+                    await self._execute_frames_sequential_async(context, filtered_files, frames_to_execute, pipeline)
 
             logger.info("debug_frame_results_before_aggregation", frames=list(context.frame_results.keys()))
             self.result_aggregator.store_validation_results(context, pipeline)

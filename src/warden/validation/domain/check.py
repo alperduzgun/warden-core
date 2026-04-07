@@ -64,10 +64,14 @@ class CheckFinding:
     documentation_url: str | None = None  # Link to docs
     is_blocker: bool = False  # ⚠️ NEW: Individual blocker status
     machine_context_raw: dict | None = None  # To bypass fragile LLM list mappings
+    # Pattern match confidence (0.0–1.0). Set by checks that perform context-aware
+    # matching. None means the check did not assign a confidence (treated as 1.0
+    # for backward compatibility with existing deterministic checks).
+    pattern_confidence: float | None = None
 
     def to_json(self) -> dict[str, Any]:
         """Serialize to Panel JSON."""
-        return {
+        result = {
             "checkId": self.check_id,
             "checkName": self.check_name,
             "severity": self.severity.value,
@@ -78,6 +82,9 @@ class CheckFinding:
             "documentationUrl": self.documentation_url,
             "isBlocker": self.is_blocker,
         }
+        if self.pattern_confidence is not None:
+            result["patternConfidence"] = self.pattern_confidence
+        return result
 
 
 @dataclass

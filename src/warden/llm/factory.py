@@ -66,6 +66,7 @@ def _ensure_providers_registered() -> None:
             "warden.llm.providers.qwencode",
             "warden.llm.providers.openai",
             "warden.llm.providers.groq",
+            "warden.llm.providers.qwen",
             "warden.llm.providers.ollama",
             "warden.llm.providers.gemini",
             "warden.llm.providers.claude_code",

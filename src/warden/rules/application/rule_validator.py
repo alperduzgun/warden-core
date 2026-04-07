@@ -49,6 +49,9 @@ class CustomRuleValidator:
         """
         self.rules = [r for r in rules if r.enabled]
         self.llm_service = llm_service
+        # Populated during validation: blocker AI rules skipped due to missing LLM service.
+        # Callers should surface these to the user — a skipped blocker is not a silent pass.
+        self.skipped_ai_blockers: list[str] = []
         logger.info("custom_rule_validator_initialized", rule_count=len(self.rules), has_llm=llm_service is not None)
 
     async def validate_file_async(
@@ -98,13 +101,98 @@ class CustomRuleValidator:
                 # Fallback: Treat all as python rules
                 python_rules.extend(rust_rules)
 
-        # 3. Python Execution (Iterative Fallback)
+        # 3. Python Execution — split AI vs deterministic rules
         if python_rules:
+            ai_rules = [r for r in python_rules if r.type == "ai"]
+            det_rules = [r for r in python_rules if r.type != "ai"]
+
+            # 3a. Deterministic rules: fast, run sequentially per file
             for file_path in valid_paths:
-                violations = await self._validate_single_file_python(file_path, python_rules)
-                all_violations.extend(violations)
+                if det_rules:
+                    violations = await self._validate_single_file_python(file_path, det_rules)
+                    all_violations.extend(violations)
+
+            # 3b. AI rules: concurrent across files, bounded by semaphore
+            if ai_rules and self.llm_service:
+                ai_violations = await self._validate_ai_rules_concurrent(valid_paths, ai_rules)
+                all_violations.extend(ai_violations)
+            elif ai_rules:
+                # llm_service is None — delegate to per-file path for skipped-blocker tracking
+                for file_path in valid_paths:
+                    violations = await self._validate_single_file_python(file_path, ai_rules)
+                    all_violations.extend(violations)
 
         return all_violations
+
+    # Maximum concurrent LLM calls for AI rule validation.
+    _AI_CONCURRENCY = 5
+
+    # Maximum files checked per AI rule. AI rules are probabilistic — exhaustive
+    # scanning of hundreds of files is wasteful and causes timeouts on slow providers
+    # (qwen_cli, ollama). Cap at a budget that completes within pipeline timeout.
+    _AI_MAX_FILES_PER_RULE = 25
+
+    async def _validate_ai_rules_concurrent(
+        self, file_paths: list[Path], ai_rules: list[CustomRule]
+    ) -> list[CustomRuleViolation]:
+        """Run AI rule validation concurrently across files with budget cap.
+
+        For each rule, filters files by language/file_pattern, caps at
+        _AI_MAX_FILES_PER_RULE, then runs all (file, rule) pairs concurrently
+        bounded by _AI_CONCURRENCY semaphore.
+        """
+        sem = asyncio.Semaphore(self._AI_CONCURRENCY)
+
+        async def _bounded(file_path: Path, rule: CustomRule) -> list[CustomRuleViolation]:
+            if not file_path.exists():
+                return []
+            try:
+                content = file_path.read_text(encoding="utf-8")
+            except Exception as exc:
+                logger.error("file_read_error", file=str(file_path), error=str(exc))
+                return []
+            async with sem:
+                return await self._validate_ai_rule_async(rule, file_path, content)
+
+        tasks = []
+        for rule in ai_rules:
+            # Filter candidates for this rule (cheap, no LLM)
+            candidates = []
+            for fp in file_paths:
+                if rule.language and not self._is_language_match(fp, rule.language):
+                    continue
+                if rule.file_pattern and not fnmatch.fnmatch(fp.name, rule.file_pattern):
+                    continue
+                if rule.exceptions and self._is_exception_match(fp, rule.exceptions):
+                    continue
+                candidates.append(fp)
+
+            # Budget cap: log and trim
+            if len(candidates) > self._AI_MAX_FILES_PER_RULE:
+                logger.info(
+                    "ai_rule_file_budget_applied",
+                    rule_id=rule.id,
+                    total=len(candidates),
+                    capped=self._AI_MAX_FILES_PER_RULE,
+                )
+                candidates = candidates[: self._AI_MAX_FILES_PER_RULE]
+
+            for fp in candidates:
+                tasks.append(_bounded(fp, rule))
+
+        if not tasks:
+            return []
+
+        logger.info("ai_rule_concurrent_tasks", count=len(tasks), concurrency=self._AI_CONCURRENCY)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        violations: list[CustomRuleViolation] = []
+        for res in results:
+            if isinstance(res, Exception):
+                logger.error("ai_rule_concurrent_task_failed", error=str(res))
+            elif isinstance(res, list):
+                violations.extend(res)
+        return violations
 
     async def _validate_single_file_python(self, file_path: Path, rules: list[CustomRule]) -> list[CustomRuleViolation]:
         """Legacy validation logic (refactored from validate_file_async)."""
@@ -137,6 +225,10 @@ class CustomRuleValidator:
             if rule.language and not self._is_language_match(file_path, rule.language):
                 continue
 
+            # Check file_pattern filter (glob)
+            if rule.file_pattern and not fnmatch.fnmatch(file_path.name, rule.file_pattern):
+                continue
+
             # Check exceptions
             if rule.exceptions and self._is_exception_match(file_path, rule.exceptions):
                 continue
@@ -155,7 +247,9 @@ class CustomRuleValidator:
                     ai_violations = await self._validate_ai_rule_async(rule, file_path, content)
                     violations.extend(ai_violations)
                 else:
-                    logger.warning("ai_rule_skipped_no_llm", rule_id=rule.id)
+                    logger.warning("ai_rule_skipped_no_llm", rule_id=rule.id, is_blocker=rule.is_blocker)
+                    if rule.is_blocker:
+                        self.skipped_ai_blockers.append(rule.id)
 
         logger.info(
             "file_validation_complete",
@@ -808,6 +902,11 @@ class CustomRuleValidator:
             return []
 
         # Prepare prompt for LLM
+        rule_context_block = (
+            f"\nRULE CONTEXT (architectural guidance — use to avoid false positives):\n{rule.context}\n"
+            if rule.context
+            else ""
+        )
         prompt = f"""
 You are a Senior Code Auditor. Your task is to audit the following code against a specific PROJECT RULE.
 
@@ -816,10 +915,10 @@ PROJECT RULE:
 - Name: {rule.name}
 - Directive: {rule.description}
 - Severity: {rule.severity.value if hasattr(rule.severity, "value") else rule.severity}
-
+{rule_context_block}
 CODE TO AUDIT ({file_path.name}):
 ```
-{content[:10000]}  # Limit content size for LLM
+{content[:10000]}
 ```
 
 INSTRUCTIONS:
@@ -852,6 +951,10 @@ RETURN ONLY A JSON OBJECT:
             from warden.shared.utils.json_parser import parse_json_from_llm
 
             result = parse_json_from_llm(response.content if hasattr(response, "content") else str(response))
+
+            if not result or not isinstance(result, dict):
+                logger.warning("ai_rule_invalid_response", rule_id=rule.id)
+                return []
 
             if result.get("violation_found"):
                 logger.info(

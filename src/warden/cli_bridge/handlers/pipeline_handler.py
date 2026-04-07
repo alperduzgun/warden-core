@@ -87,6 +87,7 @@ class PipelineHandler(BaseHandler):
         analysis_level: str = "standard",
         baseline_fingerprints: set | None = None,
         force: bool = False,
+        max_files: int | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Execute validation pipeline with streaming progress updates."""
         if not self.orchestrator:
@@ -102,7 +103,7 @@ class PipelineHandler(BaseHandler):
             raise IPCError(ErrorCode.VALIDATION_ERROR, str(e))
 
         # 2. Collect files first to detect languages
-        code_files = await self._collect_files_async(path_list)
+        code_files = await self._collect_files_async(path_list, max_files=max_files)
         if not code_files:
             logger.warning("no_code_files_found", paths=str(paths))
             return
@@ -195,7 +196,7 @@ class PipelineHandler(BaseHandler):
             return None
         return result
 
-    async def _collect_files_async(self, paths: list[Path]) -> list[CodeFile]:
+    async def _collect_files_async(self, paths: list[Path], max_files: int | None = None) -> list[CodeFile]:
         """Collect and prepare code files for pipeline execution using optimized discoverer."""
         from warden.analysis.application.discovery.discoverer import FileDiscoverer
 
@@ -286,7 +287,17 @@ class PipelineHandler(BaseHandler):
                 except Exception as e:
                     logger.warning("file_read_error", file=f.path, error=str(e))
 
-        return code_files[:1000]  # Limit protection
+        # Apply max_files limit (#639): CLI --max-files now enforced here.
+        # Default 1000 if not specified; hard cap at 10000 for safety.
+        effective_limit = min(max(max_files, 1), 10000) if max_files is not None else 1000
+        if len(code_files) > effective_limit:
+            logger.info(
+                "max_files_limit_applied",
+                collected=len(code_files),
+                limit=effective_limit,
+            )
+            code_files = code_files[:effective_limit]
+        return code_files
 
     def _detect_language(self, path: Path) -> str:
         ext = path.suffix.lower()

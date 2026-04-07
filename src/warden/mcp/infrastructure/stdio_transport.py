@@ -23,6 +23,10 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 
+# Hard limit on incoming message size to prevent memory exhaustion (#642).
+_MAX_MESSAGE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
 class STDIOTransport(ITransport):
     """
     STDIO-based MCP transport.
@@ -43,17 +47,42 @@ class STDIOTransport(ITransport):
 
         Returns:
             Message string, or None on EOF
+
+        Raises:
+            MCPTransportError: If message exceeds _MAX_MESSAGE_BYTES or read fails.
         """
         if not self._is_open:
             return None
 
         async with self._read_lock:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             try:
                 line = await loop.run_in_executor(None, sys.stdin.readline)
                 if not line:
                     return None
+                encoded = line.encode("utf-8")
+                if len(encoded) > _MAX_MESSAGE_BYTES:
+                    _limit_mb = _MAX_MESSAGE_BYTES // (1024 * 1024)
+                    _size_mb = len(encoded) / (1024 * 1024)
+                    try:
+                        logger.error(
+                            "mcp_message_too_large",
+                            size_bytes=len(encoded),
+                            limit_bytes=_MAX_MESSAGE_BYTES,
+                        )
+                    except TypeError:
+                        # Fallback stdlib logger doesn't accept keyword fields
+                        logger.error(
+                            "mcp_message_too_large: size=%.1f MB limit=%d MB",
+                            _size_mb,
+                            _limit_mb,
+                        )
+                    raise MCPTransportError(
+                        f"Incoming message exceeds size limit ({_MAX_MESSAGE_BYTES // (1024 * 1024)} MB)"
+                    )
                 return line.strip()
+            except MCPTransportError:
+                raise
             except Exception as e:
                 logger.error("stdio_read_error", error=str(e))
                 raise MCPTransportError(f"Failed to read from stdin: {e}")

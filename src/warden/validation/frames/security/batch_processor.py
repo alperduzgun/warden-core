@@ -62,18 +62,29 @@ async def batch_verify_security_findings(
     Returns:
         Updated findings_map with LLM-verified findings
     """
-    # Split: deterministic findings (taint, pattern) skip LLM verification.
-    # Only LLM-sourced or unattributed findings need a second opinion.
-    _DETERMINISTIC_SOURCES = {"taint", "pattern", "ast", "deterministic"}
+    # Split: high-confidence deterministic findings skip LLM verification.
+    # Pattern findings with pattern_confidence < 0.75 are routed to LLM to
+    # reduce false positives from context-aware checks (e.g. sql-injection).
+    _FULLY_DETERMINISTIC_SOURCES = {"taint", "ast", "deterministic"}
+    # Minimum pattern_confidence to skip LLM verification for "pattern" findings.
+    _PATTERN_CONFIDENCE_THRESHOLD = 0.75
+
     deterministic_by_path: dict[str, list[Any]] = {path: [] for path in findings_map}
     all_findings_with_context = []
     for file_path, findings in findings_map.items():
         code_file = next((f for f in code_files if f.path == file_path), None)
         for finding in findings:
             ds = getattr(finding, "detection_source", None) or ""
-            if ds in _DETERMINISTIC_SOURCES:
+            pc = getattr(finding, "pattern_confidence", None)
+
+            if ds in _FULLY_DETERMINISTIC_SOURCES:
+                # Always skip LLM for fully deterministic sources
+                deterministic_by_path[file_path].append(finding)
+            elif ds == "pattern" and (pc is None or pc >= _PATTERN_CONFIDENCE_THRESHOLD):
+                # High-confidence (or unscored legacy) pattern findings: skip LLM
                 deterministic_by_path[file_path].append(finding)
             else:
+                # Low-confidence pattern findings and LLM-sourced findings: verify
                 all_findings_with_context.append({"finding": finding, "file_path": file_path, "code_file": code_file})
 
     if not all_findings_with_context:

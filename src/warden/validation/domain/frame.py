@@ -152,6 +152,10 @@ class Finding:
     # after LLM verification. None when no LLM verification was performed (e.g.
     # deterministic or linter findings that are exempt from verification).
     verification_confidence: float | None = None
+    # Pattern match confidence (0.0–1.0). Set by context-aware pattern checks
+    # (e.g. SQLInjectionCheck) based on surrounding code analysis.
+    # None = check did not assign confidence (treated as 1.0 for backward compat).
+    pattern_confidence: float | None = None
     # Actionable enrichment fields (#622)
     # root_cause: Short explanation of why this vulnerability exists in the code.
     root_cause: str | None = None
@@ -183,6 +187,8 @@ class Finding:
             result["detectionSource"] = self.detection_source
         if self.verification_confidence is not None:
             result["verificationConfidence"] = self.verification_confidence
+        if self.pattern_confidence is not None:
+            result["patternConfidence"] = self.pattern_confidence
         if self.root_cause is not None:
             result["rootCause"] = self.root_cause
         if self.risk_scope is not None:

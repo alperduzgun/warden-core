@@ -22,6 +22,11 @@ from warden.cli_bridge.bridge import WardenBridge
 console = Console()
 _logger = _structlog.get_logger(__name__)
 
+# Module-level constants — defined once, not recreated on every CLI invocation.
+_VALID_FORMATS: frozenset[str] = frozenset({"text", "json", "sarif", "junit", "html", "pdf", "shield", "badge"})
+_VALID_LEVELS: frozenset[str] = frozenset({"basic", "standard", "deep"})
+_VALID_SEVERITIES: frozenset[str] = frozenset({"critical", "high", "medium", "low", "none"})
+
 # Re-exports for backwards compatibility
 from warden.cli.commands.scan_preflight import _needs_ollama, _preflight_ollama_check, _ensure_scan_dependencies
 from warden.cli.commands.scan_output import (
@@ -290,6 +295,20 @@ def scan_command(
     """
     Run the full Warden pipeline on files or directories.
     """
+    # ── Input validation (#638) ───────────────────────────────────────────────
+    if format not in _VALID_FORMATS:
+        console.print(f"[red]Error:[/red] Invalid --format '{format}'. Choose from: {', '.join(sorted(_VALID_FORMATS))}")
+        raise typer.Exit(1)
+    if level and level not in _VALID_LEVELS:
+        console.print(f"[red]Error:[/red] Invalid --level '{level}'. Choose from: {', '.join(sorted(_VALID_LEVELS))}")
+        raise typer.Exit(1)
+    if fail_on_severity not in _VALID_SEVERITIES:
+        console.print(f"[red]Error:[/red] Invalid --fail-on-severity '{fail_on_severity}'. Choose from: {', '.join(sorted(_VALID_SEVERITIES))}")
+        raise typer.Exit(1)
+    if max_files is not None and not (1 <= max_files <= 10000):
+        console.print(f"[red]Error:[/red] --max-files must be between 1 and 10000, got {max_files}")
+        raise typer.Exit(1)
+
     # Provider CLI override → env var (picked up by load_llm_config_async)
     if provider:
         import os as _os
@@ -524,6 +543,7 @@ def scan_command(
                 resume=resume,
                 diff_changed_lines=diff_changed_lines,
                 fail_on_severity=fail_on_severity,
+                max_files=max_files,
             )
         )
 
@@ -601,6 +621,7 @@ async def _process_stream_events(
     force: bool,
     bench_collector: Any | None = None,
     contract_mode: bool = False,
+    max_files: int | None = None,
 ) -> tuple[dict | None, dict, int]:
     """Process pipeline streaming events with a live-updating display.
 
@@ -778,6 +799,7 @@ async def _process_stream_events(
                 ci_mode=ci_mode,
                 force=force,
                 contract_mode=contract_mode,
+                max_files=max_files,
             ):
                 event_type = event.get("type")
 
@@ -1017,6 +1039,7 @@ async def _run_scan_async(
     resume: bool = False,
     diff_changed_lines: dict | None = None,
     fail_on_severity: str = "critical",
+    max_files: int | None = None,
 ) -> int:
     """Async implementation of scan command."""
 
@@ -1083,6 +1106,7 @@ async def _run_scan_async(
             force,
             bench_collector=bench_collector,
             contract_mode=contract_mode,
+            max_files=max_files,
         )
         _scan_wall_duration = _time.monotonic() - _scan_wall_start
 
