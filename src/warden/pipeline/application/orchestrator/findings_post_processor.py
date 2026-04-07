@@ -79,14 +79,10 @@ class FindingsPostProcessor:
                 verify_llm = self.llm_service or create_client()
                 verify_mem_manager = getattr(self.config, "memory_manager", None)
 
-                verifier = FindingVerificationService(
-                    llm_client=verify_llm,
-                    memory_manager=verify_mem_manager,
-                    enabled=True,
-                )
-
                 verified_count = 0
                 dropped_count = 0
+                # Verifier is created lazily — only when there are findings that need it.
+                verifier = None
 
                 for frame_id, frame_res in context.frame_results.items():
                     result_obj = frame_res.get("result")
@@ -125,6 +121,27 @@ class FindingsPostProcessor:
                             frame_id=frame_id,
                             findings_count=len(findings_to_verify),
                         )
+
+                        # #595 — Lazy init: create MemoryManager and verifier only when we
+                        # actually have findings to verify, to avoid unnecessary filesystem I/O.
+                        if verifier is None:
+                            if verify_mem_manager is None:
+                                from warden.memory.application.memory_manager import MemoryManager
+
+                                verify_mem_manager = MemoryManager(self.project_root)
+                                await verify_mem_manager.initialize_async()
+                                # Wire back so downstream code also benefits.
+                                self.config.memory_manager = verify_mem_manager
+                                logger.info(
+                                    "verification_cache_initialised",
+                                    reason="pre_analysis_skipped",
+                                    project_root=str(self.project_root),
+                                )
+                            verifier = FindingVerificationService(
+                                llm_client=verify_llm,
+                                memory_manager=verify_mem_manager,
+                                enabled=True,
+                            )
 
                         verified_findings_dicts = await verifier.verify_findings_async(findings_to_verify, context)
                         verified_ids = {f["id"] for f in verified_findings_dicts}
@@ -208,6 +225,16 @@ class FindingsPostProcessor:
                             after=len(context.validated_issues),
                             reason="verification_filtering",
                         )
+
+                # #595 — Persist new LLM cache entries so the next scan can reuse them.
+                # The MemoryManager accumulates cache entries in-memory during verification
+                # but never wrote them to disk before this fix.
+                if verify_mem_manager is not None:
+                    try:
+                        await verify_mem_manager.save_async()
+                        logger.debug("verification_cache_persisted")
+                    except Exception as save_err:
+                        logger.warning("verification_cache_save_failed", error=str(save_err))
 
                 logger.info(
                     "verification_phase_completed",
