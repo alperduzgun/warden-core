@@ -543,17 +543,23 @@ warden scan --diff --base HEAD~3
 
 #### How `--diff` works
 
-1. **Changed-file detection** — Warden calls `git diff <base>..HEAD` to get the list of modified, added, and renamed files. Only those files are passed to the pipeline.
-2. **Line-level filtering** — The diff is parsed to extract the exact line numbers that were added or changed. After scanning, findings on *unchanged* lines are silently dropped so you only see issues you introduced.
+1. **Changed-file detection** — Warden collects candidate files from three git sources and merges them:
+   - Committed changes: `git diff --name-only origin/<base>...HEAD` (merge-base comparison; falls back to `<base>..HEAD` or local ref when origin is unavailable)
+   - Staged/unstaged changes: `git diff --name-only HEAD`
+   - Untracked files: `git ls-files --others --exclude-standard`
+   
+   Deleted files are excluded (`--diff-filter=d`) because they no longer exist on disk.
+2. **Line-level filtering** — The diff output from the merge-base comparison (`<base>...HEAD`) is parsed to extract exact added/changed line numbers per file. After scanning, findings on *unchanged* lines are dropped so you only see issues you introduced.
 3. **Rename handling** — Renamed files are tracked under both the old and new path so findings are not orphaned on the old name.
-4. **Fallback** — If git is unavailable or the diff command fails, Warden falls back to a full scan with a warning.
+4. **Fallback** — If git is unavailable or changed-file collection fails, Warden falls back to a full scan with a warning.
 
 #### Behavior notes
 
 | Scenario | Behavior |
 | :--- | :--- |
 | No changed files detected | Scan skipped; `⚠️  No changed files detected` is printed |
-| File deleted in diff | Old path included, all findings dropped (empty line set) |
+| File deleted in diff | Excluded from scan inputs (deleted files don't exist on disk) |
+| Untracked files present | Included in the changed-file set; not part of `git diff` hunk output so all their lines are scanned |
 | `--base` not specified | Defaults to `main` |
 | Used with `--ci` | Intelligence (module map, posture) is loaded; risk distribution for changed files is shown |
 | Used with baseline | Baseline filtering still applies — only *new* findings not in baseline are reported |

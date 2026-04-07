@@ -146,3 +146,36 @@ def test_auto_init_permission_error_shown_on_console(tmp_path):
     # Warning must be visible on console
     printed_text = " ".join(str(c) for c in console.print.call_args_list)
     assert "read-only fs" in printed_text or "Could not create" in printed_text
+
+
+# ---------------------------------------------------------------------------
+# Non-directory .warden path (Copilot comment #1)
+# ---------------------------------------------------------------------------
+
+def test_auto_init_warns_when_warden_is_a_file(tmp_path):
+    """.warden exists as a file (not dir) → warn user, do not crash."""
+    from warden.cli.commands.scan import _auto_init_warden_dir
+
+    # Create .warden as a regular file
+    stray_file = tmp_path / ".warden"
+    stray_file.write_text("oops")
+
+    console = MagicMock()
+    _auto_init_warden_dir(tmp_path, console)
+
+    printed = " ".join(str(c) for c in console.print.call_args_list)
+    assert "not a directory" in printed or "Cannot initialize" in printed
+
+
+def test_auto_init_warns_when_warden_is_symlink_to_nonexistent(tmp_path):
+    """.warden is a broken symlink → warn user, do not crash."""
+    from warden.cli.commands.scan import _auto_init_warden_dir
+
+    broken_link = tmp_path / ".warden"
+    broken_link.symlink_to(tmp_path / "nonexistent_target")
+
+    console = MagicMock()
+    _auto_init_warden_dir(tmp_path, console)
+
+    printed = " ".join(str(c) for c in console.print.call_args_list)
+    assert "not a directory" in printed or "Cannot initialize" in printed

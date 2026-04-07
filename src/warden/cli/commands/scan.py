@@ -205,8 +205,19 @@ def _auto_init_warden_dir(project_root: Path, console: Any) -> None:
     warden_dir = project_root / ".warden"
     config_path = warden_dir / "config.yaml"
 
-    if warden_dir.exists():
+    if warden_dir.is_dir():
         return  # Already initialised — nothing to do
+
+    if warden_dir.exists() or warden_dir.is_symlink():
+        # Path exists but is not a directory (e.g. a stray file or broken symlink).
+        # Proceeding would corrupt later code that expects a directory.
+        console.print(
+            f"[yellow]⚠ Cannot initialize [bold]{warden_dir.name}[/bold]: "
+            "the path exists but is not a directory. "
+            "Remove or rename it, then rerun the scan.[/yellow]"
+        )
+        _logger.warning("warden_dir_invalid_path", path=str(warden_dir))
+        return
 
     try:
         warden_dir.mkdir(parents=True, exist_ok=True)
@@ -488,8 +499,11 @@ def scan_command(
             _run_scan_plan(paths=paths, level=level, max_files=max_files)
             return
 
-        # Auto-init: create minimal .warden/ on first scan (#534)
-        _auto_init_warden_dir(Path.cwd(), console)
+        # Auto-init: create minimal .warden/ on first scan (#534).
+        # Skip in CI mode: --ci is intended to be read-only and creating files
+        # would make the workspace dirty or fail on read-only checkouts.
+        if not ci:
+            _auto_init_warden_dir(Path.cwd(), console)
 
         # Auto-install scan dependencies based on analysis level
         if level != "basic":
