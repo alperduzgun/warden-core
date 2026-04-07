@@ -529,16 +529,34 @@ AI Agents working in a Warden project follow this strict protocol:
 | `warden install` | Installs/Updates validation frames. |
 | `warden search <query>` | Searches Warden Hub or local codebase. |
 
-### ⚡ Incremental Scanning (The Speed Force)
+### ⚡ Incremental Scanning (`--diff` mode)
 Don't wait hours for a full scan. Use **Diff Mode** to check only your recent changes:
 
 ```bash
-# Checks changes relative to 'main' (staged + unstaged)
+# Check files changed relative to 'main' (default base branch)
 warden scan --diff
 
-# Checks changes relative to a specific branch
+# Check files changed relative to a specific branch or commit
 warden scan --diff --base origin/develop
+warden scan --diff --base HEAD~3
 ```
+
+#### How `--diff` works
+
+1. **Changed-file detection** — Warden calls `git diff <base>..HEAD` to get the list of modified, added, and renamed files. Only those files are passed to the pipeline.
+2. **Line-level filtering** — The diff is parsed to extract the exact line numbers that were added or changed. After scanning, findings on *unchanged* lines are silently dropped so you only see issues you introduced.
+3. **Rename handling** — Renamed files are tracked under both the old and new path so findings are not orphaned on the old name.
+4. **Fallback** — If git is unavailable or the diff command fails, Warden falls back to a full scan with a warning.
+
+#### Behavior notes
+
+| Scenario | Behavior |
+| :--- | :--- |
+| No changed files detected | Scan skipped; `⚠️  No changed files detected` is printed |
+| File deleted in diff | Old path included, all findings dropped (empty line set) |
+| `--base` not specified | Defaults to `main` |
+| Used with `--ci` | Intelligence (module map, posture) is loaded; risk distribution for changed files is shown |
+| Used with baseline | Baseline filtering still applies — only *new* findings not in baseline are reported |
 
 > **Result:** Scans finish in seconds, providing "Deep Scan" quality for just the code you touched.
 

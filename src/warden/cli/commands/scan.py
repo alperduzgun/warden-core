@@ -183,6 +183,48 @@ def _attempt_self_healing_sync(error: Exception, level: str) -> bool:
         return False
 
 
+def _auto_init_warden_dir(project_root: Path, console: Any) -> None:
+    """Auto-create a minimal .warden/ on first scan if it doesn't exist (#534).
+
+    Only creates the directory and a stub config.yaml — does not run the full
+    interactive `warden init` flow. Subsequent scans are idempotent.
+    """
+    warden_dir = project_root / ".warden"
+    config_path = warden_dir / "config.yaml"
+
+    if warden_dir.exists():
+        return  # Already initialised — nothing to do
+
+    try:
+        warden_dir.mkdir(parents=True, exist_ok=True)
+        project_name = project_root.name
+
+        stub_config = (
+            "# Warden config — auto-created on first scan.\n"
+            "# Run 'warden init' for the full interactive setup.\n"
+            "\n"
+            "project:\n"
+            f'  name: "{project_name}"\n'
+            "\n"
+            "frames:\n"
+            "  - security\n"
+            "  - orphan\n"
+            "\n"
+            "# LLM provider — remove section to run in offline mode\n"
+            "# llm:\n"
+            "#   provider: ollama\n"
+            "#   model: qwen2.5-coder:7b\n"
+        )
+        config_path.write_text(stub_config, encoding="utf-8")
+        console.print(
+            f"[dim]📁 Initialized [bold].warden/[/bold] — "
+            "run [bold cyan]warden init[/bold cyan] for full setup.[/dim]"
+        )
+        _logger.info("warden_dir_auto_created", path=str(warden_dir))
+    except Exception as exc:  # pragma: no cover — filesystem errors are environment-dependent
+        _logger.warning("warden_dir_auto_init_failed", error=str(exc))
+
+
 def _run_scan_plan(paths: list[str] | None, level: str, max_files: int | None = None) -> None:
     """
     Generate and display a pre-scan analysis plan using ScanPlanner.
@@ -395,6 +437,9 @@ def scan_command(
         if plan:
             _run_scan_plan(paths=paths, level=level, max_files=max_files)
             return
+
+        # Auto-init: create minimal .warden/ on first scan (#534)
+        _auto_init_warden_dir(Path.cwd(), console)
 
         # Auto-install scan dependencies based on analysis level
         if level != "basic":
