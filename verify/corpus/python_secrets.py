@@ -1,4 +1,9 @@
-"""Vulnerable: Hardcoded secrets and credentials."""
+"""
+Vulnerable: Hardcoded secrets and credentials.
+
+corpus_labels:
+  hardcoded-password: 3
+"""
 
 import os
 

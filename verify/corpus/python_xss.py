@@ -1,4 +1,9 @@
-"""Vulnerable: XSS via render_template_string and Markup."""
+"""
+Vulnerable: XSS via render_template_string and Markup.
+
+corpus_labels:
+  xss: 1
+"""
 
 from flask import Flask, Markup, render_template_string, request
 

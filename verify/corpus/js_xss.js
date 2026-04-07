@@ -1,5 +1,8 @@
 /**
  * Vulnerable: XSS via innerHTML and document.write.
+ *
+ * corpus_labels:
+ *   xss: 2
  */
 
 const express = require('express');

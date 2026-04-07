@@ -1,4 +1,13 @@
-"""Clean code: no vulnerabilities expected. False positive test."""
+"""
+Clean code: no vulnerabilities expected.
+
+corpus_labels:
+  sql-injection: 0
+  xss: 0
+  hardcoded-password: 0
+  weak-crypto: 0
+  command-injection: 0
+"""
 
 import logging
 import math
