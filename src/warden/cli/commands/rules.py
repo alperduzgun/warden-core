@@ -379,22 +379,50 @@ def _collect_fp_examples(corpus_dir: Path, check_id: str | None) -> list[dict]:
         )
 
         for cid in checks_here:
-            # Extract non-comment, non-empty lines as FP examples
+            # Extract non-comment, non-empty lines as FP examples,
+            # skipping triple-quoted docstring/comment regions entirely.
+            in_triple_quote = False
+            triple_quote_delim: str | None = None
+
             for line_no, line in enumerate(content.splitlines(), start=1):
                 stripped = line.strip()
-                if (
-                    stripped
-                    and not stripped.startswith("#")
-                    and not stripped.startswith('"""')
-                    and not stripped.startswith("'''")
-                    and len(stripped) > 5
-                ):
+
+                if not stripped:
+                    continue
+
+                if in_triple_quote:
+                    if triple_quote_delim and triple_quote_delim in stripped:
+                        in_triple_quote = False
+                        triple_quote_delim = None
+                    continue
+
+                if stripped.startswith("#"):
+                    continue
+
+                if '"""' in stripped or "'''" in stripped:
+                    has_double = '"""' in stripped
+                    has_single = "'''" in stripped
+                    delim = (
+                        '"""'
+                        if has_double and (not has_single or stripped.find('"""') <= stripped.find("'''"))
+                        else "'''"
+                    )
+                    # Single-line triple-quoted string (both open+close on same line) — skip
+                    if stripped.count(delim) >= 2:
+                        continue
+                    # Opening of a multi-line triple-quoted block — enter and skip
+                    in_triple_quote = True
+                    triple_quote_delim = delim
+                    continue
+
+                if len(stripped) > 5:
                     examples.append({
                         "file": fp_file.name,
                         "line_no": line_no,
                         "line": stripped,
                         "check_id": cid,
                     })
+
             # Limit to avoid overwhelming LLM
             if len(examples) >= 20:
                 break
@@ -416,13 +444,18 @@ async def _run_corpus_eval(corpus_dir: Path, check_id: str | None, fast: bool) -
     frame = frame_class()
 
     if fast:
-        for attr in ("_llm_client", "_llm", "_verifier"):
+        for attr, value in (
+            ("_llm_client", None),
+            ("_llm", None),
+            ("_verifier", None),
+            ("_use_llm", False),
+        ):
             if hasattr(frame, attr):
                 try:
-                    object.__setattr__(frame, attr, None)
+                    object.__setattr__(frame, attr, value)
                 except Exception:
                     try:
-                        setattr(frame, attr, None)
+                        setattr(frame, attr, value)
                     except Exception:
                         pass
 
@@ -623,13 +656,24 @@ async def _autoimprove_loop(
             console.print(f"[dim]Check '{target_check}' has no FPs. Skipping.[/dim]")
             break
 
+        # Only use FP examples for the check targeted in this iteration.
+        target_fp_examples = [ex for ex in fp_examples if ex.get("check_id") == target_check]
+        if not target_fp_examples:
+            console.print(
+                f"[dim]No FP examples found for check '{target_check}'. Skipping iteration.[/dim]"
+            )
+            continue
+
         # Get or generate a pattern
-        if fast or llm_service is None:
-            pattern = _make_demo_pattern(target_check, fp_examples)
+        if fast:
+            pattern = _make_demo_pattern(target_check, target_fp_examples)
             console.print(f"  [dim]Fast mode — deterministic pattern: [cyan]{pattern}[/cyan][/dim]")
+        elif llm_service is None:
+            pattern = _make_demo_pattern(target_check, target_fp_examples)
+            console.print(f"  [dim]No LLM available — deterministic pattern: [cyan]{pattern}[/cyan][/dim]")
         else:
             console.print(f"  Asking LLM for exclusion pattern (check: {target_check})…")
-            pattern = await _ask_llm_for_pattern(llm_service, target_check, fp_examples)
+            pattern = await _ask_llm_for_pattern(llm_service, target_check, target_fp_examples)
             if not pattern:
                 console.print("  [yellow]LLM returned no pattern. Skipping iteration.[/yellow]")
                 continue
