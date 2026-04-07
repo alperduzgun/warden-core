@@ -188,7 +188,20 @@ def _auto_init_warden_dir(project_root: Path, console: Any) -> None:
 
     Only creates the directory and a stub config.yaml — does not run the full
     interactive `warden init` flow. Subsequent scans are idempotent.
+
+    Resilience properties:
+    - Idempotent: returns immediately if .warden/ already exists.
+    - Atomic write: tempfile + os.replace so crash mid-write never leaves a
+      corrupt config.yaml.
+    - TOCTOU-safe: config_path existence checked after mkdir so concurrent
+      `warden scan` invocations don't overwrite each other.
+    - YAML-safe: project name is stripped of characters that would break YAML
+      double-quoted scalars.
     """
+    import os as _os
+    import re as _re
+    import tempfile as _tempfile
+
     warden_dir = project_root / ".warden"
     config_path = warden_dir / "config.yaml"
 
@@ -197,7 +210,17 @@ def _auto_init_warden_dir(project_root: Path, console: Any) -> None:
 
     try:
         warden_dir.mkdir(parents=True, exist_ok=True)
-        project_name = project_root.name
+
+        # After mkdir, another concurrent process may have already written
+        # config.yaml — skip the write to avoid a silent overwrite.
+        if config_path.exists():
+            return
+
+        # Sanitize project name for safe YAML double-quoted scalar:
+        # strip control characters and backslash/double-quote that would
+        # require YAML escape sequences we don't emit.
+        raw_name = project_root.name or "project"
+        project_name = _re.sub(r'[\x00-\x1f"\\]', "", raw_name) or "project"
 
         stub_config = (
             "# Warden config — auto-created on first scan.\n"
@@ -215,14 +238,41 @@ def _auto_init_warden_dir(project_root: Path, console: Any) -> None:
             "#   provider: ollama\n"
             "#   model: qwen2.5-coder:7b\n"
         )
-        config_path.write_text(stub_config, encoding="utf-8")
+
+        # Atomic write: write to a temp file in the same directory, then
+        # os.replace (POSIX rename) so a crash mid-write never corrupts
+        # config.yaml.
+        fd, tmp_path = _tempfile.mkstemp(
+            dir=warden_dir, prefix=".cfg_tmp_", suffix=".yaml"
+        )
+        try:
+            with _os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(stub_config)
+            _os.replace(tmp_path, config_path)
+        except Exception:
+            try:
+                _os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
         console.print(
-            f"[dim]📁 Initialized [bold].warden/[/bold] — "
+            "[dim]📁 Initialized [bold].warden/[/bold] — "
             "run [bold cyan]warden init[/bold cyan] for full setup.[/dim]"
         )
         _logger.info("warden_dir_auto_created", path=str(warden_dir))
-    except Exception as exc:  # pragma: no cover — filesystem errors are environment-dependent
+    except PermissionError as exc:
         _logger.warning("warden_dir_auto_init_failed", error=str(exc))
+        console.print(
+            f"[yellow]⚠️  Could not create .warden/ ({exc}). "
+            "Continuing without persistent config.[/yellow]"
+        )
+    except OSError as exc:
+        _logger.warning("warden_dir_auto_init_failed", error=str(exc))
+        console.print(
+            f"[yellow]⚠️  Could not create .warden/ ({exc}). "
+            "Continuing without persistent config.[/yellow]"
+        )
 
 
 def _run_scan_plan(paths: list[str] | None, level: str, max_files: int | None = None) -> None:
