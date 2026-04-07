@@ -1413,17 +1413,40 @@ async def _run_scan_async(
                 console.print(f"\n[dim]Auto-FP corpus → {_auto_fp_path.relative_to(Path.cwd())}[/dim]")
                 _corpus_to_use = _auto_fp_path.parent
             else:
-                _corpus_to_use = Path(auto_improve_corpus)
+                # Resolve the corpus path: try as-is first, then relative to warden package.
+                _corpus_candidate = Path(auto_improve_corpus)
+                if not _corpus_candidate.is_absolute():
+                    # Absolute form relative to CWD
+                    _corpus_candidate_abs = Path.cwd() / _corpus_candidate
+                    if _corpus_candidate_abs.exists():
+                        _corpus_candidate = _corpus_candidate_abs
+                    else:
+                        # Try to resolve from the warden package location (warden-core repo)
+                        try:
+                            import warden as _w
+                            _pkg_root = Path(_w.__file__).parent.parent.parent
+                            _pkg_corpus = _pkg_root / auto_improve_corpus
+                            if _pkg_corpus.exists():
+                                _corpus_candidate = _pkg_corpus
+                        except Exception:
+                            pass
+                _corpus_to_use = _corpus_candidate
 
-            await _run_autoimprove_post_scan(
-                corpus_dir=_corpus_to_use,
-                check_id=auto_improve_check,
-                iterations=auto_improve_iterations,
-                dry_run=dry_run,
-                fast=(level == "basic"),
-                verbose=verbose,
-                final_result_data=final_result_data,
-            )
+            if _auto_fp_path or _corpus_to_use.exists():
+                await _run_autoimprove_post_scan(
+                    corpus_dir=_corpus_to_use,
+                    check_id=auto_improve_check,
+                    iterations=auto_improve_iterations,
+                    dry_run=dry_run,
+                    fast=(level == "basic"),
+                    verbose=verbose,
+                    final_result_data=final_result_data,
+                )
+            else:
+                console.print(
+                    "[dim]--auto-improve: no low-confidence findings and corpus not found "
+                    f"({_corpus_to_use}). Pass --auto-improve-corpus <path> to specify one.[/dim]"
+                )
 
         # 7. Exit code decision
         status_val = final_result_data.get("status") if final_result_data else None

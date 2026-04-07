@@ -302,6 +302,8 @@ class HardcodedPasswordCheck(ValidationCheck):
                                 f"❌ BAD: password = '{weak_password}' (easily guessed)"  # warden-ignore
                             ),
                             documentation_url="https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_password",
+                            # Lower confidence for common-word matches vs hardcoded literal patterns
+                            pattern_confidence=0.72,
                         )
                     )
                     break
