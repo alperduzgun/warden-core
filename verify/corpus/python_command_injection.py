@@ -1,4 +1,9 @@
-"""Vulnerable: Command injection via os.system and subprocess."""
+"""
+Vulnerable: Command injection via os.system and subprocess shell=True.
+
+corpus_labels:
+  taint-analysis: 3
+"""
 
 import os
 import subprocess

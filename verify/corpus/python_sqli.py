@@ -1,4 +1,9 @@
-"""Vulnerable: SQL injection via f-string and string concatenation."""
+"""
+Vulnerable: SQL injection via f-string and string concatenation.
+
+corpus_labels:
+  sql-injection: 3
+"""
 
 import sqlite3
 

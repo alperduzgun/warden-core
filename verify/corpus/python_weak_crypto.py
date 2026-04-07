@@ -1,4 +1,9 @@
-"""Vulnerable: Weak cryptographic algorithms."""
+"""
+Vulnerable: Weak cryptographic algorithms in password context.
+
+corpus_labels:
+  weak-crypto: 1
+"""
 
 import hashlib
 import hmac

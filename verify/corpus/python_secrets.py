@@ -1,4 +1,9 @@
-"""Vulnerable: Hardcoded secrets and credentials."""
+"""
+Vulnerable: Hardcoded secrets and credentials.
+
+corpus_labels:
+  hardcoded-password: 3
+"""
 
 import os
 
@@ -6,6 +11,9 @@ import os
 OPENAI_API_KEY = "sk-proj-1234567890abcdef1234567890abcdef1234567890abcdef"
 AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
 AWS_SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+# OAuth token (hardcoded, not from env)
+token = "ghp_1234567890abcdef1234567890abcdef12"
 
 # Hardcoded database password
 DB_PASSWORD = "super_secret_password_123"
