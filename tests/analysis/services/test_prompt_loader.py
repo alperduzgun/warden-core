@@ -190,6 +190,23 @@ class TestCaching:
 # ---------------------------------------------------------------------------
 
 
+class TestSafety:
+    def test_rejects_invalid_prompt_name(self, tmp_prompts_dir: Path) -> None:
+        loader = PromptLoader(project_root=None, default_prompts_dir=tmp_prompts_dir)
+        with pytest.raises(ValueError, match="Invalid prompt name"):
+            loader.load("../etc/passwd")
+
+    def test_rejects_prompt_name_with_path_separator(self, tmp_prompts_dir: Path) -> None:
+        loader = PromptLoader(project_root=None, default_prompts_dir=tmp_prompts_dir)
+        with pytest.raises(ValueError, match="Invalid prompt name"):
+            loader.load("sub/dir")
+
+    def test_rejects_prompt_name_with_null_byte(self, tmp_prompts_dir: Path) -> None:
+        loader = PromptLoader(project_root=None, default_prompts_dir=tmp_prompts_dir)
+        with pytest.raises(ValueError, match="Invalid prompt name"):
+            loader.load("name\x00evil")
+
+
 class TestFindProjectRoot:
     def test_finds_warden_dir_in_cwd(self, tmp_path: Path) -> None:
         (tmp_path / ".warden").mkdir()
@@ -206,16 +223,23 @@ class TestFindProjectRoot:
         assert root == tmp_path.resolve()
 
     def test_returns_none_when_no_warden_dir(self, tmp_path: Path) -> None:
-        # tmp_path itself has no .warden — use a deep subdirectory
         subdir = tmp_path / "project" / "src"
         subdir.mkdir(parents=True)
-        with patch("warden.analysis.services.prompt_loader.Path.cwd", return_value=subdir):
+
+        original_is_dir = Path.is_dir
+
+        def is_dir_without_warden(self: Path) -> bool:
+            if self.name == ".warden":
+                return False
+            return original_is_dir(self)
+
+        with (
+            patch("warden.analysis.services.prompt_loader.Path.cwd", return_value=subdir),
+            patch.object(Path, "is_dir", autospec=True, side_effect=is_dir_without_warden),
+        ):
             root = PromptLoader._find_project_root()
-        # Root will be None OR it might find the real repo's .warden depending on env.
-        # The important thing: if no .warden found under tmp_path subtree, it returns None.
-        # We cannot assert None unconditionally because CI may have .warden in a parent.
-        # Just assert the return type is Path or None.
-        assert root is None or isinstance(root, Path)
+
+        assert root is None
 
 
 # ---------------------------------------------------------------------------

@@ -5,8 +5,8 @@ Resolution order:
   1. .warden/prompts/{name}.md  — project-local override (in cwd or nearest ancestor)
   2. src/warden/analysis/prompts/{name}.md  — package default
 
-Variable substitution uses Python str.format_map() with {{variable}} syntax
-matching the existing PromptManager convention ({{VAR}} placeholders).
+Variable substitution replaces ``{{VARIABLE}}`` placeholders directly,
+matching the existing PromptManager convention (``{{VAR}}`` placeholders).
 """
 
 from __future__ import annotations
@@ -14,6 +14,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Optional
+
+# Safe prompt name: letters, digits, underscores, hyphens only (no path separators)
+_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 from warden.shared.infrastructure.logging import get_logger
 
@@ -97,6 +100,11 @@ class PromptLoader:
 
     def _resolve(self, prompt_name: str) -> Path:
         """Return the path to use, preferring project override over default."""
+        if not _SAFE_NAME_RE.match(prompt_name):
+            raise ValueError(
+                f"Invalid prompt name {prompt_name!r}. "
+                "Only letters, digits, underscores and hyphens are allowed."
+            )
         override = self._override_path(prompt_name)
         if override and override.exists():
             logger.debug(
@@ -120,7 +128,14 @@ class PromptLoader:
         """Return the expected project-override path, or None if no project root."""
         if self._project_root is None:
             return None
-        return self._project_root / ".warden" / "prompts" / f"{prompt_name}.md"
+        expected_dir = (self._project_root / ".warden" / "prompts").resolve()
+        candidate = (expected_dir / f"{prompt_name}.md").resolve()
+        # Ensure the resolved path stays within the expected directory
+        if not str(candidate).startswith(str(expected_dir)):
+            raise ValueError(
+                f"Prompt path escapes the allowed directory: {candidate}"
+            )
+        return candidate
 
     def _read_cached(self, path: Path) -> str:
         key = str(path)

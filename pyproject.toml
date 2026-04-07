@@ -90,6 +90,7 @@ warden = "warden.main:main"
     "validation/frames/security/models/*.yaml",
     "templates/**/*",
     "llm/prompts/templates/**/*.txt",
+    "analysis/prompts/*.md",
 ]
 
 [tool.setuptools_scm]
