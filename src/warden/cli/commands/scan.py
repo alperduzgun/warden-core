@@ -183,6 +183,109 @@ def _attempt_self_healing_sync(error: Exception, level: str) -> bool:
         return False
 
 
+def _auto_init_warden_dir(project_root: Path, console: Any) -> None:
+    """Auto-create a minimal .warden/ on first scan if it doesn't exist (#534).
+
+    Only creates the directory and a stub config.yaml — does not run the full
+    interactive `warden init` flow. Subsequent scans are idempotent.
+
+    Resilience properties:
+    - Idempotent: returns immediately if .warden/ already exists.
+    - Atomic write: tempfile + os.replace so crash mid-write never leaves a
+      corrupt config.yaml.
+    - TOCTOU-safe: config_path existence checked after mkdir so concurrent
+      `warden scan` invocations don't overwrite each other.
+    - YAML-safe: project name is stripped of characters that would break YAML
+      double-quoted scalars.
+    """
+    import os as _os
+    import re as _re
+    import tempfile as _tempfile
+
+    warden_dir = project_root / ".warden"
+    config_path = warden_dir / "config.yaml"
+
+    if warden_dir.is_dir():
+        return  # Already initialised — nothing to do
+
+    if warden_dir.exists() or warden_dir.is_symlink():
+        # Path exists but is not a directory (e.g. a stray file or broken symlink).
+        # Proceeding would corrupt later code that expects a directory.
+        console.print(
+            f"[yellow]⚠ Cannot initialize [bold]{warden_dir.name}[/bold]: "
+            "the path exists but is not a directory. "
+            "Remove or rename it, then rerun the scan.[/yellow]"
+        )
+        _logger.warning("warden_dir_invalid_path", path=str(warden_dir))
+        return
+
+    try:
+        warden_dir.mkdir(parents=True, exist_ok=True)
+
+        # After mkdir, another concurrent process may have already written
+        # config.yaml — skip the write to avoid a silent overwrite.
+        if config_path.exists():
+            return
+
+        # Sanitize project name for safe YAML double-quoted scalar:
+        # strip control characters and backslash/double-quote that would
+        # require YAML escape sequences we don't emit.
+        raw_name = project_root.name or "project"
+        project_name = _re.sub(r'[\x00-\x1f"\\]', "", raw_name) or "project"
+
+        stub_config = (
+            "# Warden config — auto-created on first scan.\n"
+            "# Run 'warden init' for the full interactive setup.\n"
+            "\n"
+            "project:\n"
+            f'  name: "{project_name}"\n'
+            "\n"
+            "frames:\n"
+            "  - security\n"
+            "  - orphan\n"
+            "\n"
+            "# LLM provider — remove section to run in offline mode\n"
+            "# llm:\n"
+            "#   provider: ollama\n"
+            "#   model: qwen2.5-coder:7b\n"
+        )
+
+        # Atomic write: write to a temp file in the same directory, then
+        # os.replace (POSIX rename) so a crash mid-write never corrupts
+        # config.yaml.
+        fd, tmp_path = _tempfile.mkstemp(
+            dir=warden_dir, prefix=".cfg_tmp_", suffix=".yaml"
+        )
+        try:
+            with _os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(stub_config)
+            _os.replace(tmp_path, config_path)
+        except Exception:
+            try:
+                _os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        console.print(
+            "[dim]📁 Initialized [bold].warden/[/bold] — "
+            "run [bold cyan]warden init[/bold cyan] for full setup.[/dim]"
+        )
+        _logger.info("warden_dir_auto_created", path=str(warden_dir))
+    except PermissionError as exc:
+        _logger.warning("warden_dir_auto_init_failed", error=str(exc))
+        console.print(
+            f"[yellow]⚠️  Could not create .warden/ ({exc}). "
+            "Continuing without persistent config.[/yellow]"
+        )
+    except OSError as exc:
+        _logger.warning("warden_dir_auto_init_failed", error=str(exc))
+        console.print(
+            f"[yellow]⚠️  Could not create .warden/ ({exc}). "
+            "Continuing without persistent config.[/yellow]"
+        )
+
+
 def _run_scan_plan(paths: list[str] | None, level: str, max_files: int | None = None) -> None:
     """
     Generate and display a pre-scan analysis plan using ScanPlanner.
@@ -395,6 +498,12 @@ def scan_command(
         if plan:
             _run_scan_plan(paths=paths, level=level, max_files=max_files)
             return
+
+        # Auto-init: create minimal .warden/ on first scan (#534).
+        # Skip in CI mode: --ci is intended to be read-only and creating files
+        # would make the workspace dirty or fail on read-only checkouts.
+        if not ci:
+            _auto_init_warden_dir(Path.cwd(), console)
 
         # Auto-install scan dependencies based on analysis level
         if level != "basic":
