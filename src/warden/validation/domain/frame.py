@@ -152,7 +152,7 @@ class Finding:
     # after LLM verification. None when no LLM verification was performed (e.g.
     # deterministic or linter findings that are exempt from verification).
     verification_confidence: float | None = None
-    # Pattern match confidence (0.0–1.0). Set by context-aware pattern checks
+    # Pattern match confidence (0.0-1.0). Set by context-aware pattern checks
     # (e.g. SQLInjectionCheck) based on surrounding code analysis.
     # None = check did not assign confidence (treated as 1.0 for backward compat).
     pattern_confidence: float | None = None

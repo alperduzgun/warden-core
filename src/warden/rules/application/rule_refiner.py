@@ -193,7 +193,7 @@ async def refine_rules(
     Returns:
         :class:`RefinementResult` summarising what was done.
     """
-    from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader  # noqa: PLC0415
+    from warden.rules.infrastructure.yaml_loader import RulesYAMLLoader
 
     result = RefinementResult()
 
@@ -278,7 +278,7 @@ async def refine_rules(
                 ),
             )
             raw: str = response.content if hasattr(response, "content") else str(response)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "llm_classify_error",
                 rule_id=finding_rule_id,

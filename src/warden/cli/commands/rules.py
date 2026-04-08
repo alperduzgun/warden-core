@@ -357,8 +357,8 @@ def _resolve_fp_exclusions_path() -> Path:
 
     # Locate via installed package
     try:
-        import warden.validation.domain.fp_exclusions as _mod
         import inspect
+        import warden.validation.domain.fp_exclusions as _mod
         return Path(inspect.getfile(_mod))
     except Exception:
         return relative  # return the expected path so the caller can report "not found"

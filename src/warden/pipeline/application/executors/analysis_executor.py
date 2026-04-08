@@ -73,7 +73,7 @@ class AnalysisExecutor(BasePhaseExecutor):
 
                     # Timeout per LLM attempt: kept short so slow/hanging providers
                     # (e.g. Qwen CLI with large batch prompts) fall back to rules
-                    # quickly rather than blocking the pipeline for 320s × max_retries.
+                    # quickly rather than blocking the pipeline for 320s x max_retries.
                     # max_retries=1: quality analysis is best-effort; a second identical
                     # call on a slow provider just wastes time with no gain.
                     _file_count = len(code_files) if code_files else 1

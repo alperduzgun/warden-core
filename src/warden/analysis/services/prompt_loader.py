@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
 
 # Safe prompt name: letters, digits, underscores, hyphens only (no path separators)
 _SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
@@ -54,10 +53,10 @@ class PromptLoader:
 
     def __init__(
         self,
-        project_root: Optional[Path] = None,
-        default_prompts_dir: Optional[Path] = None,
+        project_root: Path | None = None,
+        default_prompts_dir: Path | None = None,
     ) -> None:
-        self._project_root: Optional[Path] = (
+        self._project_root: Path | None = (
             project_root.resolve() if project_root else self._find_project_root()
         )
         self._default_dir: Path = (default_prompts_dir or _DEFAULT_PROMPTS_DIR).resolve()
@@ -126,7 +125,7 @@ class PromptLoader:
             f"  Checked default:  {default}"
         )
 
-    def _override_path(self, prompt_name: str) -> Optional[Path]:
+    def _override_path(self, prompt_name: str) -> Path | None:
         """Return the expected project-override path, or None if no project root."""
         if self._project_root is None:
             return None
@@ -163,7 +162,7 @@ class PromptLoader:
         return _PLACEHOLDER_RE.sub(replace, template)
 
     @staticmethod
-    def _find_project_root() -> Optional[Path]:
+    def _find_project_root() -> Path | None:
         """Walk up from cwd to find the nearest directory containing `.warden/`.
 
         Returns None if no `.warden/` directory is found (prevents accidental

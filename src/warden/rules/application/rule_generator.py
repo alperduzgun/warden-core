@@ -98,7 +98,7 @@ async def generate_rules_for_project(
     Raises:
         ValueError: LLM output is unparseable or missing required fields.
     """
-    from warden.analysis.application.discovery.framework_detector import detect_frameworks_async  # noqa: PLC0415
+    from warden.analysis.application.discovery.framework_detector import detect_frameworks_async
 
     warden_dir = project_path / ".warden"
     single_file = warden_dir / "rules.yaml"
