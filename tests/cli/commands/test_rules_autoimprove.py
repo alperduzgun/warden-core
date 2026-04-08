@@ -270,6 +270,7 @@ class TestAutoimproveCliDryRun:
         asyncio.run(rules_mod._autoimprove_loop(
             corpus_dir=corpus_dir,
             fp_exclusions_file=fp_exclusions_file,
+            frame_id="security",
             check_id="sql-injection",
             iterations=1,
             min_improvement=0.005,

@@ -105,9 +105,15 @@ class MemoryManager:
             try:
                 async with aiofiles.open(fd, mode="w", encoding="utf-8") as f:
                     await f.write(content)
+                # aiofiles closes fd when the context manager exits; only
+                # open-by-path operations need an explicit os.close() here.
                 os.replace(tmp_path, self.memory_file)  # atomic on POSIX
             except Exception:
-                # Clean up temp file if rename fails
+                # Close the fd in case aiofiles never opened it, then clean up.
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
                 try:
                     os.unlink(tmp_path)
                 except OSError:

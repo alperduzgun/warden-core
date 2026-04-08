@@ -15,7 +15,10 @@ from warden.validation.domain.check import (
     CheckSeverity,
     ValidationCheck,
 )
+from warden.validation.domain.fp_exclusions import get_fp_exclusion_registry
 from warden.validation.domain.frame import CodeFile
+
+_fp_registry = get_fp_exclusion_registry()
 
 
 class CircuitBreakerCheck(ValidationCheck):
@@ -56,6 +59,21 @@ class CircuitBreakerCheck(ValidationCheck):
         has_circuit_breaker = self._has_circuit_breaker(code_file.content)
 
         if has_external_calls and not has_circuit_breaker:
+            # FP check: circuit-breaker check is file-level; check non-comment lines only.
+            non_comment_lines = [
+                ln for ln in code_file.content.splitlines()
+                if ln.strip() and not ln.strip().startswith(("#", "//", "/*", "*", '"""', "'''"))
+            ]
+            first_code_line = next(iter(non_comment_lines), "")
+            excl = _fp_registry.check(self.id, first_code_line, non_comment_lines[:10])
+            if excl.is_excluded:
+                return CheckResult(
+                    check_id=self.id,
+                    check_name=self.name,
+                    passed=True,
+                    findings=[],
+                    metadata={"has_external_calls": has_external_calls, "has_circuit_breaker": has_circuit_breaker, "excluded": True},
+                )
             findings.append(
                 CheckFinding(
                     check_id=self.id,

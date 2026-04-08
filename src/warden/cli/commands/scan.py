@@ -1354,6 +1354,7 @@ async def _run_autoimprove_post_scan(
         await _autoimprove_loop(
             corpus_dir=corpus_dir,
             fp_exclusions_file=fp_exclusions_file,
+            frame_id="security",
             check_id=check_id,
             iterations=iterations,
             min_improvement=0.005,

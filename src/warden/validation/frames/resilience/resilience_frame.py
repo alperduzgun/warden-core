@@ -374,13 +374,25 @@ class ResilienceFrame(ValidationFrame, TaintAware, ChunkingAware):
                 logger.debug("chaos_no_externals_skipping", file=code_file.path)
                 return self._create_result(code_file, findings, context, start_time)
 
-            # STEP 2: Enrich with LSP (cheap, with timeout)
+            # STEP 2: Static checks (always run — fast, deterministic, no LLM)
+            # These were previously dead code; wired here so timeout/error-handling/
+            # circuit-breaker patterns are caught even when LLM is unavailable.
+            static_findings = await self._run_static_checks(code_file)
+            findings.extend(static_findings)
+            if static_findings:
+                logger.info(
+                    "resilience_static_checks_findings",
+                    file=code_file.path,
+                    count=len(static_findings),
+                )
+
+            # STEP 3: Enrich with LSP (cheap, with timeout)
             await self._enrich_with_lsp(code_file, context)
 
-            # STEP 3: Search related resilience patterns (VectorDB)
+            # STEP 4: Search related resilience patterns (VectorDB)
             related_patterns = await self._search_related_patterns(code_file, context)
 
-            # STEP 4: LLM analysis (expensive, only if LLM available)
+            # STEP 5: LLM analysis (expensive, only if LLM available)
             if self._has_llm_service():
                 svc = ChunkingService()
                 if svc.should_chunk(code_file, self.chunking_config):
@@ -433,6 +445,15 @@ class ResilienceFrame(ValidationFrame, TaintAware, ChunkingAware):
             logger.debug(
                 "structure_extracted_tree_sitter", imports=len(context.imports), calls=len(context.function_calls)
             )
+            # If the AST provider parsed successfully but extracted nothing from a non-trivial
+            # file, the provider's node types are likely incompatible with _walk_ast_node
+            # (e.g. python-native returns ast.AST nodes, not tree-sitter nodes).
+            # Fall back to regex to ensure has_potential_externals is accurate.
+            if not context.has_potential_externals and len(code_file.content or "") > 50:
+                regex_context = self._extract_with_regex(code_file)
+                if regex_context.has_potential_externals:
+                    logger.debug("tree_sitter_empty_fallback_to_regex", file=code_file.path)
+                    context = regex_context
         except Exception as e:
             # Fallback to regex (always works)
             logger.debug("tree_sitter_fallback_to_regex", reason=str(e))
@@ -959,7 +980,10 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                 if hasattr(self.llm_service, "set_safe_num_predict"):
                     self.llm_service.set_safe_num_predict(_safe_tokens)
             else:
-                _safe_tokens = 800
+                # Cloud providers (qwen_cloud, openai, etc.) have large context
+                # windows. 800 tokens caps the JSON response too tightly when there
+                # are many findings. 2000 comfortably fits 15-20 findings.
+                _safe_tokens = 2000
 
             request = LlmRequest(
                 system_prompt=CHAOS_SYSTEM_PROMPT,
@@ -1059,6 +1083,47 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
     # =========================================================================
     # Fallback: Basic Analysis (No LLM)
     # =========================================================================
+
+    async def _run_static_checks(self, code_file: CodeFile) -> list[Finding]:
+        """Run deterministic internal checks (timeout, circuit-breaker, error-handling).
+
+        These checks were previously dead code — they exist in _internal/ but were
+        never called from execute_async. Wired here so pattern-level findings are
+        always produced regardless of LLM availability.
+
+        Each check is isolated: a failure in one does not abort the others.
+        """
+        from warden.validation.frames.resilience._internal.circuit_breaker_check import CircuitBreakerCheck
+        from warden.validation.frames.resilience._internal.error_handling_check import ErrorHandlingCheck
+        from warden.validation.frames.resilience._internal.timeout_check import TimeoutCheck
+
+        all_check_findings = []
+        for check_cls in (TimeoutCheck, CircuitBreakerCheck, ErrorHandlingCheck):
+            try:
+                result = await check_cls().execute_async(code_file)
+                all_check_findings.extend(result.findings)
+            except Exception as exc:
+                logger.warning(
+                    "resilience_static_check_failed",
+                    check=check_cls.__name__,
+                    file=code_file.path,
+                    error=str(exc),
+                )
+
+        return [
+            Finding(
+                id=f"{self.frame_id}-{cf.check_id}-{i}",
+                severity=cf.severity.value.lower(),
+                message=cf.message,
+                location=cf.location,
+                detail=cf.suggestion,
+                code=cf.code_snippet,
+                # Static/pattern-based findings are deterministic — skip LLM verification
+                # to prevent the verification phase from discarding them as false positives.
+                detection_source="llm_independent",
+            )
+            for i, cf in enumerate(all_check_findings)
+        ]
 
     def _basic_analysis(self, code_file: CodeFile, context: ChaosContext) -> list[Finding]:
         """

@@ -148,6 +148,7 @@ class FindingsPostProcessor:
                                 llm_client=verify_llm,
                                 memory_manager=verify_mem_manager,
                                 enabled=True,
+                                project_root=self.project_root,
                             )
 
                         verified_findings_dicts = await verifier.verify_findings_async(findings_to_verify, context)

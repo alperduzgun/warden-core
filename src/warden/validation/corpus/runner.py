@@ -130,9 +130,9 @@ def _infer_labels_from_filename(path: Path, check_ids: list[str]) -> dict[str, i
     """
     stem = path.stem.lower()
     if stem.endswith("_tp"):
-        return {cid: 1 for cid in check_ids}
+        return dict.fromkeys(check_ids, 1)
     if stem.endswith("_fp") or stem.startswith("clean_"):
-        return {cid: 0 for cid in check_ids}
+        return dict.fromkeys(check_ids, 0)
     return None
 
 
@@ -260,8 +260,8 @@ class CorpusRunner:
                     1 for f in frame_result.findings
                     if cid in (f.id or "")
                     and (
-                        getattr(f, "pattern_confidence", None) is None
-                        or getattr(f, "pattern_confidence") >= self.CONFIDENCE_THRESHOLD
+                        f.pattern_confidence is None
+                        or f.pattern_confidence >= self.CONFIDENCE_THRESHOLD
                     )
                 )
 

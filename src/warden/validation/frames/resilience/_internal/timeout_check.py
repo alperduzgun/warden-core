@@ -17,7 +17,10 @@ from warden.validation.domain.check import (
     CheckSeverity,
     ValidationCheck,
 )
+from warden.validation.domain.fp_exclusions import get_fp_exclusion_registry
 from warden.validation.domain.frame import CodeFile
+
+_fp_registry = get_fp_exclusion_registry()
 
 logger = get_logger(__name__)
 
@@ -129,40 +132,75 @@ class TimeoutCheck(ValidationCheck):
     ]
 
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
-        """Execute timeout configuration check."""
+        """Execute timeout configuration check.
+
+        Scans the full file content with DOTALL so multi-line HTTP calls
+        (idiomatic Python formatting) are detected correctly.
+        """
         findings: list[CheckFinding] = []
+        content = code_file.content
+        lines = content.split("\n")
+
+        # Pre-compute byte offset → line number mapping for O(1) lookup.
+        line_start_offsets: list[int] = [0]
+        for ln in lines:
+            line_start_offsets.append(line_start_offsets[-1] + len(ln) + 1)
+
+        def _offset_to_line(offset: int) -> int:
+            lo, hi = 0, len(line_start_offsets) - 1
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if line_start_offsets[mid] <= offset:
+                    lo = mid
+                else:
+                    hi = mid - 1
+            return lo + 1  # 1-based
+
+        # Track already-flagged (line, check_description) pairs to avoid duplicate findings
+        # when a pattern matches multiple times within the same multi-line call.
+        seen: set[tuple[int, str]] = set()
 
         for pattern_str, description, suggestion in self.RISKY_PATTERNS:
             pattern = re.compile(pattern_str, re.IGNORECASE | re.DOTALL)
 
-            for line_num, line in enumerate(code_file.content.split("\n"), start=1):
-                # Skip comments
-                if line.strip().startswith("#") or line.strip().startswith("//"):
+            for match in pattern.finditer(content):
+                line_num = _offset_to_line(match.start())
+                matched_line = lines[line_num - 1] if line_num <= len(lines) else ""
+
+                # Skip if the opening line is a comment
+                if matched_line.strip().startswith(("#", "//")):
                     continue
 
-                if "requests" in line:
-                    match = pattern.search(line)
-                else:
-                    match = pattern.search(line)
-                if match:
-                    findings.append(
-                        CheckFinding(
-                            check_id=self.id,
-                            check_name=self.name,
-                            severity=self.severity,
-                            message=f"Missing timeout: {description}",
-                            location=f"{code_file.path}:{line_num}",
-                            code_snippet=line.strip(),
-                            suggestion=(
-                                f"Add timeout to prevent indefinite hangs:\n"
-                                f"✅ GOOD: {suggestion}\n"
-                                f"❌ BAD: {match.group(0)} (no timeout)\n\n"
-                                "Recommended timeout: 30s for external APIs, "
-                                "10s for internal services, 5s for databases"
-                            ),
-                            documentation_url="https://www.python-httpx.org/advanced/#timeout-configuration",
-                        )
+                key = (line_num, description)
+                if key in seen:
+                    continue
+                seen.add(key)
+
+                ctx_start = max(0, line_num - 4)
+                ctx_end = min(len(lines), line_num + 3)
+                context = lines[ctx_start:ctx_end]
+                excl = _fp_registry.check(self.id, matched_line, context)
+                if excl.is_excluded:
+                    continue
+
+                findings.append(
+                    CheckFinding(
+                        check_id=self.id,
+                        check_name=self.name,
+                        severity=self.severity,
+                        message=f"Missing timeout: {description}",
+                        location=f"{code_file.path}:{line_num}",
+                        code_snippet=matched_line.strip() or match.group(0)[:120],
+                        suggestion=(
+                            f"Add timeout to prevent indefinite hangs:\n"
+                            f"✅ GOOD: {suggestion}\n"
+                            f"❌ BAD: {match.group(0)[:80].strip()} (no timeout)\n\n"
+                            "Recommended timeout: 30s for external APIs, "
+                            "10s for internal services, 5s for databases"
+                        ),
+                        documentation_url="https://www.python-httpx.org/advanced/#timeout-configuration",
                     )
+                )
 
         return CheckResult(
             check_id=self.id,

@@ -13,7 +13,7 @@ AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE"
 AWS_SECRET_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
 # OAuth token (hardcoded, not from env)
-token = "ghp_1234567890abcdef1234567890abcdef12"
+token = "GITHUB_TOKEN_EXAMPLE_xxxxxxxxxxxxxxxxxxx"
 
 # Hardcoded database password
 DB_PASSWORD = "super_secret_password_123"
