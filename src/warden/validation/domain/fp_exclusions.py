@@ -163,8 +163,8 @@ _LIBRARY_SAFE_PATTERNS: dict[str, list[re.Pattern]] = {
     "error-handling": [
         # Pattern definitions inside check files
         re.compile(r'\bRISKY_PATTERNS\s*[=:\[]|\bNETWORK_PATTERNS\s*[=:\[]'),
-        # Re-raise patterns — bare except that immediately re-raises is fine
-        re.compile(r'\bexcept\b.*:\s*\n\s*raise\b', re.IGNORECASE),
+        # Re-raise patterns — same-line "except ...: raise" or context line "raise"
+        re.compile(r'\bexcept\b.*:\s*raise\b', re.IGNORECASE),
         # Test-only: catching in test assertions
         re.compile(r'\bpytest\.raises\b|\bassertRaises\b', re.IGNORECASE),
     ],

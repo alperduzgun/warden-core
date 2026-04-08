@@ -17,10 +17,10 @@ from warden.validation.domain.check import (
     CheckSeverity,
     ValidationCheck,
 )
-from warden.validation.domain.fp_exclusions import FPExclusionRegistry
+from warden.validation.domain.fp_exclusions import get_fp_exclusion_registry
 from warden.validation.domain.frame import CodeFile
 
-_fp_registry = FPExclusionRegistry()
+_fp_registry = get_fp_exclusion_registry()
 
 logger = get_logger(__name__)
 

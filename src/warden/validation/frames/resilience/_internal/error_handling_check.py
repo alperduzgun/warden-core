@@ -16,10 +16,10 @@ from warden.validation.domain.check import (
     CheckSeverity,
     ValidationCheck,
 )
-from warden.validation.domain.fp_exclusions import FPExclusionRegistry
+from warden.validation.domain.fp_exclusions import get_fp_exclusion_registry
 from warden.validation.domain.frame import CodeFile
 
-_fp_registry = FPExclusionRegistry()
+_fp_registry = get_fp_exclusion_registry()
 
 
 class ErrorHandlingCheck(ValidationCheck):
@@ -120,19 +120,19 @@ class ErrorHandlingCheck(ValidationCheck):
     async def execute_async(self, code_file: CodeFile) -> CheckResult:
         """Execute error handling check."""
         findings: list[CheckFinding] = []
+        lines_list = code_file.content.split("\n")
 
         # Check for risky error handling patterns
         for pattern_str, description, suggestion in self.RISKY_PATTERNS:
             pattern = re.compile(pattern_str, re.IGNORECASE | re.DOTALL)
 
-            for line_num, line in enumerate(code_file.content.split("\n"), start=1):
+            for line_num, line in enumerate(lines_list, start=1):
                 # Skip comments
                 if line.strip().startswith("#") or line.strip().startswith("//"):
                     continue
 
                 match = pattern.search(line)
                 if match:
-                    lines_list = code_file.content.split("\n")
                     ctx_start = max(0, line_num - 4)
                     ctx_end = min(len(lines_list), line_num + 3)
                     context = lines_list[ctx_start:ctx_end]
