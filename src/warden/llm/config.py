@@ -323,10 +323,13 @@ def _is_safe_endpoint(url: str, allow_lan: bool = False) -> bool:
 
     Always blocked:
         loopback (127/8, ::1), link-local/metadata (169.254/16, fe80::/10),
-        ULA (fc00::/7), unspecified (0.0.0.0/::), localhost by name.
+        unspecified (0.0.0.0/::), localhost by name.
 
     Blocked when allow_lan=False (cloud providers):
-        RFC1918 (10/8, 172.16/12, 192.168/16).
+        RFC1918 (10/8, 172.16/12, 192.168/16), ULA (fc00::/7).
+
+    Allowed when allow_lan=True (local providers such as Ollama):
+        RFC1918, ULA, and loopback hostnames.
     """
     try:
         parsed = urllib.parse.urlparse(url)

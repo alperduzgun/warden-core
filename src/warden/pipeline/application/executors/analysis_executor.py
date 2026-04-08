@@ -76,7 +76,6 @@ class AnalysisExecutor(BasePhaseExecutor):
                     # quickly rather than blocking the pipeline for 320s x max_retries.
                     # max_retries=1: quality analysis is best-effort; a second identical
                     # call on a slow provider just wastes time with no gain.
-                    _file_count = len(code_files) if code_files else 1
                     _is_local = getattr(self.llm_service, "is_local", False) if self.llm_service else False
                     _per_batch_timeout = 45 if _is_local else 90
                     phase = AnalysisPhase(

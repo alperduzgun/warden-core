@@ -130,7 +130,9 @@ class FindingVerificationService:
                 self._get(finding, "detection_source")
                 or self._get(finding, "detectionSource")
             )
-            pattern_conf = self._get(finding, "pattern_confidence") or self._get(finding, "patternConfidence")
+            _pc1 = self._get(finding, "pattern_confidence")
+            _pc2 = self._get(finding, "patternConfidence")
+            pattern_conf = _pc1 if _pc1 is not None else _pc2
             has_reduced_confidence = (
                 pattern_conf is not None and float(pattern_conf) < 0.75
             )
