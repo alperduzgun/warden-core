@@ -156,7 +156,7 @@ class AntiPatternFrame(ValidationFrame):
                 logger.debug("tree_sitter_provider_not_available")
             # Register Python native provider if available
             try:
-                from warden.ast.providers.python_provider import PythonASTProvider
+                from warden.ast.providers.python_ast_provider import PythonASTProvider
 
                 cls._registry.register(PythonASTProvider())
             except ImportError:
