@@ -145,6 +145,29 @@ _LIBRARY_SAFE_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r'subprocess\.(run|call|check_output)\s*\(\s*\[', re.IGNORECASE),
         re.compile(r'\bDANGEROUS_PATTERNS\s*[=:\[]'),
     ],
+    # ── Resilience frame static checks ──────────────────────────────────────
+    "timeout": [
+        # Pattern/constant definitions inside warden check files — not real network calls
+        re.compile(r'\bRISKY_PATTERNS\s*[=:\[]'),
+        # requests.Session or httpx.Client configured once with timeout (caller passes it)
+        re.compile(r'\bself\._session\b|\bself\._client\b', re.IGNORECASE),
+        # Test fixtures: mock HTTP calls in test files never need real timeouts
+        re.compile(r'\bMagicMock\b|\bpatch\b.*requests|\bresponses\.add\b', re.IGNORECASE),
+    ],
+    "circuit-breaker": [
+        # Pattern definitions inside check files
+        re.compile(r'\bGOOD_PATTERNS\s*[=:\[]|\bRISKY_PATTERNS\s*[=:\[]'),
+        # Circuit breaker implementation files themselves
+        re.compile(r'\bclass.*CircuitBreaker\b', re.IGNORECASE),
+    ],
+    "error-handling": [
+        # Pattern definitions inside check files
+        re.compile(r'\bRISKY_PATTERNS\s*[=:\[]|\bNETWORK_PATTERNS\s*[=:\[]'),
+        # Re-raise patterns — bare except that immediately re-raises is fine
+        re.compile(r'\bexcept\b.*:\s*\n\s*raise\b', re.IGNORECASE),
+        # Test-only: catching in test assertions
+        re.compile(r'\bpytest\.raises\b|\bassertRaises\b', re.IGNORECASE),
+    ],
 }
 
 

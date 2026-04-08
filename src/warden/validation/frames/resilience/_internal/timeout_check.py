@@ -17,7 +17,10 @@ from warden.validation.domain.check import (
     CheckSeverity,
     ValidationCheck,
 )
+from warden.validation.domain.fp_exclusions import FPExclusionRegistry
 from warden.validation.domain.frame import CodeFile
+
+_fp_registry = FPExclusionRegistry()
 
 logger = get_logger(__name__)
 
@@ -145,6 +148,13 @@ class TimeoutCheck(ValidationCheck):
                 else:
                     match = pattern.search(line)
                 if match:
+                    lines_list = code_file.content.split("\n")
+                    ctx_start = max(0, line_num - 4)
+                    ctx_end = min(len(lines_list), line_num + 3)
+                    context = lines_list[ctx_start:ctx_end]
+                    excl = _fp_registry.check(self.id, line, context)
+                    if excl.is_excluded:
+                        continue
                     findings.append(
                         CheckFinding(
                             check_id=self.id,

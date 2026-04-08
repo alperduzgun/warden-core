@@ -255,10 +255,15 @@ def autoimprove_command(
         "--corpus",
         help="Corpus directory [default: verify/corpus/]",
     ),
+    frame: str = typer.Option(
+        "security",
+        "--frame",
+        help="Frame to autoimprove: security | resilience",
+    ),
     check: str | None = typer.Option(
         None,
         "--check",
-        help="Improve only this check (e.g. sql-injection, xss)",
+        help="Improve only this check (e.g. sql-injection, timeout, circuit-breaker)",
     ),
     iterations: int = typer.Option(
         20,
@@ -291,6 +296,11 @@ def autoimprove_command(
       3. Temporarily apply the pattern to fp_exclusions.py
       4. Re-score the corpus — keep if F1 improved, revert otherwise
 
+    Supports both security and resilience frames:
+        warden rules autoimprove --frame security --fast --dry-run
+        warden rules autoimprove --frame resilience --corpus verify/corpus/resilience/ --fast
+        warden rules autoimprove --check timeout --frame resilience
+
     Examples:
         warden rules autoimprove --fast --dry-run
         warden rules autoimprove --corpus verify/corpus/ --iterations 5
@@ -315,6 +325,7 @@ def autoimprove_command(
             fast = True
 
     console.print("\n[bold cyan]Warden Rules Autoimprove[/bold cyan]")
+    console.print(f"  Frame:      {frame}")
     console.print(f"  Corpus:     {corpus.resolve()}")
     console.print(f"  Check:      {check or '(all)'}")
     console.print(f"  Iterations: {iterations}")
@@ -326,6 +337,7 @@ def autoimprove_command(
         _autoimprove_loop(
             corpus_dir=corpus,
             fp_exclusions_file=fp_exclusions_file,
+            frame_id=frame,
             check_id=check,
             iterations=iterations,
             min_improvement=min_improvement,
@@ -431,25 +443,28 @@ def _collect_fp_examples(corpus_dir: Path, check_id: str | None) -> list[dict]:
     return examples[:20]
 
 
-async def _run_corpus_eval(corpus_dir: Path, check_id: str | None, fast: bool) -> "CorpusResult":  # noqa: F821
+async def _run_corpus_eval(corpus_dir: Path, check_id: str | None, fast: bool, frame_id: str = "security") -> "CorpusResult":  # noqa: F821
     """Run corpus evaluation and return CorpusResult."""
     from warden.validation.corpus.runner import CorpusRunner
     from warden.validation.infrastructure.frame_registry import get_registry
 
     registry = get_registry()
     registry.discover_all()
-    frame_class = registry.get_frame_by_id("security")
+    frame_class = registry.get_frame_by_id(frame_id)
     if frame_class is None:
-        raise RuntimeError("Security frame not found in registry.")
+        raise RuntimeError(f"Frame '{frame_id}' not found in registry.")
 
     frame = frame_class()
 
     if fast:
+        # Attributes vary by frame; try all known LLM-related attributes.
+        # Security frame uses _llm_client/_verifier; resilience frame uses llm_service.
         for attr, value in (
             ("_llm_client", None),
             ("_llm", None),
             ("_verifier", None),
             ("_use_llm", False),
+            ("llm_service", None),   # resilience frame
         ):
             if hasattr(frame, attr):
                 try:
@@ -603,6 +618,7 @@ def _make_demo_pattern(check_id: str, fp_examples: list[dict]) -> str:
 async def _autoimprove_loop(
     corpus_dir: Path,
     fp_exclusions_file: Path,
+    frame_id: str,
     check_id: str | None,
     iterations: int,
     min_improvement: float,
@@ -634,7 +650,7 @@ async def _autoimprove_loop(
     console.print("[bold]Step 1/N  Baseline evaluation[/bold]")
     with console.status("Running baseline corpus eval…"):
         try:
-            baseline_result = await _run_corpus_eval(corpus_dir, check_id, fast)
+            baseline_result = await _run_corpus_eval(corpus_dir, check_id, fast, frame_id)
         except Exception as exc:
             console.print(f"[red]Baseline eval failed: {exc}[/red]")
             return
@@ -743,7 +759,7 @@ async def _autoimprove_loop(
         # Re-evaluate corpus
         with console.status("Re-scoring corpus…"):
             try:
-                new_result = await _run_corpus_eval(corpus_dir, check_id, fast)
+                new_result = await _run_corpus_eval(corpus_dir, check_id, fast, frame_id)
             except Exception as exc:
                 console.print(f"  [red]Corpus eval failed after patch: {exc}[/red]")
                 _revert_file(fp_exclusions_file, original_content)
