@@ -78,8 +78,10 @@ def fetch_data(url):
         result = await frame.execute_async(code_file)
 
         assert result.status == "warning"  # High severity = warning (if not critical blocker)
-        assert result.issues_found == 1
-        assert result.findings[0].message == "Missing timeout in network call"
+        # Static checks (timeout, circuit-breaker, error-handling) now run before LLM,
+        # so issues_found includes both static findings and the mocked LLM finding.
+        assert result.issues_found >= 1
+        assert any(f.message == "Missing timeout in network call" for f in result.findings)
 
 
 @pytest.mark.asyncio
