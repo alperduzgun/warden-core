@@ -43,9 +43,22 @@ class BaseDetector(ABC):
         lines: list[str],
         ast_root: ASTNode | None = None,
     ) -> list[AntiPatternViolation]:
-        """Detect anti-patterns using AST if available, else regex."""
+        """Detect anti-patterns using AST if available, else regex.
+
+        Falls back to regex when AST is present but yields no results on a
+        non-trivial file — this handles cases where the AST provider's node
+        type representation is incompatible with the detector's expectations
+        (e.g. python-native provider vs tree-sitter string node types).
+        """
         if ast_root:
-            return self.detect_ast(code_file, language, lines, ast_root)
+            results = self.detect_ast(code_file, language, lines, ast_root)
+            if results:
+                return results
+            # AST yielded nothing on a non-trivial file — provider may use a
+            # different node-type vocabulary; try regex as a safety net.
+            if len(lines) > 5:
+                return self.detect_regex(code_file, language, lines)
+            return results
         return self.detect_regex(code_file, language, lines)
 
     @staticmethod
