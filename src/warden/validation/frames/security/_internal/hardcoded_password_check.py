@@ -17,6 +17,7 @@ from warden.validation.domain.check import (
     CheckSeverity,
     ValidationCheck,
 )
+from warden.validation.domain.fp_exclusions import get_fp_exclusion_registry
 from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
@@ -95,6 +96,8 @@ class HardcodedPasswordCheck(ValidationCheck):
             re.compile(r"getpass\("),  # Password prompt
         ]
 
+        self._fp_registry = get_fp_exclusion_registry()
+
         # Pre-compile weak password patterns
         self._compiled_weak_patterns = [
             (re.compile(rf'["\']({weak_password})["\']', re.IGNORECASE), weak_password)
@@ -153,6 +156,16 @@ class HardcodedPasswordCheck(ValidationCheck):
                 match = compiled_pattern.search(line)
 
                 if match and self._is_likely_password(match.group(0)):
+                    # FP exclusion (path-based: scanner impl files contain pattern strings)
+                    exclusion = self._fp_registry.check(
+                        check_id=self.id,
+                        matched_line=line,
+                        context_lines=[],
+                        file_path=str(code_file.path),
+                    )
+                    if exclusion.is_excluded:
+                        break
+
                     # Check if suppressed via inline comment
                     suppression_matcher = self._get_suppression_matcher(code_file.path)
                     if suppression_matcher and suppression_matcher.is_suppressed(

@@ -182,6 +182,14 @@ class FPExclusionRegistry:
     to decide whether the match is a known FP and what confidence to assign.
     """
 
+    # Compiled once at class level — matches Warden's own security check
+    # implementation files (frames/*/\_internal/*_check.py).  These files
+    # contain regex/pattern strings that look like real vulnerabilities to
+    # the very checks they implement.
+    _SCANNER_IMPL_PATH_RE = re.compile(
+        r"[/\\]frames[/\\]\w+[/\\]_internal[/\\][^/\\]+_check\.py$"
+    )
+
     def check(
         self,
         check_id: str,
@@ -196,7 +204,7 @@ class FPExclusionRegistry:
             check_id:      Check identifier, e.g. ``"sql-injection"``
             matched_line:  The exact source line that triggered the pattern
             context_lines: Surrounding lines (typically ±7 from the match)
-            file_path:     Source file path (reserved for future path-based rules)
+            file_path:     Source file path used for path-based exclusions
 
         Returns:
             ExclusionResult:
@@ -204,6 +212,13 @@ class FPExclusionRegistry:
               - ``is_excluded=False`` → proceed; ``confidence_adjustment`` may
                 lower the default confidence for soft FPs
         """
+        # Layer 0: path-based — security scanner implementation files contain
+        # pattern strings (SQL, XSS, secrets regexes) that match their own
+        # checks.  Any finding inside frames/*/_internal/*_check.py is a FP.
+        if file_path and self._SCANNER_IMPL_PATH_RE.search(file_path):
+            logger.debug("fp_excluded_scanner_impl", check=check_id, file=file_path[-60:])
+            return ExclusionResult(is_excluded=True, reason="scanner_implementation_file")
+
         # Layer 1: comment / docstring lines → hard exclude
         if _is_comment_line(matched_line):
             logger.debug("fp_excluded_comment", check=check_id, line=matched_line[:80])

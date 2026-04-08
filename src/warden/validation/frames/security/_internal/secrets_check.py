@@ -18,6 +18,7 @@ from warden.validation.domain.check import (
     CheckSeverity,
     ValidationCheck,
 )
+from warden.validation.domain.fp_exclusions import get_fp_exclusion_registry
 from warden.validation.domain.frame import CodeFile
 
 logger = get_logger(__name__)
@@ -102,6 +103,8 @@ class SecretsCheck(ValidationCheck):
         # Pre-compile allowed patterns too
         self._compiled_allowed = [re.compile(p) for p in self.allowed_patterns]
 
+        self._fp_registry = get_fp_exclusion_registry()
+
     async def execute_async(self, code_file: CodeFile, context=None) -> CheckResult:
         """Execute secrets detection."""
         findings: list[CheckFinding] = []
@@ -116,6 +119,16 @@ class SecretsCheck(ValidationCheck):
                 match = compiled_pattern.search(line)
 
                 if match:
+                    # FP exclusion (path-based: scanner impl files contain pattern strings)
+                    exclusion = self._fp_registry.check(
+                        check_id=self.id,
+                        matched_line=line,
+                        context_lines=[],
+                        file_path=str(code_file.path),
+                    )
+                    if exclusion.is_excluded:
+                        continue
+
                     # Check if suppressed via inline comment
                     suppression_matcher = self._get_suppression_matcher(code_file.path)
                     if suppression_matcher and suppression_matcher.is_suppressed(
