@@ -445,6 +445,15 @@ class ResilienceFrame(ValidationFrame, TaintAware, ChunkingAware):
             logger.debug(
                 "structure_extracted_tree_sitter", imports=len(context.imports), calls=len(context.function_calls)
             )
+            # If the AST provider parsed successfully but extracted nothing from a non-trivial
+            # file, the provider's node types are likely incompatible with _walk_ast_node
+            # (e.g. python-native returns ast.AST nodes, not tree-sitter nodes).
+            # Fall back to regex to ensure has_potential_externals is accurate.
+            if not context.has_potential_externals and len(code_file.content or "") > 50:
+                regex_context = self._extract_with_regex(code_file)
+                if regex_context.has_potential_externals:
+                    logger.debug("tree_sitter_empty_fallback_to_regex", file=code_file.path)
+                    context = regex_context
         except Exception as e:
             # Fallback to regex (always works)
             logger.debug("tree_sitter_fallback_to_regex", reason=str(e))
@@ -1109,6 +1118,9 @@ Identify external dependencies and missing resilience patterns. Return JSON."""
                 location=cf.location,
                 detail=cf.suggestion,
                 code=cf.code_snippet,
+                # Static/pattern-based findings are deterministic — skip LLM verification
+                # to prevent the verification phase from discarding them as false positives.
+                detection_source="llm_independent",
             )
             for i, cf in enumerate(all_check_findings)
         ]
