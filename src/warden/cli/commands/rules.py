@@ -311,7 +311,7 @@ def autoimprove_command(
         raise typer.Exit(2)
 
     # Auto-select frame-specific corpus subdirectory when --corpus is not overridden
-    if frame != "security":
+    if frame != "security" and corpus == Path("verify/corpus"):
         suggested = corpus / frame
         if suggested.exists():
             corpus = suggested
