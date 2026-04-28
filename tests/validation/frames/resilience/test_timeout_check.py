@@ -138,3 +138,25 @@ RISKY_PATTERNS = [
     # RISKY_PATTERNS matches _LIBRARY_SAFE_PATTERNS["timeout"] exclusion
     assert result.passed is True
     assert len(result.findings) == 0
+
+
+@pytest.mark.asyncio
+async def test_scanner_impl_path_excluded():
+    """Check files inside _internal/ should be excluded via Layer 0 (file_path)."""
+    code = '''
+import requests
+
+def fetch(url):
+    return requests.get(url)
+'''
+    code_file = CodeFile(
+        path="src/warden/validation/frames/resilience/_internal/timeout_check.py",
+        content=code,
+        language="python",
+    )
+    check = TimeoutCheck()
+    result = await check.execute_async(code_file)
+
+    # file_path triggers _SCANNER_IMPL_PATH_RE Layer 0 exclusion
+    assert result.passed is True
+    assert len(result.findings) == 0

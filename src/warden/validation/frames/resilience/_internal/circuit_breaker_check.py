@@ -65,7 +65,7 @@ class CircuitBreakerCheck(ValidationCheck):
                 if ln.strip() and not ln.strip().startswith(("#", "//", "/*", "*", '"""', "'''"))
             ]
             first_code_line = next(iter(non_comment_lines), "")
-            excl = _fp_registry.check(self.id, first_code_line, non_comment_lines[:10])
+            excl = _fp_registry.check(self.id, first_code_line, non_comment_lines[:10], file_path=str(code_file.path))
             if excl.is_excluded:
                 return CheckResult(
                     check_id=self.id,
