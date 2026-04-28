@@ -5,7 +5,6 @@ Warden hooks CLI — manage Git hooks installation.
 from pathlib import Path
 
 import typer
-
 from rich.console import Console
 
 console = Console()

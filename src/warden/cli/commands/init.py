@@ -4,6 +4,7 @@ from pathlib import Path
 
 import typer
 import yaml
+from rich.console import Console
 
 from warden.cli.commands.init_helpers import configure_vector_db
 from warden.cli.commands.init_steps import (
@@ -14,8 +15,6 @@ from warden.cli.commands.init_steps import (
     run_post_setup,
     select_mode,
 )
-
-from rich.console import Console
 
 console = Console()
 
@@ -121,10 +120,10 @@ def init_command(
         existing_config=existing_config,
     )
 
-    # --- Steps 5.5 – 8: Scaffolds, ignore files, rules, config comments ---
+    # --- Steps 5.5 - 8: Scaffolds, ignore files, rules, config comments ---
     generate_scaffolds(warden_dir, config_path, meta)
 
-    # --- Steps 9 – 16: Post-setup (semantic, agent, baseline, intel, CI, grammars, context) ---
+    # --- Steps 9 - 16: Post-setup (semantic, agent, baseline, intel, CI, grammars, context) ---
     # Minimal + CI: skip heavy post-setup steps, only generate CI workflow
     _is_minimal = mode_choice == "0"
     run_post_setup(
