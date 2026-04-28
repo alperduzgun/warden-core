@@ -86,3 +86,6 @@ src/warden_rust/target/
 target/
 **/*.rs.bk
 Cargo.lock.bak
+
+# Personal AI session notes (NOT committed)
+.notes/

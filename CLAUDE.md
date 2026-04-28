@@ -2,6 +2,13 @@
 
 Last refreshed: 2026-04-28 (per WCORE-CONSENSUS)
 
+> **AI Session Notes (gitignored — `.notes/`):**
+> Detailed runtime flow + architecture analysis, per dual-AI clash consensus 2026-04-28:
+> - **Quick reference (~5 min read):** `.notes/WARDEN-FLOW.md` — pipeline phases, frame list, providers, CLI, smart features
+> - **Full consensus (660 lines):** `.notes/WARDEN-FLOW-FULL.md` — every claim grep-verified, R2-corrected
+>
+> These docs capture the runtime flow so future AI sessions don't re-derive it. They are personal notes, NOT in git. If the codebase changes substantially, regenerate via dual clash workflow.
+
 ---
 
 ## Project Identity
