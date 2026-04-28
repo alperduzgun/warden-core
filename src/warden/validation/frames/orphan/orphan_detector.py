@@ -355,6 +355,16 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                 if def_type == "class" and self._is_port_or_interface(def_name, node):
                     continue
 
+                # Skip exception classes — used via raise/except in other files,
+                # which single-file analysis cannot see.
+                if def_type == "class" and self._is_exception_class(node):
+                    continue
+
+                # Skip enum classes — referenced via EnumClass.VALUE or type
+                # annotations across files; single-file analysis misses these.
+                if def_type == "class" and self._is_enum_class(node):
+                    continue
+
                 # Skip FastAPI dependency-injection functions (#637).
                 if def_type == "function" and self._is_fastapi_dependency(def_name):
                     continue
@@ -427,6 +437,51 @@ class PythonOrphanDetector(AbstractOrphanDetector):
                     base_name = base.attr
                 if base_name in ("ABC", "Protocol", "ABCMeta"):
                     return True
+        return False
+
+    @staticmethod
+    def _is_exception_class(node: ast.AST) -> bool:
+        """Return True if the class inherits from an exception base class.
+
+        Exception classes are raised and caught across files — single-file
+        analysis cannot see those usages and would always flag them as orphans.
+        """
+        _EXCEPTION_BASES = {
+            "Exception", "BaseException", "Error", "Warning",
+            "RuntimeError", "ValueError", "TypeError", "OSError",
+            "IOError", "KeyError", "AttributeError", "NotImplementedError",
+            "PermissionError", "TimeoutError", "ConnectionError",
+        }
+        if not isinstance(node, ast.ClassDef):
+            return False
+        for base in node.bases:
+            base_name = ""
+            if isinstance(base, ast.Name):
+                base_name = base.id
+            elif isinstance(base, ast.Attribute):
+                base_name = base.attr
+            if base_name in _EXCEPTION_BASES or base_name.endswith(("Error", "Exception", "Warning")):
+                return True
+        return False
+
+    @staticmethod
+    def _is_enum_class(node: ast.AST) -> bool:
+        """Return True if the class inherits from an Enum base class.
+
+        Enum classes are accessed via EnumClass.VALUE and type annotations
+        across files — single-file analysis cannot see those usages.
+        """
+        _ENUM_BASES = {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "auto"}
+        if not isinstance(node, ast.ClassDef):
+            return False
+        for base in node.bases:
+            base_name = ""
+            if isinstance(base, ast.Name):
+                base_name = base.id
+            elif isinstance(base, ast.Attribute):
+                base_name = base.attr
+            if base_name in _ENUM_BASES:
+                return True
         return False
 
     def _is_fastapi_dependency(self, name: str) -> bool:

@@ -223,6 +223,9 @@ class PythonASTProvider(IASTProvider):
         name = None
         if hasattr(py_node, "name") or isinstance(py_node, (ast.FunctionDef, ast.ClassDef)):
             name = py_node.name
+        elif isinstance(py_node, ast.Name):
+            # ast.Name uses .id (not .name) — e.g. variables, function references
+            name = py_node.id
         elif isinstance(py_node, ast.AnnAssign) and isinstance(py_node.target, ast.Name):
             # For annotated assignments like "name: str", extract field name
             name = py_node.target.id

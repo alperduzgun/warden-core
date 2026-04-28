@@ -310,6 +310,18 @@ def autoimprove_command(
         console.print(f"[red]Corpus directory not found:[/red] {corpus}")
         raise typer.Exit(2)
 
+    # Auto-select frame-specific corpus subdirectory when --corpus is not overridden
+    if frame != "security":
+        suggested = corpus / frame
+        if suggested.exists():
+            corpus = suggested
+            console.print(f"[yellow]Auto-selected corpus subdirectory:[/yellow] {corpus}")
+        else:
+            console.print(
+                f"[yellow]Warning: corpus subdirectory {suggested} not found. "
+                f"Using {corpus}.[/yellow]"
+            )
+
     fp_exclusions_file = _resolve_fp_exclusions_path()
     if not fp_exclusions_file.exists():
         console.print(f"[red]fp_exclusions.py not found at:[/red] {fp_exclusions_file}")

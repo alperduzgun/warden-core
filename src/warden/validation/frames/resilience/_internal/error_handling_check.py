@@ -136,7 +136,7 @@ class ErrorHandlingCheck(ValidationCheck):
                     ctx_start = max(0, line_num - 4)
                     ctx_end = min(len(lines_list), line_num + 3)
                     context = lines_list[ctx_start:ctx_end]
-                    excl = _fp_registry.check(self.id, line, context)
+                    excl = _fp_registry.check(self.id, line, context, file_path=str(code_file.path))
                     if excl.is_excluded:
                         continue
                     findings.append(

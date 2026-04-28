@@ -349,13 +349,18 @@ class OrphanFrame(ValidationFrame, BatchExecutable, ProjectContextAware, LSPAwar
                 final_findings_map[path] = self._filter_findings(findings, code_file)
 
         # 2.1. Cross-file reference filter — remove functions/classes that are
-        #      called or referenced in OTHER project files (batch mode has the
-        #      full file list, so we can build the corpus here).
-        if len(code_files) > 1:
+        #      called or referenced in OTHER project files.
+        #
+        #      Corpus source priority:
+        #        1. self._sibling_files — full project file set injected by
+        #           frame_runner before chunking (covers all chunks, not just 5)
+        #        2. code_files — the current chunk (fallback; misses cross-chunk refs)
+        all_project_files = self._sibling_files if self._sibling_files else code_files
+        if len(all_project_files) > 1:
             cross_file_filtered_count = 0
             for path in list(final_findings_map.keys()):
                 pre_filter = final_findings_map[path]
-                corpus = self._build_cross_file_corpus(code_files, exclude_path=path)
+                corpus = self._build_cross_file_corpus(all_project_files, exclude_path=path)
                 final_findings_map[path] = self._filter_cross_file_orphans(pre_filter, corpus)
                 cross_file_filtered_count += len(pre_filter) - len(final_findings_map[path])
             if cross_file_filtered_count:

@@ -794,6 +794,13 @@ class FrameRunner:
                                 total_files_to_scan = len(files_to_scan)
                                 CHUNK_SIZE = 5
 
+                                # Cross-file-aware frames (e.g. OrphanFrame) need the
+                                # full project file list to build a complete corpus for
+                                # reference resolution — inject it before chunking so
+                                # execute_batch_async can use it regardless of chunk size.
+                                if hasattr(frame, "set_sibling_files"):
+                                    frame.set_sibling_files(files_to_scan)
+
                                 # --- Cross-scan findings cache for batch path ---
                                 # Separate files with cache hits from those needing LLM.
                                 uncached_files: list[CodeFile] = []

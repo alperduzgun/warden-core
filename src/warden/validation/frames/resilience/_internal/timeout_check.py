@@ -179,7 +179,7 @@ class TimeoutCheck(ValidationCheck):
                 ctx_start = max(0, line_num - 4)
                 ctx_end = min(len(lines), line_num + 3)
                 context = lines[ctx_start:ctx_end]
-                excl = _fp_registry.check(self.id, matched_line, context)
+                excl = _fp_registry.check(self.id, matched_line, context, file_path=str(code_file.path))
                 if excl.is_excluded:
                     continue
 

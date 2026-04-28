@@ -83,46 +83,47 @@ class SQLInjectionCheck(ValidationCheck):
     ]
 
     # Dangerous patterns — tuple of (regex_pattern, description, confidence_key)
+    # NOTE: \b after SQL keywords prevents prefix matches on "Selecting", "update_*", etc.
     DANGEROUS_PATTERNS = [
         # String concatenation
         (
-            r'["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER).*?["\'][\s]*\+',
+            r'["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b.*?["\'][\s]*\+',
             "String concatenation in SQL query",
             "concat",
         ),
         # f-string interpolation
         (
-            r'f["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER).*?\{.*?\}',
+            r'f["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b.*?\{.*?\}',
             "f-string interpolation in SQL query",
             "fstring",
         ),
         # .format() method
         (
-            r'["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER).*?["\']\.format\(',
+            r'["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b.*?["\']\.format\(',
             "String format() in SQL query",
             "format_method",
         ),
         # % formatting
         (
-            r'["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER).*?["\'][\s]*%',
+            r'["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b.*?["\'][\s]*%',
             "% formatting in SQL query",
             "percent_fmt",
         ),
         # JavaScript/TypeScript template literals in SQL
         (
-            r'`(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)[^`]*\$\{',
+            r'`(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b[^`]*\$\{',
             "JavaScript template literal interpolation in SQL query",
             "js_template",
         ),
         # Go: fmt.Sprintf with SQL keywords
         (
-            r'fmt\.Sprintf\s*\(\s*["`](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)',
+            r'fmt\.Sprintf\s*\(\s*["`](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b',
             "Go fmt.Sprintf with SQL query (use parameterized queries)",
             "go_sprintf",
         ),
         # Java: String.format with SQL keywords
         (
-            r'String\.format\s*\(\s*["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)',
+            r'String\.format\s*\(\s*["\'](?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b',
             "Java String.format with SQL query (use PreparedStatement)",
             "java_format",
         ),
