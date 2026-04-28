@@ -46,6 +46,16 @@ def init_command(
         "--grammars/--no-grammars",
         help="Install missing tree-sitter grammars",
     ),
+    setup_hooks: bool = typer.Option(
+        False,
+        "--setup-hooks",
+        help="Install Warden git hooks (pre-commit, pre-push, commit-msg)",
+    ),
+    hooks: str = typer.Option(
+        "pre-commit,pre-push,commit-msg",
+        "--hooks",
+        help="Comma-separated hook names to install",
+    ),
     provider: str | None = typer.Option(
         None,
         "--provider",
@@ -131,6 +141,17 @@ def init_command(
         is_interactive=is_interactive,
         grammars=grammars and not _is_minimal,
     )
+
+    # --- Step 17: Git Hooks ---
+    if setup_hooks:
+        from warden.infrastructure.hooks.installer import HookInstaller
+
+        hook_list = [h.strip() for h in hooks.split(",")]
+        console.print("[bold blue]🔗 Installing Git hooks...[/bold blue]")
+        results = HookInstaller.install_hooks(hooks=hook_list)
+        for r in results:
+            status = "[green]✓[/green]" if r.installed else "[yellow]⚠[/yellow]"
+            console.print(f"  {status} {r.hook_name}: {r.message}")
 
     # Init completed (with possible warnings) — remove marker
     # Partial completion with warnings is still considered complete.
