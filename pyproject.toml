@@ -70,7 +70,7 @@ dev = [
     "pytest-asyncio==0.23.7",
     "pytest-cov>=5.0.0,<8.0.0",
     "pytest-timeout>=2.3.0,<3.0.0",
-    "black==24.4.2",
+    "black==26.5.1",
     "isort==8.0.1",
     "mypy==1.20.0",
     "pyright>=1.1.360,<1.2.0",
