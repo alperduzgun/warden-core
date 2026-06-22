@@ -54,14 +54,24 @@ CREATE TABLE IF NOT EXISTS graph_meta (
     value TEXT NOT NULL
 );
 
--- ── symbol_intent (Layer-B semantic enrichment; all nullable) ────────
+-- ── symbol_intent (semantic enrichment) ─────────────────────────────
+--   * Layer-A (#690): deterministic role/summary/centrality/public_api,
+--     written during `warden graph build`. source = 'deterministic'.
+--   * Layer-B (future): LLM-derived intent/summary/confidence/model.
+--   The original Layer-B columns stay nullable so an AST-only write never
+--   needs them; the Layer-A columns carry NOT NULL defaults where sensible.
 CREATE TABLE IF NOT EXISTS symbol_intent (
     symbol_id  INTEGER PRIMARY KEY REFERENCES symbols(id) ON DELETE CASCADE,
     intent     TEXT,
     summary    TEXT,
     confidence REAL,
     model      TEXT,
-    updated_at TEXT
+    updated_at TEXT,
+    -- Layer-A deterministic enrichment (#690)
+    role       TEXT,
+    centrality INTEGER NOT NULL DEFAULT 0,
+    public_api INTEGER NOT NULL DEFAULT 0,
+    source     TEXT
 );
 
 -- ── full-text search over symbols (FTS5) ─────────────────────────────
@@ -79,3 +89,5 @@ CREATE INDEX IF NOT EXISTS idx_edges_target_rel    ON edges (target_id, relation
 CREATE INDEX IF NOT EXISTS idx_edges_source_rel    ON edges (source_id, relation);
 -- supports who_uses() lookups for not-yet-resolved targets
 CREATE INDEX IF NOT EXISTS idx_edges_target_hint   ON edges (target_fqn_hint);
+-- supports role-based symbol_intent queries (#690)
+CREATE INDEX IF NOT EXISTS idx_symbol_intent_role  ON symbol_intent (role);

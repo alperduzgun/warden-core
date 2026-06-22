@@ -13,7 +13,7 @@ import logging
 from collections import defaultdict
 from typing import Any
 
-from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolKind, SymbolNode
+from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolIntent, SymbolKind, SymbolNode
 from warden.analysis.domain.graph_store import GraphStore
 from warden.analysis.services.graph_store_factory import register_backend
 
@@ -27,6 +27,7 @@ class MemoryGraphStore(GraphStore):
         self._files: dict[str, dict[str, str]] = {}  # file_path -> {content_hash}
         self._nodes: dict[str, SymbolNode] = {}  # fqn -> SymbolNode
         self._edges: list[SymbolEdge] = []
+        self._intents: dict[str, SymbolIntent] = {}  # fqn -> SymbolIntent
         self._closed = False
 
     # ── write path ────────────────────────────────────────────────────
@@ -55,6 +56,30 @@ class MemoryGraphStore(GraphStore):
         self._edges = [
             e for e in self._edges if e.source not in fqns_to_remove and e.target not in fqns_to_remove
         ]
+        for fqn in fqns_to_remove:
+            self._intents.pop(fqn, None)
+
+    # ── intent / centrality (Layer A, #690) ───────────────────────────
+
+    def compute_fan_in(self) -> dict[str, int]:
+        self._ensure_open()
+        # Key on the raw target string (FQN for resolved edges, short name for
+        # unresolved CALLS/INHERITS), mirroring the SQLite COALESCE aggregate.
+        counts: dict[str, int] = defaultdict(int)
+        for edge in self._edges:
+            if edge.target:
+                counts[edge.target] += 1
+        return dict(counts)
+
+    def upsert_intents(self, intents: list[SymbolIntent]) -> None:
+        self._ensure_open()
+        for intent in intents:
+            if intent.fqn in self._nodes:
+                self._intents[intent.fqn] = intent
+
+    def get_intent(self, symbol_fqn: str) -> SymbolIntent | None:
+        self._ensure_open()
+        return self._intents.get(symbol_fqn)
 
     # ── read path ─────────────────────────────────────────────────────
 
@@ -141,6 +166,7 @@ class MemoryGraphStore(GraphStore):
         self._files.clear()
         self._nodes.clear()
         self._edges.clear()
+        self._intents.clear()
 
     # ── internal ──────────────────────────────────────────────────────
 

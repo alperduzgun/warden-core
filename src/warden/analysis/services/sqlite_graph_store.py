@@ -19,7 +19,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolKind, SymbolNode
+from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolIntent, SymbolKind, SymbolNode
 from warden.analysis.domain.graph_store import GraphStore
 from warden.analysis.services.graph_store_factory import register_backend
 
@@ -70,6 +70,33 @@ class SqliteGraphStore(GraphStore):
         ddl = _SCHEMA_FILE.read_text(encoding="utf-8")
         # executescript commits any pending transaction and runs the DDL as one batch.
         self._conn.executescript(ddl)
+        self._migrate_intent_columns()
+
+    def _migrate_intent_columns(self) -> None:
+        """Add the Layer-A (#690) symbol_intent columns to pre-existing DBs.
+
+        ``CREATE TABLE IF NOT EXISTS`` never alters an existing table, so a DB
+        created before #690 keeps the old column set.  Each column is added
+        idempotently (guarded by PRAGMA table_info) so connecting to either a
+        fresh or a legacy DB converges on the full schema.
+        """
+        existing = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(symbol_intent)").fetchall()
+        }
+        additions = (
+            ("role", "TEXT"),
+            ("centrality", "INTEGER NOT NULL DEFAULT 0"),
+            ("public_api", "INTEGER NOT NULL DEFAULT 0"),
+            ("source", "TEXT"),
+        )
+        with self._conn:
+            for name, decl in additions:
+                if name not in existing:
+                    self._conn.execute(f"ALTER TABLE symbol_intent ADD COLUMN {name} {decl}")
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_symbol_intent_role ON symbol_intent (role)"
+            )
 
     def _init_meta(self) -> None:
         with self._conn:
@@ -164,6 +191,121 @@ class SqliteGraphStore(GraphStore):
                 self._conn.execute("DELETE FROM graph_fts WHERE rowid = ?", (row["id"],))
             # ON DELETE CASCADE clears symbols (and their edges/intent) for the file.
             self._conn.execute("DELETE FROM files WHERE path = ?", (file_path,))
+
+    # ── intent / centrality (Layer A, #690) ───────────────────────────
+
+    def compute_fan_in(self) -> dict[str, int]:
+        """Aggregate incoming edge counts (centrality) per target via SQL.
+
+        Keys on the resolved target FQN when the edge resolved, else the raw
+        ``target_fqn_hint`` (the builder leaves CALLS/INHERITS targets as short
+        names).  Returns ``{target_key: fan_in}``; absent keys mean zero.  The
+        classifier resolves these keys to symbols by FQN and (graph-unique)
+        short name.
+        """
+        self._ensure_open()
+        rows = self._conn.execute(
+            """
+            SELECT COALESCE(t.fqn, e.target_fqn_hint) AS key, COUNT(*) AS c
+            FROM edges e
+            LEFT JOIN symbols t ON t.id = e.target_id
+            WHERE COALESCE(t.fqn, e.target_fqn_hint) IS NOT NULL
+            GROUP BY key
+            """
+        ).fetchall()
+        return {row["key"]: int(row["c"]) for row in rows}
+
+    def upsert_intents(self, intents: list[SymbolIntent]) -> None:
+        """Write deterministic Layer-A intent rows, keyed by resolved symbol id.
+
+        Intents whose symbol is unknown (never upserted) are skipped rather
+        than fabricating a symbol row.
+        """
+        self._ensure_open()
+        with self._conn:
+            for intent in intents:
+                symbol_id = self._symbol_id(intent.fqn)
+                if symbol_id is None:
+                    continue
+                self._conn.execute(
+                    """
+                    INSERT INTO symbol_intent(symbol_id, summary, role, centrality, public_api, source, confidence)
+                    VALUES(?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(symbol_id) DO UPDATE SET
+                        summary = excluded.summary,
+                        role = excluded.role,
+                        centrality = excluded.centrality,
+                        public_api = excluded.public_api,
+                        source = excluded.source,
+                        confidence = excluded.confidence
+                    """,
+                    (
+                        symbol_id,
+                        intent.summary,
+                        intent.role,
+                        intent.centrality,
+                        1 if intent.public_api else 0,
+                        intent.source,
+                        intent.confidence,
+                    ),
+                )
+
+    def intent_stats(self) -> dict[str, Any]:
+        """Return Layer-A intent coverage stats for status / acceptance checks.
+
+        Includes total symbols, how many carry a role, the coverage ratio,
+        public-API count and the role distribution.
+        """
+        self._ensure_open()
+        total = self._count("symbols")
+        with_role = int(
+            self._conn.execute(
+                "SELECT COUNT(*) AS c FROM symbol_intent WHERE role IS NOT NULL AND role != ''"
+            ).fetchone()["c"]
+        )
+        public = int(
+            self._conn.execute(
+                "SELECT COUNT(*) AS c FROM symbol_intent WHERE public_api = 1"
+            ).fetchone()["c"]
+        )
+        dist = {
+            row["role"]: int(row["c"])
+            for row in self._conn.execute(
+                "SELECT role, COUNT(*) AS c FROM symbol_intent "
+                "WHERE role IS NOT NULL GROUP BY role ORDER BY c DESC"
+            ).fetchall()
+        }
+        return {
+            "total_symbols": total,
+            "symbols_with_role": with_role,
+            "role_coverage": (with_role / total) if total else 0.0,
+            "public_api": public,
+            "role_distribution": dist,
+        }
+
+    def get_intent(self, symbol_fqn: str) -> SymbolIntent | None:
+        """Read back a single symbol's Layer-A intent (test / introspection)."""
+        self._ensure_open()
+        row = self._conn.execute(
+            """
+            SELECT s.fqn AS fqn, i.role, i.summary, i.centrality, i.public_api, i.source, i.confidence
+            FROM symbol_intent i
+            JOIN symbols s ON s.id = i.symbol_id
+            WHERE s.fqn = ?
+            """,
+            (symbol_fqn,),
+        ).fetchone()
+        if row is None or row["role"] is None:
+            return None
+        return SymbolIntent(
+            fqn=row["fqn"],
+            role=row["role"],
+            summary=row["summary"] or "",
+            centrality=int(row["centrality"] or 0),
+            public_api=bool(row["public_api"]),
+            source=row["source"] or "",
+            confidence=float(row["confidence"]) if row["confidence"] is not None else 1.0,
+        )
 
     # ── read path ─────────────────────────────────────────────────────
 

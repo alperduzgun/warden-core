@@ -78,6 +78,25 @@ class SymbolEdge(BaseDomainModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class SymbolIntent(BaseDomainModel):
+    """
+    Deterministic "Layer A" semantic enrichment for a symbol.
+
+    Produced with ZERO LLM cost from path patterns, AST decorators, the naming
+    lexicon and edge fan-in.  Persisted to the ``symbol_intent`` table by the
+    GraphStore.  ``source`` is always ``"deterministic"`` for Layer A so a later
+    "Layer B" LLM pass can be distinguished.
+    """
+
+    fqn: str  # Symbol this intent describes (joins to symbols.fqn)
+    role: str  # Assigned role (e.g. "cli_command", "data_model", "test")
+    summary: str = ""  # Docstring head → one-line intent summary
+    centrality: int = 0  # Incoming edge fan-in (SQL aggregate over edges)
+    public_api: bool = False  # High fan-in / exported → part of the public API
+    source: str = "deterministic"  # Provenance: Layer A is always deterministic
+    confidence: float = 1.0  # Deterministic rules carry full confidence
+
+
 class CodeGraph(BaseDomainModel):
     """
     Project-wide symbol relationship graph.

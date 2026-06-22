@@ -223,14 +223,34 @@ class CodeGraphBuilder:
         dependency_graph: Any | None = None,
         *,
         content_hashes: dict[str, str] | None = None,
+        populate_intent: bool = False,
+        sources: dict[str, str] | None = None,
     ) -> CodeGraph:
         """Build the graph and persist it THROUGH a GraphStore in one call.
+
+        Enforces the mandatory build-pass order:
+        extract (:meth:`build`) → resolve (:meth:`persist`) →
+        fan-in + classify (:func:`populate_symbol_intent`, when
+        ``populate_intent`` is set).  Centrality is read from the resolved edges,
+        so intent population always runs after persistence.
+
+        Args:
+            store: Target GraphStore backend.
+            dependency_graph: Optional DependencyGraph for file-level edges.
+            content_hashes: Optional ``{relative_path: hash}`` for the files table.
+            populate_intent: When True, write deterministic Layer-A intent rows.
+            sources: ``{absolute_path: source_text}`` for docstring extraction.
 
         Returns the in-memory CodeGraph as well so callers retain the build
         intermediate for gap analysis.
         """
-        graph = self.build(dependency_graph)
-        self.persist(store, graph, content_hashes=content_hashes)
+        graph = self.build(dependency_graph)  # extract
+        self.persist(store, graph, content_hashes=content_hashes)  # resolve
+        if populate_intent:
+            from warden.analysis.services.intent_classifier import populate_symbol_intent
+
+            # fan-in (SQL aggregate over resolved edges) → classify → write
+            populate_symbol_intent(graph, store, project_root=self._project_root, sources=sources)
         return graph
 
     def _extract_ast_root(self, parse_result: Any) -> ASTNode | None:

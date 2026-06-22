@@ -13,7 +13,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from warden.analysis.domain.code_graph import SymbolEdge, SymbolNode
+from warden.analysis.domain.code_graph import SymbolEdge, SymbolIntent, SymbolNode
 
 
 class GraphStore(ABC):
@@ -101,6 +101,18 @@ class GraphStore(ABC):
         Returns:
             List of matching SymbolNode objects.
         """
+
+    # ── intent / centrality (Layer A, #690) ───────────────────────────
+    # Concrete defaults so backends without persistence (or reserved slots)
+    # need no changes; durable backends override these.
+
+    def compute_fan_in(self) -> dict[str, int]:
+        """Return ``{target_fqn: incoming_edge_count}`` (symbol centrality)."""
+        return {}
+
+    def upsert_intents(self, intents: list[SymbolIntent]) -> None:
+        """Persist deterministic Layer-A intent rows. Default: no-op."""
+        return None
 
     # ── introspection ─────────────────────────────────────────────────
 

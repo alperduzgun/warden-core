@@ -37,8 +37,9 @@ _GRAPH_LANGUAGES = ("python",)
 async def _discover_and_parse(project_root: Path) -> tuple[dict, dict[str, str], int]:
     """Discover every project file (Rust path) and parse the graph languages.
 
-    Returns ``(ast_cache, content_hashes, total_discovered)`` where the cache is
-    keyed by absolute path and hashes are keyed by relative path.
+    Returns ``(ast_cache, content_hashes, sources, total_discovered)`` where the
+    cache and sources are keyed by absolute path and hashes by relative path.
+    ``sources`` feeds deterministic docstring extraction (#690).
     """
     from warden.analysis.application.discovery.discoverer import FileDiscoverer
     from warden.ast.application.provider_registry import ASTProviderRegistry
@@ -55,6 +56,7 @@ async def _discover_and_parse(project_root: Path) -> tuple[dict, dict[str, str],
 
     ast_cache: dict = {}
     content_hashes: dict[str, str] = {}
+    sources: dict[str, str] = {}
 
     for dfile in discovered:
         path = Path(dfile.path)
@@ -87,11 +89,12 @@ async def _discover_and_parse(project_root: Path) -> tuple[dict, dict[str, str],
         except Exception:
             continue
 
+        sources[str(path)] = content
         rel = dfile.relative_path or str(path)
         if dfile.hash:
             content_hashes[rel] = dfile.hash
 
-    return ast_cache, content_hashes, total_discovered
+    return ast_cache, content_hashes, sources, total_discovered
 
 
 @graph_app.command(name="build")
@@ -120,13 +123,17 @@ def build_command(
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     start = time.perf_counter()
-    ast_cache, content_hashes, total_discovered = asyncio.run(_discover_and_parse(project_root))
+    ast_cache, content_hashes, sources, total_discovered = asyncio.run(_discover_and_parse(project_root))
 
     builder = CodeGraphBuilder(ast_cache, project_root=project_root)
     store = get_graph_store("sqlite", path=str(db_path))
     try:
-        graph = builder.build_into_store(store, content_hashes=content_hashes)
+        # build_into_store enforces: extract → resolve → fan-in → classify.
+        graph = builder.build_into_store(
+            store, content_hashes=content_hashes, populate_intent=True, sources=sources
+        )
         status = store.status()
+        intent = store.intent_stats()
     finally:
         store.close()
 
@@ -139,6 +146,10 @@ def build_command(
     console.print(f"  Nodes:        {status['node_count']}")
     console.print(f"  Edges:        {status['edge_count']}")
     console.print(f"  Classes:      {stats['classes']}   Functions: {stats['functions']}")
+    console.print(
+        f"  Roles:        {intent['symbols_with_role']}/{intent['total_symbols']} "
+        f"({intent['role_coverage']:.1%})   public_api: {intent['public_api']}"
+    )
     console.print(f"  Duration:     {duration:.2f}s")
 
 
@@ -163,6 +174,7 @@ def status_command(
     try:
         status = store.status()
         export = store.export_json()
+        intent = store.intent_stats()
     finally:
         store.close()
 
@@ -189,6 +201,15 @@ def status_command(
     if lang_counter:
         langs = ", ".join(f"{ext}:{n}" for ext, n in lang_counter.most_common())
         table.add_row("Languages", langs)
+    if intent["total_symbols"]:
+        table.add_row(
+            "Roles (Layer A)",
+            f"{intent['symbols_with_role']}/{intent['total_symbols']} "
+            f"({intent['role_coverage']:.1%})   public_api: {intent['public_api']}",
+        )
+        top_roles = ", ".join(f"{r}:{n}" for r, n in list(intent["role_distribution"].items())[:6])
+        if top_roles:
+            table.add_row("Top roles", top_roles)
     table.add_row("Staleness", "[red]STALE[/red]" if stale else "[green]fresh[/green]")
     if stale:
         table.add_row("Files newer than DB", str(newer_count))
