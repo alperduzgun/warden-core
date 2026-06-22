@@ -322,9 +322,13 @@ class TestGraphStoreFactory:
         assert isinstance(store, MemoryGraphStore)
         store.close()
 
-    def test_sqlite_raises_not_implemented(self) -> None:
-        with pytest.raises(NotImplementedError, match="SQLite.*not yet implemented.*#686"):
-            get_graph_store("sqlite")
+    def test_sqlite_backend_resolves(self) -> None:
+        # #686: SQLite backend is now implemented and resolvable via the factory.
+        from warden.analysis.services.sqlite_graph_store import SqliteGraphStore
+
+        store = get_graph_store("sqlite")
+        assert isinstance(store, SqliteGraphStore)
+        store.close()
 
     def test_kuzu_raises_not_implemented(self) -> None:
         with pytest.raises(NotImplementedError, match="Kuzu.*reserved"):
