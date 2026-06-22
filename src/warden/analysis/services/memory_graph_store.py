@@ -14,7 +14,7 @@ from collections import defaultdict
 from typing import Any
 
 from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolIntent, SymbolKind, SymbolNode
-from warden.analysis.domain.graph_store import GraphStore
+from warden.analysis.domain.graph_store import CYCLE_RELATIONS, GraphStore, detect_cycles
 from warden.analysis.services.graph_store_factory import register_backend
 
 logger = logging.getLogger(__name__)
@@ -125,6 +125,22 @@ class MemoryGraphStore(GraphStore):
                 queue.append((edge.target, new_path))
 
         return chains
+
+    def find_orphan_symbols(self) -> list[SymbolNode]:
+        self._ensure_open()
+        connected: set[str] = set()
+        for edge in self._edges:
+            connected.add(edge.source)
+            connected.add(edge.target)
+        return [node for fqn, node in self._nodes.items() if fqn not in connected]
+
+    def find_circular_deps(self) -> list[list[str]]:
+        self._ensure_open()
+        adjacency: dict[str, list[str]] = {}
+        for edge in self._edges:
+            if edge.relation in CYCLE_RELATIONS:
+                adjacency.setdefault(edge.source, []).append(edge.target)
+        return detect_cycles(adjacency)
 
     def search(self, query: str, *, kind: str | None = None, limit: int = 50) -> list[SymbolNode]:
         self._ensure_open()

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolIntent, SymbolKind, SymbolNode
-from warden.analysis.domain.graph_store import GraphStore
+from warden.analysis.domain.graph_store import CYCLE_RELATIONS, GraphStore, detect_cycles
 from warden.analysis.services.graph_store_factory import register_backend
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,16 @@ logger = logging.getLogger(__name__)
 SCHEMA_VERSION = "1"
 _SCHEMA_FILE = Path(__file__).parent / "schema" / "v1.sql"
 _BUSY_TIMEOUT_MS = 5000
+
+# Hard ceiling on impact() recursion depth and on the number of chains it
+# returns, so a pathological graph cannot blow up memory. Mirrors the MCP
+# audit adapter's _MAX_DEPTH=10.
+_MAX_DEPTH = 10
+_MAX_IMPACT_RESULTS = 10_000
+
+# Path separator used by the impact() recursive CTE to delimit FQNs inside the
+# visited-set string. The ASCII unit separator never appears in a real FQN.
+_PATH_SEP = "\x1f"
 
 # Column list for reconstructing a SymbolNode; requires `symbols s` joined to
 # `files f` so file_path resolves from the FK.
@@ -364,38 +374,68 @@ class SqliteGraphStore(GraphStore):
         return [self._row_to_node(r) for r in rows]
 
     def impact(self, target_fqn: str, *, max_depth: int = 5) -> list[list[SymbolEdge]]:
+        """Depth-capped impact analysis via a single recursive CTE.
+
+        Replaces the old in-Python BFS (one SQL round-trip per node) with one
+        ``WITH RECURSIVE`` walk that the engine drives over the indexed
+        ``edges(source_id)`` lookups. ``max_depth`` is clamped to ``_MAX_DEPTH``
+        and the result count to ``_MAX_IMPACT_RESULTS``.
+
+        Each emitted row is one dependency chain (the path of edges from
+        ``target_fqn`` to that point); every prefix is emitted as its own chain,
+        matching the legacy semantics. A node repeating on a path closes a cycle:
+        the closing edge is emitted but the walk does not recurse through it.
+        """
         self._ensure_open()
-        chains: list[list[SymbolEdge]] = []
-        queue: list[tuple[str, list[SymbolEdge]]] = [(target_fqn, [])]
-        visited: set[str] = set()
+        depth = min(max_depth, _MAX_DEPTH)
+        if depth <= 0:
+            return []
 
-        while queue:
-            current, path = queue.pop(0)
-            if current in visited or len(path) >= max_depth:
-                continue
-            visited.add(current)
-
-            source_id = self._symbol_id(current)
-            if source_id is None:
-                continue
-            rows = self._conn.execute(
-                """
-                SELECT e.relation, e.runtime, e.metadata, e.target_fqn_hint,
-                       src.fqn AS source_fqn, tgt.fqn AS target_fqn
+        rows = self._conn.execute(
+            """
+            WITH RECURSIVE walk(tip_fqn, path_ids, nodes, depth, stop) AS (
+                -- anchor: outgoing edges of the start symbol (depth 1)
+                SELECT
+                    COALESCE(tgt.fqn, e.target_fqn_hint),
+                    CAST(e.id AS TEXT),
+                    :sep || src.fqn || :sep || COALESCE(tgt.fqn, e.target_fqn_hint) || :sep,
+                    1,
+                    CASE WHEN instr(:sep || src.fqn || :sep,
+                                    :sep || COALESCE(tgt.fqn, e.target_fqn_hint) || :sep) > 0
+                         THEN 1 ELSE 0 END
                 FROM edges e
                 JOIN symbols src ON src.id = e.source_id
                 LEFT JOIN symbols tgt ON tgt.id = e.target_id
-                WHERE e.source_id = ?
-                """,
-                (source_id,),
-            ).fetchall()
-            for row in rows:
-                edge = self._row_to_edge(row)
-                new_path = [*path, edge]
-                chains.append(new_path)
-                queue.append((edge.target, new_path))
+                WHERE src.fqn = :start
+              UNION ALL
+                -- step: extend each still-open path by one outgoing edge
+                SELECT
+                    COALESCE(tgt.fqn, e.target_fqn_hint),
+                    w.path_ids || ',' || e.id,
+                    w.nodes || COALESCE(tgt.fqn, e.target_fqn_hint) || :sep,
+                    w.depth + 1,
+                    CASE WHEN instr(w.nodes,
+                                    :sep || COALESCE(tgt.fqn, e.target_fqn_hint) || :sep) > 0
+                         THEN 1 ELSE 0 END
+                FROM walk w
+                JOIN symbols src ON src.fqn = w.tip_fqn
+                JOIN edges e ON e.source_id = src.id
+                LEFT JOIN symbols tgt ON tgt.id = e.target_id
+                WHERE w.stop = 0 AND w.depth < :max_depth
+            )
+            SELECT path_ids FROM walk
+            ORDER BY depth, path_ids
+            LIMIT :cap
+            """,
+            {
+                "start": target_fqn,
+                "sep": _PATH_SEP,
+                "max_depth": depth,
+                "cap": _MAX_IMPACT_RESULTS,
+            },
+        ).fetchall()
 
-        return chains
+        return self._chains_from_path_ids([r["path_ids"] for r in rows])
 
     def search(self, query: str, *, kind: str | None = None, limit: int = 50) -> list[SymbolNode]:
         self._ensure_open()
@@ -422,10 +462,65 @@ class SqliteGraphStore(GraphStore):
         if kind is not None:
             sql += " AND s.kind = ?"
             params.append(kind)
-        sql += " LIMIT ?"
+        # FTS5 `rank` is the bm25 relevance score (more-negative = better match);
+        # ORDER BY rank surfaces the closest names first before the LIMIT cap.
+        sql += " ORDER BY gf.rank LIMIT ?"
         params.append(limit)
         rows = self._conn.execute(sql, params).fetchall()
         return [self._row_to_node(r) for r in rows]
+
+    def find_orphan_symbols(self) -> list[SymbolNode]:
+        """Symbols referenced by no edge — indexed anti-join, not an O(E) scan.
+
+        A symbol is connected if any edge names it as a source, a resolved
+        target, or an unresolved ``target_fqn_hint``. Orphans are everything
+        else. Parity with the legacy in-memory implementation.
+        """
+        self._ensure_open()
+        rows = self._conn.execute(
+            f"""
+            SELECT {_NODE_COLS}
+            FROM symbols s
+            JOIN files f ON f.id = s.file_id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM edges e
+                WHERE e.source_id = s.id
+                   OR e.target_id = s.id
+                   OR e.target_fqn_hint = s.fqn
+            )
+            """
+        ).fetchall()
+        return [self._row_to_node(r) for r in rows]
+
+    def find_circular_deps(self) -> list[list[str]]:
+        """Detect dependency cycles over inherits/implements/imports edges.
+
+        SQL builds the adjacency (filtered + ordered by edge id so traversal
+        order is deterministic); the shared :func:`detect_cycles` DFS finds the
+        cycles, guaranteeing byte-identical output to the in-memory backend.
+        """
+        self._ensure_open()
+        relations = sorted(r.value for r in CYCLE_RELATIONS)
+        placeholders = ",".join("?" for _ in relations)
+        rows = self._conn.execute(
+            f"""
+            SELECT src.fqn AS source_fqn,
+                   COALESCE(tgt.fqn, e.target_fqn_hint) AS target_fqn
+            FROM edges e
+            JOIN symbols src ON src.id = e.source_id
+            LEFT JOIN symbols tgt ON tgt.id = e.target_id
+            WHERE e.relation IN ({placeholders})
+            ORDER BY e.id
+            """,
+            relations,
+        ).fetchall()
+        adjacency: dict[str, list[str]] = {}
+        for row in rows:
+            target = row["target_fqn"]
+            if target is None:
+                continue
+            adjacency.setdefault(row["source_fqn"], []).append(target)
+        return detect_cycles(adjacency)
 
     # ── introspection ─────────────────────────────────────────────────
 
@@ -501,6 +596,34 @@ class SqliteGraphStore(GraphStore):
     def _symbol_id(self, fqn: str) -> int | None:
         row = self._conn.execute("SELECT id FROM symbols WHERE fqn = ?", (fqn,)).fetchone()
         return int(row["id"]) if row else None
+
+    def _chains_from_path_ids(self, path_id_rows: list[str]) -> list[list[SymbolEdge]]:
+        """Rebuild ``SymbolEdge`` chains from CTE ``path_ids`` (csv of edge ids).
+
+        Every distinct edge id is hydrated once, then chains are assembled in
+        the order the CTE returned them.
+        """
+        if not path_id_rows:
+            return []
+        id_lists = [[int(x) for x in row.split(",")] for row in path_id_rows]
+        wanted = {eid for ids in id_lists for eid in ids}
+        edge_by_id = self._edges_by_id(wanted)
+        return [[edge_by_id[eid] for eid in ids] for ids in id_lists]
+
+    def _edges_by_id(self, ids: set[int]) -> dict[int, SymbolEdge]:
+        placeholders = ",".join("?" for _ in ids)
+        rows = self._conn.execute(
+            f"""
+            SELECT e.id, e.relation, e.runtime, e.metadata, e.target_fqn_hint,
+                   src.fqn AS source_fqn, tgt.fqn AS target_fqn
+            FROM edges e
+            JOIN symbols src ON src.id = e.source_id
+            LEFT JOIN symbols tgt ON tgt.id = e.target_id
+            WHERE e.id IN ({placeholders})
+            """,
+            tuple(ids),
+        ).fetchall()
+        return {int(r["id"]): self._row_to_edge(r) for r in rows}
 
     def _sync_fts(self, sym: SymbolNode) -> None:
         sid = self._symbol_id(sym.fqn)

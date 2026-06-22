@@ -13,7 +13,59 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from warden.analysis.domain.code_graph import SymbolEdge, SymbolIntent, SymbolNode
+from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolIntent, SymbolNode
+
+# Edge relations that form the dependency graph for cycle detection.
+# Calls are intentionally excluded — a call cycle is not an import cycle.
+CYCLE_RELATIONS: frozenset[EdgeRelation] = frozenset(
+    {EdgeRelation.INHERITS, EdgeRelation.IMPLEMENTS, EdgeRelation.IMPORTS}
+)
+
+
+def detect_cycles(adjacency: dict[str, list[str]]) -> list[list[str]]:
+    """Detect dependency cycles in *adjacency* via DFS.
+
+    Shared by every :class:`GraphStore` backend so the in-memory and SQLite
+    implementations return byte-identical results. The algorithm is a direct
+    port of :meth:`warden.analysis.domain.code_graph.CodeGraph.find_circular_deps`:
+    a recursion stack tracks the active path and a cycle is recorded the first
+    time a back-edge into the stack is found.
+
+    Args:
+        adjacency: Mapping of source FQN to the list of target FQNs it depends
+            on. Insertion order determines traversal order (and therefore the
+            order of the returned cycles).
+
+    Returns:
+        A list of cycles. Each cycle is a list of FQNs whose first element is
+        repeated as the last to close the loop.
+    """
+    cycles: list[list[str]] = []
+    visited: set[str] = set()
+    rec_stack: set[str] = set()
+
+    def _dfs(node: str, path: list[str]) -> None:
+        visited.add(node)
+        rec_stack.add(node)
+        path.append(node)
+
+        for neighbor in adjacency.get(node, []):
+            if neighbor not in visited:
+                _dfs(neighbor, path)
+            elif neighbor in rec_stack:
+                cycle_start = path.index(neighbor)
+                cycle = path[cycle_start:] + [neighbor]
+                if cycle not in cycles:
+                    cycles.append(cycle)
+
+        path.pop()
+        rec_stack.discard(node)
+
+    for node_fqn in adjacency:
+        if node_fqn not in visited:
+            _dfs(node_fqn, [])
+
+    return cycles
 
 
 class GraphStore(ABC):
@@ -84,9 +136,30 @@ class GraphStore(ABC):
 
     @abstractmethod
     def impact(self, target_fqn: str, *, max_depth: int = 5) -> list[list[SymbolEdge]]:
-        """BFS impact analysis starting from ``target_fqn``.
+        """Depth-capped impact analysis starting from ``target_fqn``.
+
+        Walks outgoing edges and returns every dependency chain (each chain is
+        an ordered list of edges) reachable within ``max_depth`` hops. Cycles
+        are cut once a node repeats on a path.
 
         Returns list of paths (each path is a list of edges).
+        """
+
+    @abstractmethod
+    def find_orphan_symbols(self) -> list[SymbolNode]:
+        """Return symbols with zero edges (neither a source nor a target).
+
+        Mirrors :meth:`warden.analysis.domain.code_graph.CodeGraph.find_orphan_symbols`.
+        """
+
+    @abstractmethod
+    def find_circular_deps(self) -> list[list[str]]:
+        """Detect circular dependency cycles via DFS.
+
+        Only ``inherits``/``implements``/``imports`` edges form the dependency
+        graph (calls are excluded). Each cycle is returned as a list of FQNs
+        where the first element is repeated as the last to close the loop.
+        Mirrors :meth:`warden.analysis.domain.code_graph.CodeGraph.find_circular_deps`.
         """
 
     @abstractmethod
