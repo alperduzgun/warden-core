@@ -12,6 +12,7 @@ from warden.cli.commands.audit_context import audit_context_command
 from warden.cli.commands.baseline import baseline_app
 from warden.cli.commands.corpus import corpus_app
 from warden.cli.commands.feedback import feedback_app
+from warden.cli.commands.graph import graph_app
 from warden.cli.commands.chat import chat_command
 from warden.cli.commands.ci import ci_app
 from warden.cli.commands.ci_config import ci_config_command
@@ -98,6 +99,7 @@ app.add_typer(context_app, name="context")
 app.add_typer(codex_app, name="codex")
 app.add_typer(workflow_app, name="workflow")
 app.add_typer(rules_app, name="rules")
+app.add_typer(graph_app, name="graph")
 
 # Register Top-Level Commands
 app.command(name="version")(version_command)

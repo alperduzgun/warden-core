@@ -527,6 +527,14 @@ class PreAnalysisPhase:
                         timeout=60,
                     )
 
+                    # G1 fix (permanent): when a persistent graph DB exists
+                    # (built via `warden graph build`), update ONLY the files
+                    # parsed this run and read the whole-project graph back from
+                    # the DB. This keeps gap analysis whole-project-aware even on
+                    # --diff scans, instead of seeing only the changed files.
+                    # When no DB exists, behaviour is unchanged (in-memory graph).
+                    code_graph = self._sync_graph_store(code_graph, pipeline_context, code_graph_builder)
+
                     # Compute project file list for coverage
                     all_rel_paths = [self._path_to_relative(cf.path) for cf in code_files]
 
@@ -1283,6 +1291,63 @@ class PreAnalysisPhase:
             )
 
         return impacted_paths
+
+    def _sync_graph_store(self, code_graph: Any, pipeline_context: Any, builder: Any) -> Any:
+        """G1 fix: incrementally update the persistent graph DB and read it back.
+
+        Only runs when a durable graph DB already exists (created by
+        ``warden graph build``). It writes through the GraphStore for ONLY the
+        files parsed in this run, then returns the whole-project graph exported
+        from the DB so downstream gap analysis sees the full project even on
+        narrow (``--diff``) scans.
+
+        On any failure — or when no DB exists — the original in-memory
+        ``code_graph`` is returned unchanged, preserving prior behaviour.
+
+        Args:
+            code_graph: The in-memory CodeGraph built from this run's AST cache.
+            pipeline_context: Pipeline context holding the AST cache.
+            builder: The CodeGraphBuilder used for the in-memory build.
+
+        Returns:
+            The whole-project CodeGraph from the DB, or the input unchanged.
+        """
+        try:
+            from warden.analysis.domain.code_graph import CodeGraph, SymbolEdge, SymbolNode
+            from warden.analysis.services.graph_store_factory import default_db_path, get_graph_store
+
+            db_path = default_db_path(self.project_root)
+            if not db_path.exists():
+                return code_graph
+
+            # Files actually parsed this run → the only rows we may rewrite.
+            parsed_files = [self._path_to_relative(p) for p in pipeline_context.ast_cache]
+            if not parsed_files:
+                return code_graph
+
+            store = get_graph_store("sqlite", path=str(db_path))
+            try:
+                builder.persist(store, code_graph, files=parsed_files)
+                exported = store.export_json()
+            finally:
+                store.close()
+
+            full_graph = CodeGraph()
+            for node in exported.get("nodes", []):
+                full_graph.add_node(SymbolNode(**node))
+            for edge in exported.get("edges", []):
+                full_graph.add_edge(SymbolEdge(**edge))
+
+            logger.info(
+                "code_graph_store_synced",
+                parsed_files=len(parsed_files),
+                db_nodes=len(full_graph.nodes),
+                db_edges=len(full_graph.edges),
+            )
+            return full_graph
+        except Exception as e:
+            logger.warning("code_graph_store_sync_failed", error=str(e))
+            return code_graph
 
     def _path_to_relative(self, path: str | Path) -> str:
         """Convert an absolute or relative path to a project-relative string."""

@@ -18,8 +18,9 @@ Chaos Fixes Applied:
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -33,7 +34,80 @@ from warden.analysis.domain.code_graph import (
 from warden.ast.domain.enums import ASTNodeType, ParseStatus
 from warden.ast.domain.models import ASTNode
 
+if TYPE_CHECKING:
+    from warden.analysis.domain.graph_store import GraphStore
+
 logger = structlog.get_logger(__name__)
+
+
+def write_graph_to_store(
+    graph: CodeGraph,
+    store: GraphStore,
+    *,
+    files: list[str] | None = None,
+    content_hashes: dict[str, str] | None = None,
+) -> None:
+    """Persist a :class:`CodeGraph` THROUGH a :class:`GraphStore`.
+
+    This is the single Python-only write path from the in-memory build
+    intermediate onto a durable backend.  Symbols and edges are grouped by
+    their owning file so the operation can run either as a full write or as
+    an incremental per-file update.
+
+    Args:
+        graph: The built CodeGraph to persist.
+        store: Target GraphStore (sqlite for durability, memory for tests).
+        files: When provided, only these relative file paths are updated.
+            Each is cleared first (``delete_file``) so stale symbols/edges
+            never linger — this is the permanent G1 incremental path.  When
+            ``None`` the entire graph is written.
+        content_hashes: Optional ``{relative_path: hash}`` recorded on the
+            ``files`` table for staleness detection.
+    """
+    hashes = content_hashes or {}
+
+    nodes_by_file: dict[str, list[SymbolNode]] = defaultdict(list)
+    for node in graph.nodes.values():
+        nodes_by_file[node.file_path].append(node)
+
+    # Map every symbol FQN to its owning file so edges can be attributed.
+    node_file: dict[str, str] = {fqn: n.file_path for fqn, n in graph.nodes.items()}
+
+    if files is None:
+        target_files: set[str] = set(nodes_by_file)
+        # Include files that only appear as edge sources (e.g. file-level
+        # DEFINES/IMPORTS) so their `files` row exists even with no symbols.
+        for edge in graph.edges:
+            owner = node_file.get(edge.source, edge.source)
+            target_files.add(owner)
+    else:
+        target_files = set(files)
+        # Incremental: drop existing rows for the touched files first so the
+        # re-write is authoritative (no duplicate edges, no orphaned symbols).
+        for file_path in target_files:
+            store.delete_file(file_path)
+
+    # files + symbols
+    symbols_to_write: list[SymbolNode] = []
+    for file_path in sorted(target_files):
+        store.upsert_file(file_path, content_hash=hashes.get(file_path, ""))
+        symbols_to_write.extend(nodes_by_file.get(file_path, []))
+    if symbols_to_write:
+        store.upsert_symbols(symbols_to_write)
+
+    # Edges owned by a target file, attributed via their source symbol's file.
+    # File-level edges (DEFINES/IMPORTS/RE_EXPORTS whose source is a file path,
+    # not a symbol FQN) are intentionally not persisted as symbol edges — the
+    # store would skip them anyway, so we drop them here to avoid the noise.
+    edges_to_write: list[SymbolEdge] = []
+    for edge in graph.edges:
+        owner = node_file.get(edge.source)
+        if owner is None:
+            continue
+        if owner in target_files:
+            edges_to_write.append(edge)
+    if edges_to_write:
+        store.upsert_edges(edges_to_write)
 
 # Patterns for test file detection (Y7)
 _TEST_PATH_PATTERNS = re.compile(
@@ -120,6 +194,44 @@ class CodeGraphBuilder:
         )
 
         return self._graph
+
+    def persist(
+        self,
+        store: GraphStore,
+        graph: CodeGraph | None = None,
+        *,
+        files: list[str] | None = None,
+        content_hashes: dict[str, str] | None = None,
+    ) -> None:
+        """Write a built CodeGraph THROUGH a GraphStore.
+
+        Thin wrapper over :func:`write_graph_to_store` that defaults to the
+        graph produced by the last :meth:`build` call.
+
+        Args:
+            store: Target GraphStore backend.
+            graph: Graph to persist; defaults to this builder's last build.
+            files: Optional relative paths for an incremental per-file update.
+            content_hashes: Optional ``{relative_path: hash}`` for the files table.
+        """
+        target_graph = graph if graph is not None else self._graph
+        write_graph_to_store(target_graph, store, files=files, content_hashes=content_hashes)
+
+    def build_into_store(
+        self,
+        store: GraphStore,
+        dependency_graph: Any | None = None,
+        *,
+        content_hashes: dict[str, str] | None = None,
+    ) -> CodeGraph:
+        """Build the graph and persist it THROUGH a GraphStore in one call.
+
+        Returns the in-memory CodeGraph as well so callers retain the build
+        intermediate for gap analysis.
+        """
+        graph = self.build(dependency_graph)
+        self.persist(store, graph, content_hashes=content_hashes)
+        return graph
 
     def _extract_ast_root(self, parse_result: Any) -> ASTNode | None:
         """Extract ASTNode from parse result, handling different formats."""

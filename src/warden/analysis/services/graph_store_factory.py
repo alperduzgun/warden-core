@@ -16,6 +16,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Literal
 
 from warden.analysis.domain.graph_store import GraphStore
@@ -24,6 +25,16 @@ logger = logging.getLogger(__name__)
 
 # Type alias for supported backend names.
 BackendName = Literal["memory", "sqlite", "kuzu"]
+
+# Default on-disk location for the persistent symbol graph, relative to a
+# project root.  Shared by `warden graph` and the PreAnalysis read path so
+# both agree on where the durable DB lives.
+DEFAULT_DB_RELPATH = ".warden/graph.db"
+
+
+def default_db_path(project_root: str | Path) -> Path:
+    """Return the canonical persistent graph DB path for a project."""
+    return Path(project_root) / DEFAULT_DB_RELPATH
 
 # Registry of known backends.  Populated lazily on first request.
 _REGISTRY: dict[str, type[GraphStore]] = {}

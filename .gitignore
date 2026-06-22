@@ -2,6 +2,8 @@
 .claude/
 .mem0/
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 
 # Qdrant storage
