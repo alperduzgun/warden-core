@@ -38,13 +38,13 @@ jobs:
 
       - name: Cache Ollama binary
         id: ollama-binary-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /usr/local/bin/ollama
           key: ollama-binary-${{ runner.os }}-0.17.4
 
       - name: Cache AI Models
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.ollama
           key: ollama-models-${{ runner.os }}-qwen2.5-coder-3b
