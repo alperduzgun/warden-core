@@ -163,7 +163,7 @@ jobs:
           warden --help
 
       - name: Cache Warden Storage
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             .warden/memory
@@ -177,20 +177,20 @@ jobs:
       # "no files to scan" outcome.  We only restore on an exact SHA match (i.e.
       # re-running the same job), and always start fresh for new commits.
       - name: Cache Warden Triage & Findings
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .warden/cache/
           key: warden-cache-${{ runner.os }}-${{ github.sha }}
 
       - name: Cache Ollama binary
         id: ollama-binary-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /usr/local/bin/ollama
           key: ollama-binary-${{ runner.os }}-0.17.4
 
       - name: Cache AI Models
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.ollama
           key: ollama-models-${{ runner.os }}-qwen2.5-coder-two-tier-v1
@@ -205,7 +205,7 @@ jobs:
 
       - name: Cache Baseline Report
         id: baseline-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .warden/baseline.sarif
           key: warden-baseline-${{ contains(github.ref, 'refs/tags/') && 'main' || github.ref_name }}-${{ hashFiles('pyproject.toml') }}
