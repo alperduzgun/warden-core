@@ -53,9 +53,7 @@ class MemoryGraphStore(GraphStore):
         for fqn in fqns_to_remove:
             del self._nodes[fqn]
         # Remove edges where either endpoint was in this file.
-        self._edges = [
-            e for e in self._edges if e.source not in fqns_to_remove and e.target not in fqns_to_remove
-        ]
+        self._edges = [e for e in self._edges if e.source not in fqns_to_remove and e.target not in fqns_to_remove]
         for fqn in fqns_to_remove:
             self._intents.pop(fqn, None)
 
@@ -141,6 +139,26 @@ class MemoryGraphStore(GraphStore):
             if edge.relation in CYCLE_RELATIONS:
                 adjacency.setdefault(edge.source, []).append(edge.target)
         return detect_cycles(adjacency)
+
+    def get_node(self, fqn: str) -> SymbolNode | None:
+        self._ensure_open()
+        return self._nodes.get(fqn)
+
+    def who_inherits(self, fqn: str) -> list[SymbolNode]:
+        self._ensure_open()
+        child_fqns = {e.source for e in self._edges if e.target == fqn and e.relation == EdgeRelation.INHERITS}
+        return [self._nodes[f] for f in child_fqns if f in self._nodes]
+
+    def who_implements(self, fqn: str) -> list[SymbolNode]:
+        self._ensure_open()
+        impl_fqns = {e.source for e in self._edges if e.target == fqn and e.relation == EdgeRelation.IMPLEMENTS}
+        return [self._nodes[f] for f in impl_fqns if f in self._nodes]
+
+    def edges_from(self, fqn: str, *, relation: EdgeRelation | None = None) -> list[SymbolEdge]:
+        self._ensure_open()
+        if relation is not None:
+            return [e for e in self._edges if e.source == fqn and e.relation == relation]
+        return [e for e in self._edges if e.source == fqn]
 
     def search(self, query: str, *, kind: str | None = None, limit: int = 50) -> list[SymbolNode]:
         self._ensure_open()

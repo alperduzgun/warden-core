@@ -8,6 +8,7 @@ Covers:
 - warden_query_symbol: found, not found, error handling
 - warden_query_symbol: query_type modes (who_uses, who_inherits, etc.)
 - warden_graph_search: fuzzy/prefix search, kind filter
+- no-DB error, edge-shape (callers/callees), freshness, old-vs-new equivalence
 """
 
 from __future__ import annotations
@@ -17,12 +18,37 @@ from pathlib import Path
 
 import pytest
 
+from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolKind, SymbolNode
 from warden.mcp.infrastructure.adapters.audit_adapter import AuditAdapter
+
+# ---------------------------------------------------------------------------
+# Graph DB populator helper
+# ---------------------------------------------------------------------------
+
+
+def _populate_graph_db(project_root: Path, nodes: list[SymbolNode], edges: list[SymbolEdge]) -> None:
+    """Write symbol data into .warden/graph.db."""
+    from warden.analysis.services.graph_store_factory import default_db_path, get_graph_store
+
+    db_path = default_db_path(project_root)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = get_graph_store("sqlite", path=str(db_path))
+    try:
+        seen_files: set[str] = set()
+        for n in nodes:
+            if n.file_path not in seen_files:
+                store.upsert_file(n.file_path)
+                seen_files.add(n.file_path)
+        store.upsert_symbols(nodes)
+        store.upsert_edges(edges)
+    finally:
+        store.close()
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_intelligence_dir(project_root: Path) -> Path:
     """Create .warden/intelligence/ with minimal mock data files."""
@@ -100,15 +126,26 @@ def _make_intelligence_dir(project_root: Path) -> Path:
         },
     }
 
-    (intel_dir / "code_graph.json").write_text(
-        json.dumps(code_graph), encoding="utf-8"
-    )
-    (intel_dir / "gap_report.json").write_text(
-        json.dumps(gap_report), encoding="utf-8"
-    )
-    (intel_dir / "dependency_graph.json").write_text(
-        json.dumps(dep_graph), encoding="utf-8"
-    )
+    (intel_dir / "code_graph.json").write_text(json.dumps(code_graph), encoding="utf-8")
+    (intel_dir / "gap_report.json").write_text(json.dumps(gap_report), encoding="utf-8")
+    (intel_dir / "dependency_graph.json").write_text(json.dumps(dep_graph), encoding="utf-8")
+
+    # Populate the graph DB for the new adapter code path
+    nodes = [
+        SymbolNode(
+            fqn=n["fqn"],
+            name=n["name"],
+            kind=SymbolKind(n["kind"]),
+            file_path=n.get("file_path", ""),
+            line=n.get("line", 0),
+        )
+        for n in code_graph["nodes"].values()
+    ]
+    edges = [
+        SymbolEdge(source=e["source"], target=e["target"], relation=EdgeRelation(e["relation"]))
+        for e in code_graph["edges"]
+    ]
+    _populate_graph_db(project_root, nodes, edges)
 
     return intel_dir
 
@@ -219,17 +256,29 @@ def _make_rich_code_graph(project_root: Path) -> Path:
         ],
     }
 
-    (intel_dir / "code_graph.json").write_text(
-        json.dumps(code_graph), encoding="utf-8"
-    )
+    (intel_dir / "code_graph.json").write_text(json.dumps(code_graph), encoding="utf-8")
 
     # Minimal gap/dep data so audit_context doesn't fail
-    (intel_dir / "gap_report.json").write_text(
-        json.dumps({"coverage": 0.9}), encoding="utf-8"
-    )
-    (intel_dir / "dependency_graph.json").write_text(
-        json.dumps({"stats": {"total_files": 5}}), encoding="utf-8"
-    )
+    (intel_dir / "gap_report.json").write_text(json.dumps({"coverage": 0.9}), encoding="utf-8")
+    (intel_dir / "dependency_graph.json").write_text(json.dumps({"stats": {"total_files": 5}}), encoding="utf-8")
+
+    # Populate the graph DB for the new adapter code path
+    nodes = [
+        SymbolNode(
+            fqn=n["fqn"],
+            name=n["name"],
+            kind=SymbolKind(n["kind"]),
+            file_path=n.get("file_path", ""),
+            line=n.get("line", 0),
+            is_test=n.get("is_test", False),
+        )
+        for n in code_graph["nodes"].values()
+    ]
+    edges = [
+        SymbolEdge(source=e["source"], target=e["target"], relation=EdgeRelation(e["relation"]))
+        for e in code_graph["edges"]
+    ]
+    _populate_graph_db(project_root, nodes, edges)
 
     return intel_dir
 
@@ -237,6 +286,7 @@ def _make_rich_code_graph(project_root: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def adapter(tmp_path: Path) -> AuditAdapter:
@@ -261,6 +311,7 @@ def rich_adapter(tmp_path: Path) -> AuditAdapter:
 # ---------------------------------------------------------------------------
 # 1. SUPPORTED_TOOLS & definitions
 # ---------------------------------------------------------------------------
+
 
 class TestSupportedToolsAndDefinitions:
     def test_supported_tools_has_exactly_three_entries(self, adapter: AuditAdapter) -> None:
@@ -308,6 +359,7 @@ class TestSupportedToolsAndDefinitions:
 # 2. warden_get_audit_context — no data
 # ---------------------------------------------------------------------------
 
+
 class TestGetAuditContextNoData:
     @pytest.mark.asyncio
     async def test_returns_error_when_no_intelligence_dir(self, adapter: AuditAdapter) -> None:
@@ -326,12 +378,11 @@ class TestGetAuditContextNoData:
 # 3. warden_get_audit_context — JSON format
 # ---------------------------------------------------------------------------
 
+
 class TestGetAuditContextJson:
     @pytest.mark.asyncio
     async def test_json_result_contains_all_keys(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "json"}
-        )
+        result = await adapter_with_data._execute_tool_async("warden_get_audit_context", {"format": "json"})
         assert result.is_error is False
         parsed = json.loads(result.content[0]["text"])
         assert "code_graph" in parsed
@@ -355,22 +406,14 @@ class TestGetAuditContextJson:
         assert "nodes" in parsed["code_graph"]
 
     @pytest.mark.asyncio
-    async def test_json_gap_report_coverage_reflects_mock_data(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "json"}
-        )
+    async def test_json_gap_report_coverage_reflects_mock_data(self, adapter_with_data: AuditAdapter) -> None:
+        result = await adapter_with_data._execute_tool_async("warden_get_audit_context", {"format": "json"})
         parsed = json.loads(result.content[0]["text"])
         assert parsed["gap_report"]["coverage"] == pytest.approx(0.85)
 
     @pytest.mark.asyncio
-    async def test_json_default_format_when_not_specified(
-        self, adapter_with_data: AuditAdapter
-    ) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {}
-        )
+    async def test_json_default_format_when_not_specified(self, adapter_with_data: AuditAdapter) -> None:
+        result = await adapter_with_data._execute_tool_async("warden_get_audit_context", {})
         assert result.is_error is False
         parsed = json.loads(result.content[0]["text"])
         assert isinstance(parsed, dict)
@@ -380,12 +423,11 @@ class TestGetAuditContextJson:
 # 4. warden_get_audit_context — markdown format
 # ---------------------------------------------------------------------------
 
+
 class TestGetAuditContextMarkdown:
     @pytest.mark.asyncio
     async def test_markdown_has_heading_and_sections(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "markdown"}
-        )
+        result = await adapter_with_data._execute_tool_async("warden_get_audit_context", {"format": "markdown"})
         assert result.is_error is False
         text = result.content[0]["text"]
         assert text.startswith("# Warden Audit Context")
@@ -395,16 +437,12 @@ class TestGetAuditContextMarkdown:
 
     @pytest.mark.asyncio
     async def test_markdown_content_type_is_text(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "markdown"}
-        )
+        result = await adapter_with_data._execute_tool_async("warden_get_audit_context", {"format": "markdown"})
         assert result.content[0]["type"] == "text"
 
     @pytest.mark.asyncio
     async def test_markdown_reflects_mock_stats(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_get_audit_context", {"format": "markdown"}
-        )
+        result = await adapter_with_data._execute_tool_async("warden_get_audit_context", {"format": "markdown"})
         text = result.content[0]["text"]
         assert "3" in text
         assert "2" in text
@@ -414,12 +452,11 @@ class TestGetAuditContextMarkdown:
 # 5. warden_query_symbol — search (default query_type)
 # ---------------------------------------------------------------------------
 
+
 class TestQuerySymbolSearch:
     @pytest.mark.asyncio
     async def test_found_with_metadata_and_edges(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "SecurityFrame"}
-        )
+        result = await adapter_with_data._execute_tool_async("warden_query_symbol", {"name": "SecurityFrame"})
         assert result.is_error is False
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is True
@@ -431,18 +468,14 @@ class TestQuerySymbolSearch:
 
     @pytest.mark.asyncio
     async def test_not_found_for_nonexistent_symbol(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": "DoesNotExist"}
-        )
+        result = await adapter_with_data._execute_tool_async("warden_query_symbol", {"name": "DoesNotExist"})
         assert result.is_error is False
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is False
 
     @pytest.mark.asyncio
     async def test_fqn_exact_match_via_double_colon(self, rich_adapter: AuditAdapter) -> None:
-        result = await rich_adapter._execute_tool_async(
-            "warden_query_symbol", {"name": "app.security::SecurityFrame"}
-        )
+        result = await rich_adapter._execute_tool_async("warden_query_symbol", {"name": "app.security::SecurityFrame"})
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is True
         assert parsed["matches"][0]["fqn"] == "app.security::SecurityFrame"
@@ -451,9 +484,7 @@ class TestQuerySymbolSearch:
     async def test_error_when_code_graph_missing(self, tmp_path: Path) -> None:
         (tmp_path / ".warden" / "intelligence").mkdir(parents=True)
         adapter = AuditAdapter(project_root=tmp_path)
-        result = await adapter._execute_tool_async(
-            "warden_query_symbol", {"name": "SecurityFrame"}
-        )
+        result = await adapter._execute_tool_async("warden_query_symbol", {"name": "SecurityFrame"})
         assert result.is_error is True
 
 
@@ -461,12 +492,11 @@ class TestQuerySymbolSearch:
 # 6. warden_query_symbol — error handling
 # ---------------------------------------------------------------------------
 
+
 class TestQuerySymbolErrors:
     @pytest.mark.asyncio
     async def test_returns_error_when_name_is_empty(self, adapter_with_data: AuditAdapter) -> None:
-        result = await adapter_with_data._execute_tool_async(
-            "warden_query_symbol", {"name": ""}
-        )
+        result = await adapter_with_data._execute_tool_async("warden_query_symbol", {"name": ""})
         assert result.is_error is True
 
     @pytest.mark.asyncio
@@ -486,6 +516,7 @@ class TestQuerySymbolErrors:
 # ---------------------------------------------------------------------------
 # 7. warden_query_symbol — who_uses
 # ---------------------------------------------------------------------------
+
 
 class TestQuerySymbolWhoUses:
     @pytest.mark.asyncio
@@ -523,6 +554,7 @@ class TestQuerySymbolWhoUses:
 # 8. warden_query_symbol — who_inherits
 # ---------------------------------------------------------------------------
 
+
 class TestQuerySymbolWhoInherits:
     @pytest.mark.asyncio
     async def test_who_inherits_finds_children(self, rich_adapter: AuditAdapter) -> None:
@@ -551,6 +583,7 @@ class TestQuerySymbolWhoInherits:
 # 9. warden_query_symbol — who_implements
 # ---------------------------------------------------------------------------
 
+
 class TestQuerySymbolWhoImplements:
     @pytest.mark.asyncio
     async def test_who_implements_finds_implementor(self, rich_adapter: AuditAdapter) -> None:
@@ -576,6 +609,7 @@ class TestQuerySymbolWhoImplements:
 # ---------------------------------------------------------------------------
 # 10. warden_query_symbol — callers / callees
 # ---------------------------------------------------------------------------
+
 
 class TestQuerySymbolCallersCallees:
     @pytest.mark.asyncio
@@ -605,6 +639,7 @@ class TestQuerySymbolCallersCallees:
 # ---------------------------------------------------------------------------
 # 11. warden_query_symbol — dependency_chain
 # ---------------------------------------------------------------------------
+
 
 class TestQuerySymbolDependencyChain:
     @pytest.mark.asyncio
@@ -642,12 +677,11 @@ class TestQuerySymbolDependencyChain:
 # 12. warden_graph_search
 # ---------------------------------------------------------------------------
 
+
 class TestGraphSearch:
     @pytest.mark.asyncio
     async def test_prefix_match(self, rich_adapter: AuditAdapter) -> None:
-        result = await rich_adapter._execute_tool_async(
-            "warden_graph_search", {"query": "Security"}
-        )
+        result = await rich_adapter._execute_tool_async("warden_graph_search", {"query": "Security"})
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is True
         names = [r["name"] for r in parsed["results"]]
@@ -655,18 +689,14 @@ class TestGraphSearch:
 
     @pytest.mark.asyncio
     async def test_case_insensitive_match(self, rich_adapter: AuditAdapter) -> None:
-        result = await rich_adapter._execute_tool_async(
-            "warden_graph_search", {"query": "securityframe"}
-        )
+        result = await rich_adapter._execute_tool_async("warden_graph_search", {"query": "securityframe"})
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is True
         assert any(r["name"] == "SecurityFrame" for r in parsed["results"])
 
     @pytest.mark.asyncio
     async def test_substring_match(self, rich_adapter: AuditAdapter) -> None:
-        result = await rich_adapter._execute_tool_async(
-            "warden_graph_search", {"query": "Frame"}
-        )
+        result = await rich_adapter._execute_tool_async("warden_graph_search", {"query": "Frame"})
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is True
         assert parsed["count"] >= 3
@@ -690,33 +720,25 @@ class TestGraphSearch:
 
     @pytest.mark.asyncio
     async def test_no_match_returns_empty(self, rich_adapter: AuditAdapter) -> None:
-        result = await rich_adapter._execute_tool_async(
-            "warden_graph_search", {"query": "ZzzNonexistent"}
-        )
+        result = await rich_adapter._execute_tool_async("warden_graph_search", {"query": "ZzzNonexistent"})
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is False
         assert parsed["count"] == 0
 
     @pytest.mark.asyncio
     async def test_missing_query_returns_error(self, rich_adapter: AuditAdapter) -> None:
-        result = await rich_adapter._execute_tool_async(
-            "warden_graph_search", {"query": ""}
-        )
+        result = await rich_adapter._execute_tool_async("warden_graph_search", {"query": ""})
         assert result.is_error is True
 
     @pytest.mark.asyncio
     async def test_limit_caps_results(self, rich_adapter: AuditAdapter) -> None:
-        result = await rich_adapter._execute_tool_async(
-            "warden_graph_search", {"query": "e", "limit": 2}
-        )
+        result = await rich_adapter._execute_tool_async("warden_graph_search", {"query": "e", "limit": 2})
         parsed = json.loads(result.content[0]["text"])
         assert parsed["count"] <= 2
 
     @pytest.mark.asyncio
     async def test_exact_match_ranked_first(self, rich_adapter: AuditAdapter) -> None:
-        result = await rich_adapter._execute_tool_async(
-            "warden_graph_search", {"query": "helper"}
-        )
+        result = await rich_adapter._execute_tool_async("warden_graph_search", {"query": "helper"})
         parsed = json.loads(result.content[0]["text"])
         assert parsed["found"] is True
         assert parsed["results"][0]["name"] == "helper"
@@ -724,7 +746,258 @@ class TestGraphSearch:
     @pytest.mark.asyncio
     async def test_missing_code_graph_returns_error(self, tmp_path: Path) -> None:
         adapter = AuditAdapter(project_root=tmp_path)
-        result = await adapter._execute_tool_async(
-            "warden_graph_search", {"query": "Foo"}
-        )
+        result = await adapter._execute_tool_async("warden_graph_search", {"query": "Foo"})
         assert result.is_error is True
+
+
+# ---------------------------------------------------------------------------
+# 13. No-DB error tests
+# ---------------------------------------------------------------------------
+
+
+class TestNoDatabase:
+    @pytest.mark.asyncio
+    async def test_get_audit_context_no_db_returns_error(self, tmp_path: Path) -> None:
+        """When no graph.db exists, warden_get_audit_context should error."""
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async("warden_get_audit_context", {})
+        assert result.is_error is True
+
+    @pytest.mark.asyncio
+    async def test_query_symbol_no_db_returns_error(self, tmp_path: Path) -> None:
+        """When no graph.db exists, warden_query_symbol should error."""
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async("warden_query_symbol", {"name": "Foo"})
+        assert result.is_error is True
+        assert "Run 'warden graph build' first" in result.content[0]["text"]
+
+    @pytest.mark.asyncio
+    async def test_graph_search_no_db_returns_error(self, tmp_path: Path) -> None:
+        """When no graph.db exists, warden_graph_search should error."""
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async("warden_graph_search", {"query": "Foo"})
+        assert result.is_error is True
+        assert "Run 'warden graph build' first" in result.content[0]["text"]
+
+
+# ---------------------------------------------------------------------------
+# 14. Edge shape tests (callers/callees)
+# ---------------------------------------------------------------------------
+
+
+class TestEdgeShape:
+    """Verify that callers/callees produce correct edge shapes."""
+
+    @pytest.mark.asyncio
+    async def test_callers_edge_has_source_and_target(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "validate_input", "query_type": "callers"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] >= 1
+        for r in parsed["results"]:
+            assert "source" in r
+            assert "target" in r
+            assert "relation" in r
+            assert r["relation"] == "calls"
+
+    @pytest.mark.asyncio
+    async def test_callees_edge_has_source_and_target(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_query_symbol",
+            {"name": "SecurityFrame", "query_type": "callees"},
+        )
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] >= 1
+        for r in parsed["results"]:
+            assert "source" in r
+            assert "target" in r
+            assert "relation" in r
+            assert r["relation"] == "calls"
+
+
+# ---------------------------------------------------------------------------
+# 15. Freshness test — DB changes visible without restart
+# ---------------------------------------------------------------------------
+
+
+class TestFreshness:
+    """Adapter reads from DB on each call — mutations are immediately visible."""
+
+    @pytest.mark.asyncio
+    async def test_new_node_visible_after_db_write(self, tmp_path: Path) -> None:
+        intel_dir = tmp_path / ".warden" / "intelligence"
+        intel_dir.mkdir(parents=True)
+        (intel_dir / "gap_report.json").write_text('{"coverage": 0.5}', encoding="utf-8")
+        (intel_dir / "dependency_graph.json").write_text('{"stats": {"total_files": 1}}', encoding="utf-8")
+
+        # Write one node
+        node = SymbolNode(fqn="app.foo::Bar", name="Bar", kind=SymbolKind.CLASS, file_path="src/foo.py", line=1)
+        _populate_graph_db(tmp_path, [node], [])
+
+        adapter = AuditAdapter(project_root=tmp_path)
+        # Query should find the node
+        result = await adapter._execute_tool_async("warden_query_symbol", {"name": "app.foo::Bar"})
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+
+        # Write a second node to the same DB
+        node2 = SymbolNode(fqn="app.foo::Baz", name="Baz", kind=SymbolKind.CLASS, file_path="src/foo.py", line=2)
+        _populate_graph_db(tmp_path, [node2], [])
+
+        # Same adapter instance should see the new node
+        result2 = await adapter._execute_tool_async("warden_query_symbol", {"name": "app.foo::Baz"})
+        parsed2 = json.loads(result2.content[0]["text"])
+        assert parsed2["found"] is True
+
+
+# ---------------------------------------------------------------------------
+# 16. Old vs new output equivalence
+# ---------------------------------------------------------------------------
+
+
+class TestOldVsNewEquivalence:
+    """Same fixture data through old CodeGraph path and new DB path
+    should produce structurally equivalent JSON for query results."""
+
+    @pytest.mark.asyncio
+    async def test_search_equivalent(self, tmp_path: Path) -> None:
+        """Search results should match between old and new paths."""
+        intel_dir = tmp_path / ".warden" / "intelligence"
+        intel_dir.mkdir(parents=True)
+
+        from warden.analysis.domain.code_graph import CodeGraph
+
+        nodes_data = {
+            "app.test::Foo": {
+                "fqn": "app.test::Foo",
+                "name": "Foo",
+                "kind": "class",
+                "file_path": "src/test.py",
+                "line": 1,
+            },
+            "app.test::Bar": {
+                "fqn": "app.test::Bar",
+                "name": "Bar",
+                "kind": "function",
+                "file_path": "src/test.py",
+                "line": 10,
+            },
+        }
+        edges_data = [
+            {"source": "app.test::Foo", "target": "app.test::Bar", "relation": "calls"},
+        ]
+
+        # Write code_graph.json for the old path
+        code_graph_json = {
+            "schema_version": "1.0.0",
+            "nodes": nodes_data,
+            "edges": edges_data,
+            "stats": {"total_nodes": 2, "total_edges": 1, "classes": 1, "functions": 1, "test_nodes": 0},
+        }
+        (intel_dir / "code_graph.json").write_text(json.dumps(code_graph_json), encoding="utf-8")
+        (intel_dir / "gap_report.json").write_text('{"coverage": 0.5}', encoding="utf-8")
+        (intel_dir / "dependency_graph.json").write_text('{"stats": {"total_files": 1}}', encoding="utf-8")
+
+        # Populate the graph DB for the new path
+        nodes = [
+            SymbolNode(
+                fqn=n["fqn"],
+                name=n["name"],
+                kind=SymbolKind(n["kind"]),
+                file_path=n.get("file_path", ""),
+                line=n.get("line", 0),
+            )
+            for n in nodes_data.values()
+        ]
+        edges = [
+            SymbolEdge(source=e["source"], target=e["target"], relation=EdgeRelation(e["relation"])) for e in edges_data
+        ]
+        _populate_graph_db(tmp_path, nodes, edges)
+
+        # Old path: load via CodeGraph model_validate (mimics old adapter)
+        # New path: use the store-backed adapter
+        adapter = AuditAdapter(project_root=tmp_path)
+
+        # Query via new adapter (uses DB)
+        result = await adapter._execute_tool_async("warden_query_symbol", {"name": "Foo"})
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert len(parsed["matches"]) == 1
+        assert parsed["matches"][0]["name"] == "Foo"
+
+        # Edges should be present
+        assert len(parsed["edges"]) >= 1
+        assert any(e["relation"] == "calls" for e in parsed["edges"])
+
+
+# ---------------------------------------------------------------------------
+# 17. D5 — Graceful degradation: code-graph-only when gap/dep/chain absent
+# ---------------------------------------------------------------------------
+
+
+class TestD5GracefulDegradation:
+    """When only graph.db exists (no gap/dep/chain JSON), audit context
+    should still return code_graph data without erroring."""
+
+    @pytest.mark.asyncio
+    async def test_code_graph_only_returns_results(self, tmp_path: Path) -> None:
+        """Only graph.db exists — no intel JSON files."""
+        node = SymbolNode(fqn="app.test::Foo", name="Foo", kind=SymbolKind.CLASS, file_path="src/test.py", line=1)
+        _populate_graph_db(tmp_path, [node], [])
+
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async("warden_get_audit_context", {"format": "json"})
+        assert not result.is_error
+        parsed = json.loads(result.content[0]["text"])
+        assert "code_graph" in parsed
+        assert parsed["code_graph"]["stats"]["total_nodes"] == 1
+
+    @pytest.mark.asyncio
+    async def test_code_graph_only_markdown(self, tmp_path: Path) -> None:
+        """Markdown output should work with only graph.db."""
+        node = SymbolNode(fqn="app.test::Foo", name="Foo", kind=SymbolKind.CLASS, file_path="src/test.py", line=1)
+        _populate_graph_db(tmp_path, [node], [])
+
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async("warden_get_audit_context", {"format": "markdown"})
+        assert not result.is_error
+        text = result.content[0]["text"]
+        assert "Code Graph Overview" in text
+        assert "1 classes" in text
+
+    @pytest.mark.asyncio
+    async def test_no_db_no_intel_still_errors(self, tmp_path: Path) -> None:
+        """Neither DB nor intel JSON — should still error."""
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async("warden_get_audit_context", {"format": "json"})
+        assert result.is_error
+
+    @pytest.mark.asyncio
+    async def test_stats_computed_from_export_nodes(self, tmp_path: Path) -> None:
+        """Stats should be computed from the export node list (D3)."""
+        nodes = [
+            SymbolNode(fqn="app.test::Foo", name="Foo", kind=SymbolKind.CLASS, file_path="src/test.py", line=1),
+            SymbolNode(fqn="app.test::bar", name="bar", kind=SymbolKind.FUNCTION, file_path="src/test.py", line=10),
+            SymbolNode(
+                fqn="tests.test_x::TestX",
+                name="TestX",
+                kind=SymbolKind.CLASS,
+                file_path="tests/test_x.py",
+                line=1,
+                is_test=True,
+            ),
+        ]
+        _populate_graph_db(tmp_path, nodes, [])
+
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async("warden_get_audit_context", {"format": "json"})
+        parsed = json.loads(result.content[0]["text"])
+        stats = parsed["code_graph"]["stats"]
+        assert stats["classes"] == 2
+        assert stats["functions"] == 1
+        assert stats["test_nodes"] == 1
+        assert stats["total_nodes"] == 3

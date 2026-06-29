@@ -41,10 +41,7 @@ _PATH_SEP = "\x1f"
 
 # Column list for reconstructing a SymbolNode; requires `symbols s` joined to
 # `files f` so file_path resolves from the FK.
-_NODE_COLS = (
-    "s.fqn, s.name, s.kind, f.path AS file_path, s.line, "
-    "s.module, s.is_test, s.bases, s.metadata"
-)
+_NODE_COLS = "s.fqn, s.name, s.kind, f.path AS file_path, s.line, s.module, s.is_test, s.bases, s.metadata"
 
 
 class SqliteGraphStore(GraphStore):
@@ -90,10 +87,7 @@ class SqliteGraphStore(GraphStore):
         idempotently (guarded by PRAGMA table_info) so connecting to either a
         fresh or a legacy DB converges on the full schema.
         """
-        existing = {
-            row["name"]
-            for row in self._conn.execute("PRAGMA table_info(symbol_intent)").fetchall()
-        }
+        existing = {row["name"] for row in self._conn.execute("PRAGMA table_info(symbol_intent)").fetchall()}
         additions = (
             ("role", "TEXT"),
             ("centrality", "INTEGER NOT NULL DEFAULT 0"),
@@ -104,15 +98,12 @@ class SqliteGraphStore(GraphStore):
             for name, decl in additions:
                 if name not in existing:
                     self._conn.execute(f"ALTER TABLE symbol_intent ADD COLUMN {name} {decl}")
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_symbol_intent_role ON symbol_intent (role)"
-            )
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol_intent_role ON symbol_intent (role)")
 
     def _init_meta(self) -> None:
         with self._conn:
             self._conn.execute(
-                "INSERT INTO graph_meta(key, value) VALUES('schema_version', ?) "
-                "ON CONFLICT(key) DO NOTHING",
+                "INSERT INTO graph_meta(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO NOTHING",
                 (SCHEMA_VERSION,),
             )
 
@@ -273,16 +264,11 @@ class SqliteGraphStore(GraphStore):
                 "SELECT COUNT(*) AS c FROM symbol_intent WHERE role IS NOT NULL AND role != ''"
             ).fetchone()["c"]
         )
-        public = int(
-            self._conn.execute(
-                "SELECT COUNT(*) AS c FROM symbol_intent WHERE public_api = 1"
-            ).fetchone()["c"]
-        )
+        public = int(self._conn.execute("SELECT COUNT(*) AS c FROM symbol_intent WHERE public_api = 1").fetchone()["c"])
         dist = {
             row["role"]: int(row["c"])
             for row in self._conn.execute(
-                "SELECT role, COUNT(*) AS c FROM symbol_intent "
-                "WHERE role IS NOT NULL GROUP BY role ORDER BY c DESC"
+                "SELECT role, COUNT(*) AS c FROM symbol_intent WHERE role IS NOT NULL GROUP BY role ORDER BY c DESC"
             ).fetchall()
         }
         return {
@@ -437,37 +423,116 @@ class SqliteGraphStore(GraphStore):
 
         return self._chains_from_path_ids([r["path_ids"] for r in rows])
 
+    def get_node(self, fqn: str) -> SymbolNode | None:
+        self._ensure_open()
+        row = self._conn.execute(
+            f"SELECT {_NODE_COLS} FROM symbols s JOIN files f ON f.id=s.file_id WHERE s.fqn=?",
+            (fqn,),
+        ).fetchone()
+        return self._row_to_node(row) if row else None
+
+    def who_inherits(self, fqn: str) -> list[SymbolNode]:
+        self._ensure_open()
+        target_id = self._symbol_id(fqn)
+        rows = self._conn.execute(
+            f"""
+            SELECT DISTINCT {_NODE_COLS}
+            FROM edges e
+            JOIN symbols s ON s.id = e.source_id
+            JOIN files f ON f.id = s.file_id
+            WHERE e.relation = ? AND (e.target_id = ? OR e.target_fqn_hint = ?)
+            """,
+            (EdgeRelation.INHERITS.value, target_id, fqn),
+        ).fetchall()
+        return [self._row_to_node(r) for r in rows]
+
+    def who_implements(self, fqn: str) -> list[SymbolNode]:
+        self._ensure_open()
+        target_id = self._symbol_id(fqn)
+        rows = self._conn.execute(
+            f"""
+            SELECT DISTINCT {_NODE_COLS}
+            FROM edges e
+            JOIN symbols s ON s.id = e.source_id
+            JOIN files f ON f.id = s.file_id
+            WHERE e.relation = ? AND (e.target_id = ? OR e.target_fqn_hint = ?)
+            """,
+            (EdgeRelation.IMPLEMENTS.value, target_id, fqn),
+        ).fetchall()
+        return [self._row_to_node(r) for r in rows]
+
+    def edges_from(self, fqn: str, *, relation: EdgeRelation | None = None) -> list[SymbolEdge]:
+        self._ensure_open()
+        source_id = self._symbol_id(fqn)
+        if source_id is None:
+            return []
+        if relation is not None:
+            rows = self._conn.execute(
+                """
+                SELECT e.relation, e.runtime, e.metadata, e.target_fqn_hint,
+                       src.fqn AS source_fqn, tgt.fqn AS target_fqn
+                FROM edges e
+                JOIN symbols src ON src.id = e.source_id
+                LEFT JOIN symbols tgt ON tgt.id = e.target_id
+                WHERE e.source_id = ? AND e.relation = ?
+                """,
+                (source_id, relation.value),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                """
+                SELECT e.relation, e.runtime, e.metadata, e.target_fqn_hint,
+                       src.fqn AS source_fqn, tgt.fqn AS target_fqn
+                FROM edges e
+                JOIN symbols src ON src.id = e.source_id
+                LEFT JOIN symbols tgt ON tgt.id = e.target_id
+                WHERE e.source_id = ?
+                """,
+                (source_id,),
+            ).fetchall()
+        return [self._row_to_edge(r) for r in rows]
+
     def search(self, query: str, *, kind: str | None = None, limit: int = 50) -> list[SymbolNode]:
         self._ensure_open()
         match_expr = _to_fts_query(query)
-        if match_expr is None:
-            # Empty query → plain scan (FTS5 MATCH cannot match an empty string).
-            sql = f"SELECT {_NODE_COLS} FROM symbols s JOIN files f ON f.id = s.file_id"
-            params: list[Any] = []
+        seen: set[str] = set()
+        results: list[SymbolNode] = []
+
+        if match_expr is not None:
+            sql = (
+                f"SELECT {_NODE_COLS} FROM graph_fts gf "
+                "JOIN symbols s ON s.id = gf.rowid "
+                "JOIN files f ON f.id = s.file_id "
+                "WHERE graph_fts MATCH ?"
+            )
+            params: list[Any] = [match_expr]
             if kind is not None:
-                sql += " WHERE s.kind = ?"
+                sql += " AND s.kind = ?"
+                params.append(kind)
+            sql += " ORDER BY gf.rank LIMIT ?"
+            params.append(limit)
+            for row in self._conn.execute(sql, params).fetchall():
+                node = self._row_to_node(row)
+                seen.add(node.fqn)
+                results.append(node)
+
+        # LIKE fallback for substring matching that FTS5 prefix search misses
+        if len(results) < limit:
+            like = f"%{query}%"
+            sql = f"SELECT {_NODE_COLS} FROM symbols s JOIN files f ON f.id = s.file_id WHERE (s.name LIKE ? OR s.fqn LIKE ?)"
+            params = [like, like]
+            if kind is not None:
+                sql += " AND s.kind = ?"
                 params.append(kind)
             sql += " LIMIT ?"
-            params.append(limit)
-            rows = self._conn.execute(sql, params).fetchall()
-            return [self._row_to_node(r) for r in rows]
+            params.append(limit - len(results))
+            for row in self._conn.execute(sql, params).fetchall():
+                node = self._row_to_node(row)
+                if node.fqn not in seen:
+                    seen.add(node.fqn)
+                    results.append(node)
 
-        sql = (
-            f"SELECT {_NODE_COLS} FROM graph_fts gf "
-            "JOIN symbols s ON s.id = gf.rowid "
-            "JOIN files f ON f.id = s.file_id "
-            "WHERE graph_fts MATCH ?"
-        )
-        params = [match_expr]
-        if kind is not None:
-            sql += " AND s.kind = ?"
-            params.append(kind)
-        # FTS5 `rank` is the bm25 relevance score (more-negative = better match);
-        # ORDER BY rank surfaces the closest names first before the LIMIT cap.
-        sql += " ORDER BY gf.rank LIMIT ?"
-        params.append(limit)
-        rows = self._conn.execute(sql, params).fetchall()
-        return [self._row_to_node(r) for r in rows]
+        return results
 
     def find_orphan_symbols(self) -> list[SymbolNode]:
         """Symbols referenced by no edge — indexed anti-join, not an O(E) scan.
@@ -566,9 +631,7 @@ class SqliteGraphStore(GraphStore):
 
     def schema_version(self) -> str:
         """Read the persisted schema version back from ``graph_meta``."""
-        row = self._conn.execute(
-            "SELECT value FROM graph_meta WHERE key = 'schema_version'"
-        ).fetchone()
+        row = self._conn.execute("SELECT value FROM graph_meta WHERE key = 'schema_version'").fetchone()
         return row["value"] if row else ""
 
     # ── lifecycle ─────────────────────────────────────────────────────
@@ -669,10 +732,15 @@ class SqliteGraphStore(GraphStore):
 def _to_fts_query(query: str) -> str | None:
     """Turn a free-text query into a safe FTS5 prefix MATCH expression.
 
-    Splits on non-alphanumeric characters and ANDs prefix terms together so
-    ``"utils.py"`` becomes ``utils* py*``. Returns ``None`` for empty queries.
+    Splits on dots and whitespace and ANDs prefix terms together so
+    ``"utils.py"`` becomes ``utils* py*`` and ``"validate_input"`` preserves
+    the underscore.  Returns ``None`` for empty queries.
     """
-    tokens = ["".join(ch for ch in part if ch.isalnum()) for part in query.replace(".", " ").split()]
+    tokens = []
+    for part in query.replace(".", " ").split():
+        cleaned = "".join(ch for ch in part if ch.isalnum() or ch == "_")
+        if cleaned:
+            tokens.append(cleaned)
     terms = [f"{t}*" for t in tokens if t]
     if not terms:
         return None

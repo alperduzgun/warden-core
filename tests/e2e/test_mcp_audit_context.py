@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolKind, SymbolNode
 from warden.mcp.infrastructure.adapters.audit_adapter import AuditAdapter
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -23,6 +23,25 @@ def _make_intel_dir(base: Path) -> Path:
     intel_dir = base / ".warden" / "intelligence"
     intel_dir.mkdir(parents=True, exist_ok=True)
     return intel_dir
+
+
+def _populate_graph_db(project_root: Path, nodes: list[SymbolNode], edges: list[SymbolEdge]) -> None:
+    """Write symbol data into .warden/graph.db."""
+    from warden.analysis.services.graph_store_factory import default_db_path, get_graph_store
+
+    db_path = default_db_path(project_root)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = get_graph_store("sqlite", path=str(db_path))
+    try:
+        seen_files: set[str] = set()
+        for n in nodes:
+            if n.file_path not in seen_files:
+                store.upsert_file(n.file_path)
+                seen_files.add(n.file_path)
+        store.upsert_symbols(nodes)
+        store.upsert_edges(edges)
+    finally:
+        store.close()
 
 
 def _write_code_graph(intel_dir: Path) -> None:
@@ -63,6 +82,23 @@ def _write_code_graph(intel_dir: Path) -> None:
         },
     }
     (intel_dir / "code_graph.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    # Populate the graph DB for the new adapter code path
+    nodes = [
+        SymbolNode(
+            fqn=n["fqn"],
+            name=n["name"],
+            kind=SymbolKind(n["kind"]),
+            file_path=n.get("file_path", ""),
+            line=n.get("line", 0),
+            module=n.get("module", ""),
+        )
+        for n in data["nodes"].values()
+    ]
+    edges = [
+        SymbolEdge(source=e["source"], target=e["target"], relation=EdgeRelation(e["relation"])) for e in data["edges"]
+    ]
+    _populate_graph_db(intel_dir.parent.parent, nodes, edges)
 
 
 def _write_gap_report(intel_dir: Path, broken_imports: list[str] | None = None) -> None:
@@ -131,7 +167,6 @@ def _make_adapter(project_root: Path) -> AuditAdapter:
 
 @pytest.mark.e2e
 class TestMCPGetAuditContext:
-
     @pytest.mark.asyncio
     async def test_no_intelligence_returns_error(self, tmp_path):
         adapter = _make_adapter(tmp_path)
@@ -214,7 +249,6 @@ class TestMCPGetAuditContext:
 
 @pytest.mark.e2e
 class TestMCPQuerySymbol:
-
     @pytest.mark.asyncio
     async def test_missing_name_returns_error(self, tmp_path):
         adapter = _make_adapter(tmp_path)
@@ -293,7 +327,6 @@ class TestMCPQuerySymbol:
 
 @pytest.mark.e2e
 class TestMCPUnknownTool:
-
     @pytest.mark.asyncio
     async def test_unknown_tool_returns_error(self, tmp_path):
         adapter = _make_adapter(tmp_path)

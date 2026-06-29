@@ -104,9 +104,7 @@ def build_command(
         help="Project root to scan [default: current directory]",
         show_default=True,
     ),
-    force: bool = typer.Option(
-        False, "--force", help="Rebuild from scratch (delete the existing graph DB first)"
-    ),
+    force: bool = typer.Option(False, "--force", help="Rebuild from scratch (delete the existing graph DB first)"),
 ) -> None:
     """Build the whole-project symbol graph and persist it to the GraphStore DB."""
     project_root = project_path.resolve()
@@ -129,13 +127,18 @@ def build_command(
     store = get_graph_store("sqlite", path=str(db_path))
     try:
         # build_into_store enforces: extract → resolve → fan-in → classify.
-        graph = builder.build_into_store(
-            store, content_hashes=content_hashes, populate_intent=True, sources=sources
-        )
+        graph = builder.build_into_store(store, content_hashes=content_hashes, populate_intent=True, sources=sources)
         status = store.status()
         intent = store.intent_stats()
     finally:
         store.close()
+
+    # Export the DB content to code_graph.json so the MCP audit adapter and
+    # CLI audit-context command can read intelligence without direct DB access.
+    from warden.analysis.services.intelligence_saver import IntelligenceSaver
+
+    saver = IntelligenceSaver(project_root)
+    saver.export_code_graph_from_db()
 
     duration = time.perf_counter() - start
     stats = graph.stats()

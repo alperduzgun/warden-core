@@ -136,13 +136,23 @@ class TestSaveDependencyGraph:
 class TestSaveCodeGraph:
     def test_basic_save(self, saver, tmp_project):
         graph = CodeGraph()
-        graph.add_node(SymbolNode(
-            fqn="src/a.py::Foo", name="Foo", kind=SymbolKind.CLASS,
-            file_path="src/a.py", line=1, module="a",
-        ))
-        graph.add_edge(SymbolEdge(
-            source="src/a.py::Foo", target="Base", relation=EdgeRelation.INHERITS,
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn="src/a.py::Foo",
+                name="Foo",
+                kind=SymbolKind.CLASS,
+                file_path="src/a.py",
+                line=1,
+                module="a",
+            )
+        )
+        graph.add_edge(
+            SymbolEdge(
+                source="src/a.py::Foo",
+                target="Base",
+                relation=EdgeRelation.INHERITS,
+            )
+        )
 
         assert saver.save_code_graph(graph)
 
@@ -156,10 +166,17 @@ class TestSaveCodeGraph:
 
     def test_roundtrip_serialization(self, saver, tmp_project):
         graph = CodeGraph()
-        graph.add_node(SymbolNode(
-            fqn="src/x.py::X", name="X", kind=SymbolKind.CLASS,
-            file_path="src/x.py", line=10, module="x", is_test=False,
-        ))
+        graph.add_node(
+            SymbolNode(
+                fqn="src/x.py::X",
+                name="X",
+                kind=SymbolKind.CLASS,
+                file_path="src/x.py",
+                line=10,
+                module="x",
+                is_test=False,
+            )
+        )
         saver.save_code_graph(graph)
 
         path = tmp_project / ".warden/intelligence/code_graph.json"
@@ -229,3 +246,104 @@ class TestAtomicWrite:
 
         data = json.loads(target.read_text())
         assert data == {"new": True}
+
+
+# --- export_code_graph_from_db ---
+
+
+def _populate_db(project_root: Path) -> None:
+    """Create a .warden/graph.db with minimal test data."""
+    from warden.analysis.services.graph_store_factory import default_db_path, get_graph_store
+
+    db_path = default_db_path(project_root)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    store = get_graph_store("sqlite", path=str(db_path))
+    try:
+        store.upsert_file("src/a.py")
+        store.upsert_symbols(
+            [
+                SymbolNode(
+                    fqn="src.a::Foo", name="Foo", kind=SymbolKind.CLASS, file_path="src/a.py", line=1, module="a"
+                ),
+                SymbolNode(
+                    fqn="src.a::bar", name="bar", kind=SymbolKind.FUNCTION, file_path="src/a.py", line=10, module="a"
+                ),
+            ]
+        )
+        store.upsert_edges(
+            [
+                SymbolEdge(source="src.a::Foo", target="src.a::bar", relation=EdgeRelation.CALLS),
+            ]
+        )
+    finally:
+        store.close()
+
+
+class TestExportCodeGraphFromDb:
+    def test_exports_when_db_exists(self, saver, tmp_project):
+        _populate_db(tmp_project)
+        assert saver.export_code_graph_from_db()
+
+        path = tmp_project / ".warden/intelligence/code_graph.json"
+        assert path.exists()
+
+        data = json.loads(path.read_text())
+        assert "nodes" in data
+        assert "edges" in data
+        assert "stats" in data
+        assert data["stats"]["total_nodes"] == 2
+        assert data["stats"]["total_edges"] == 1
+        assert data["stats"]["classes"] == 1
+        assert data["stats"]["functions"] == 1
+        assert data["stats"]["test_nodes"] == 0
+        # Nodes should be FQN-keyed dict
+        assert "src.a::Foo" in data["nodes"]
+        assert data["nodes"]["src.a::Foo"]["kind"] == "class"
+
+    def test_returns_false_when_db_missing(self, saver):
+        assert not saver.export_code_graph_from_db()
+
+    def test_stats_match_export(self, saver, tmp_project):
+        """Node/edge sets in the exported JSON should match store.export_json()."""
+        _populate_db(tmp_project)
+        assert saver.export_code_graph_from_db()
+
+        from warden.analysis.services.graph_store_factory import default_db_path, get_graph_store
+
+        db_path = default_db_path(tmp_project)
+        store = get_graph_store("sqlite", path=str(db_path))
+        try:
+            store_export = store.export_json()
+        finally:
+            store.close()
+
+        path = tmp_project / ".warden/intelligence/code_graph.json"
+        data = json.loads(path.read_text())
+
+        store_node_fqns = {n["fqn"] for n in store_export["nodes"]}
+        exported_node_fqns = set(data["nodes"].keys())
+        assert store_node_fqns == exported_node_fqns
+
+        store_edge_tuples = {(e["source"], e["target"], e["relation"]) for e in store_export["edges"]}
+        exported_edge_tuples = {(e["source"], e["target"], e["relation"]) for e in data["edges"]}
+        assert store_edge_tuples == exported_edge_tuples
+
+    def test_save_code_graph_legacy_still_works(self, saver, tmp_project):
+        """save_code_graph with CodeGraph instance should still work unchanged."""
+        graph = CodeGraph()
+        graph.add_node(
+            SymbolNode(
+                fqn="src/x.py::X",
+                name="X",
+                kind=SymbolKind.CLASS,
+                file_path="src/x.py",
+                line=1,
+                module="x",
+            )
+        )
+        assert saver.save_code_graph(graph)
+
+        path = tmp_project / ".warden/intelligence/code_graph.json"
+        assert path.exists()
+        data = json.loads(path.read_text())
+        assert "src/x.py::X" in data["nodes"]

@@ -396,6 +396,69 @@ class IntelligenceSaver:
             logger.error("gap_report_save_failed", error=str(e))
             return False
 
+    def export_code_graph_from_db(self) -> bool:
+        """Export the GraphStore DB to ``code_graph.json`` in the intelligence dir.
+
+        Opens the durable SQLite graph database (``.warden/graph.db``),
+        calls ``export_json()``, converts the flat node list to a FQN-keyed
+        dict, computes stats (classes/functions/test_nodes) from the node
+        list, and atomically writes ``.warden/intelligence/code_graph.json``.
+
+        Returns:
+            True if exported successfully, False if the DB is missing or an
+            error occurred (a warning is logged).
+        """
+        try:
+            from warden.analysis.services.graph_store_factory import default_db_path, get_graph_store
+        except ImportError:
+            return False
+
+        db_path = default_db_path(self.project_root)
+        if not db_path.exists():
+            logger.warning("export_code_graph_from_db_no_db", path=str(db_path))
+            return False
+
+        try:
+            store = get_graph_store("sqlite", path=str(db_path))
+            try:
+                export = store.export_json()
+                status = store.status()
+            finally:
+                store.close()
+
+            nodes_list = export.get("nodes", [])
+            nodes = {n["fqn"]: n for n in nodes_list}
+            edges = export.get("edges", [])
+
+            data = {
+                "schema_version": "1.0.0",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "nodes": nodes,
+                "edges": edges,
+                "stats": {
+                    "total_nodes": status.get("node_count", len(nodes_list)),
+                    "total_edges": status.get("edge_count", len(edges)),
+                    "classes": sum(1 for n in nodes_list if n.get("kind") == "class"),
+                    "functions": sum(1 for n in nodes_list if n.get("kind") in ("function", "method")),
+                    "test_nodes": sum(1 for n in nodes_list if n.get("is_test")),
+                },
+            }
+
+            path = self.intelligence_dir / "code_graph.json"
+            self._atomic_write(path, json.dumps(data, indent=2, ensure_ascii=False))
+
+            logger.info(
+                "code_graph_exported_from_db",
+                path=str(path),
+                nodes=len(nodes_list),
+                edges=len(edges),
+            )
+            return True
+
+        except Exception as e:
+            logger.error("export_code_graph_from_db_failed", error=str(e))
+            return False
+
     def save_chain_validation(self, chain_validation: Any) -> bool:
         """
         Save LSP ChainValidation to .warden/intelligence/chain_validation.json.

@@ -163,6 +163,51 @@ class GraphStore(ABC):
         """
 
     @abstractmethod
+    def get_node(self, fqn: str) -> SymbolNode | None:
+        """Fetch a single symbol by fully-qualified name.
+
+        Args:
+            fqn: Fully-qualified name of the symbol.
+
+        Returns:
+            SymbolNode if found, None otherwise.
+        """
+
+    @abstractmethod
+    def who_inherits(self, fqn: str) -> list[SymbolNode]:
+        """Return symbols that *inherit from* ``fqn`` (INHERITS edges → source nodes).
+
+        Args:
+            fqn: Fully-qualified name of the parent symbol.
+
+        Returns:
+            List of SymbolNode objects that inherit from this symbol.
+        """
+
+    @abstractmethod
+    def who_implements(self, fqn: str) -> list[SymbolNode]:
+        """Return symbols that *implement* ``fqn`` (IMPLEMENTS edges → source nodes).
+
+        Args:
+            fqn: Fully-qualified name of the mixin/interface.
+
+        Returns:
+            List of SymbolNode objects that implement this symbol.
+        """
+
+    @abstractmethod
+    def edges_from(self, fqn: str, *, relation: EdgeRelation | None = None) -> list[SymbolEdge]:
+        """Return all edges originating from ``fqn``, optionally filtered by relation.
+
+        Args:
+            fqn: Fully-qualified name of the source symbol.
+            relation: Optional relation type to filter by.
+
+        Returns:
+            List of SymbolEdge objects originating from this symbol.
+        """
+
+    @abstractmethod
     def search(self, query: str, *, kind: str | None = None, limit: int = 50) -> list[SymbolNode]:
         """Search symbols by name or FQN substring.
 

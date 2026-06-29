@@ -2,6 +2,8 @@
 Audit Context Adapter
 
 MCP adapter for code graph intelligence and audit context tools.
+Reads the symbol graph from the durable GraphStore DB (.warden/graph.db)
+and gap/dep/chain data from .warden/intelligence/*.json.
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from warden.analysis.domain.code_graph import EdgeRelation
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
@@ -69,7 +72,9 @@ class AuditAdapter(BaseWardenAdapter):
 
     def __init__(self, project_root: Path, bridge: Any | None = None) -> None:
         super().__init__(project_root, bridge)
-        self._code_graph_cache: Any | None = None  # CodeGraph instance
+        from warden.analysis.services.graph_store_factory import default_db_path
+
+        self._db_path = default_db_path(project_root)
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
         """Get audit tool definitions."""
@@ -174,33 +179,33 @@ class AuditAdapter(BaseWardenAdapter):
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
     # ------------------------------------------------------------------
-    # CodeGraph loading
+    # GraphStore helpers
     # ------------------------------------------------------------------
 
-    def _load_code_graph(self) -> Any:
-        """Load and cache CodeGraph from intelligence directory.
+    def _open_store(self):
+        """Open the SQLite GraphStore for the project.
 
         Returns:
-            CodeGraph domain model instance.
+            GraphStore instance.
 
         Raises:
-            FileNotFoundError: If code_graph.json does not exist.
+            FileNotFoundError: If the graph DB does not exist.
         """
-        if self._code_graph_cache is not None:
-            return self._code_graph_cache
+        if not self._db_path.exists():
+            raise FileNotFoundError("Code graph not found. Run 'warden graph build' first.")
+        from warden.analysis.services.graph_store_factory import get_graph_store
 
-        cg_path = self.project_root / ".warden" / "intelligence" / "code_graph.json"
-        if not cg_path.exists():
-            raise FileNotFoundError("Code graph not found. Run 'warden refresh --force' first.")
+        return get_graph_store("sqlite", path=str(self._db_path))
 
-        data = json.loads(cg_path.read_text(encoding="utf-8"))
+    @staticmethod
+    def _serialize_node(n):
+        return {"fqn": n.fqn, **n.model_dump(by_alias=False, exclude={"fqn"})}
 
-        from warden.analysis.domain.code_graph import CodeGraph
+    @staticmethod
+    def _serialize_edge(e):
+        return e.model_dump(by_alias=False)
 
-        self._code_graph_cache = CodeGraph.model_validate(data)
-        return self._code_graph_cache
-
-    def _resolve_symbol(self, code_graph: Any, name: str) -> tuple[str | None, list[Any]]:
+    def _resolve_symbol(self, store, name: str) -> tuple[str | None, list[Any]]:
         """Resolve a symbol name to FQN and matching nodes.
 
         If name contains '::' it is treated as an exact FQN lookup.
@@ -210,14 +215,15 @@ class AuditAdapter(BaseWardenAdapter):
             (fqn_or_none, list_of_matching_nodes)
         """
         if "::" in name:
-            node = code_graph.nodes.get(name)
+            node = store.get_node(name)
             if node:
                 return name, [node]
             return None, []
 
-        matches = code_graph.get_symbols_by_name(name)
-        if matches:
-            return matches[0].fqn, matches
+        matches = store.search(name, limit=_MAX_NODES)
+        filtered = [m for m in matches if m.name == name]
+        if filtered:
+            return filtered[0].fqn, filtered
         return None, []
 
     # ------------------------------------------------------------------
@@ -225,21 +231,44 @@ class AuditAdapter(BaseWardenAdapter):
     # ------------------------------------------------------------------
 
     async def _get_audit_context_async(self, arguments: dict[str, Any]) -> MCPToolResult:
-        """Get audit context from intelligence files."""
+        """Get audit context from the GraphStore DB and intelligence JSON files."""
         fmt = arguments.get("format", "json")
         full = arguments.get("full", False)
 
         try:
-            from warden.cli.commands.audit_context import (
-                _load_intelligence,
-                _render_json,
-                _render_markdown,
-            )
+            from warden.analysis.services.graph_store_factory import get_graph_store
+            from warden.cli.commands.audit_context import _load_json, _render_json, _render_markdown
 
-            code_graph, gap_report, dep_graph, chain_val = _load_intelligence(self.project_root)
+            intel_dir = self.project_root / ".warden" / "intelligence"
+            gap_report = _load_json(intel_dir / "gap_report.json")
+            dep_graph = _load_json(intel_dir / "dependency_graph.json")
+            chain_val = _load_json(intel_dir / "chain_validation.json")
+
+            code_graph: dict[str, Any] = {}
+            if self._db_path.exists():
+                store = get_graph_store("sqlite", path=str(self._db_path))
+                try:
+                    export = store.export_json()
+                    status = store.status()
+                    nodes_list = export.get("nodes", [])
+                    nodes = {n["fqn"]: n for n in nodes_list}
+                    edges = export.get("edges", [])
+                    code_graph = {
+                        "nodes": nodes,
+                        "edges": edges,
+                        "stats": {
+                            "total_nodes": status["node_count"],
+                            "total_edges": status["edge_count"],
+                            "classes": sum(1 for n in nodes_list if n.get("kind") == "class"),
+                            "functions": sum(1 for n in nodes_list if n.get("kind") in ("function", "method")),
+                            "test_nodes": sum(1 for n in nodes_list if n.get("is_test")),
+                        },
+                    }
+                finally:
+                    store.close()
 
             if not code_graph and not gap_report and not dep_graph and not chain_val:
-                return MCPToolResult.error("No intelligence data found. Run 'warden refresh --force' first.")
+                return MCPToolResult.error("No intelligence data found. Run 'warden graph build' first.")
 
             if fmt == "markdown":
                 output = _render_markdown(
@@ -275,18 +304,20 @@ class AuditAdapter(BaseWardenAdapter):
             )
 
         try:
-            code_graph = self._load_code_graph()
+            with self._open_store() as store:
+                return await self._query_with_store(store, name, query_type, arguments)
         except FileNotFoundError as e:
             return MCPToolResult.error(str(e))
         except Exception as e:
             return MCPToolResult.error(f"Symbol query failed: {e}")
 
-        fqn, matches = self._resolve_symbol(code_graph, name)
+    async def _query_with_store(self, store, name: str, query_type: str, arguments: dict[str, Any]) -> MCPToolResult:
+        """Execute symbol query against an open store."""
+        fqn, matches = self._resolve_symbol(store, name)
 
         if query_type == "search":
-            return self._result_search(name, fqn, matches, code_graph, arguments)
+            return self._result_search_with_store(name, fqn, matches, store, arguments)
 
-        # All other query types require at least one resolved symbol
         if not fqn:
             return MCPToolResult.json_result(
                 {
@@ -303,29 +334,29 @@ class AuditAdapter(BaseWardenAdapter):
         max_depth = min(arguments.get("max_depth", _DEFAULT_DEPTH), _MAX_DEPTH)
 
         if query_type == "who_uses":
-            return self._result_who_uses(name, fqn, code_graph, include_tests)
+            return self._result_who_uses(name, fqn, store, include_tests)
         elif query_type == "who_inherits":
-            return self._result_who_inherits(name, fqn, code_graph)
+            return self._result_who_inherits(name, fqn, store)
         elif query_type == "who_implements":
-            return self._result_who_implements(name, fqn, code_graph)
+            return self._result_who_implements(name, fqn, store)
         elif query_type == "dependency_chain":
-            return self._result_dependency_chain(name, fqn, code_graph, max_depth)
+            return self._result_dependency_chain(name, fqn, store, max_depth)
         elif query_type == "callers":
-            return self._result_callers(name, fqn, code_graph, include_tests)
+            return self._result_callers(name, fqn, store, include_tests)
         elif query_type == "callees":
-            return self._result_callees(name, fqn, code_graph)
+            return self._result_callees(name, fqn, store)
 
         return MCPToolResult.error(f"Unhandled query_type: {query_type}")
 
-    def _result_search(
+    def _result_search_with_store(
         self,
         name: str,
         _fqn: str | None,
         matches: list[Any],
-        code_graph: Any,
+        store: Any,
         _arguments: dict[str, Any],
     ) -> MCPToolResult:
-        """Original search behavior: find symbol + related edges."""
+        """Search for a symbol and include related edges."""
         if not matches:
             return MCPToolResult.json_result(
                 {
@@ -336,16 +367,25 @@ class AuditAdapter(BaseWardenAdapter):
                 }
             )
 
-        serialized_matches = [
-            {"fqn": m.fqn, **m.model_dump(by_alias=False, exclude={"fqn"})} for m in matches[:_MAX_NODES]
-        ]
+        serialized_matches = [self._serialize_node(m) for m in matches[:_MAX_NODES]]
 
-        match_fqns = {m.fqn for m in matches}
-        related_edges = [
-            e.model_dump(by_alias=False) for e in code_graph.edges if e.source in match_fqns or e.target in match_fqns
-        ][:_MAX_EDGES]
+        related_edges: list[dict[str, Any]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for m in matches:
+            for e in store.who_uses(m.fqn):
+                key = (e.source, e.target, e.relation.value)
+                if key not in seen:
+                    seen.add(key)
+                    related_edges.append(self._serialize_edge(e))
+            for e in store.edges_from(m.fqn):
+                key = (e.source, e.target, e.relation.value)
+                if key not in seen:
+                    seen.add(key)
+                    related_edges.append(self._serialize_edge(e))
+            if len(related_edges) >= _MAX_EDGES:
+                break
+        related_edges = related_edges[:_MAX_EDGES]
 
-        # Check LSP confirmation
         lsp_confirmed = None
         cv_path = self.project_root / ".warden" / "intelligence" / "chain_validation.json"
         if cv_path.exists():
@@ -369,10 +409,10 @@ class AuditAdapter(BaseWardenAdapter):
 
         return MCPToolResult.json_result(result_data)
 
-    def _result_who_uses(self, name: str, fqn: str, code_graph: Any, include_tests: bool) -> MCPToolResult:
+    def _result_who_uses(self, name: str, fqn: str, store: Any, include_tests: bool) -> MCPToolResult:
         """Return edges where target == fqn."""
-        edges = code_graph.who_uses(fqn, include_tests=include_tests)
-        serialized = [e.model_dump(by_alias=False) for e in edges[:_MAX_EDGES]]
+        edges = store.who_uses(fqn, include_tests=include_tests)
+        serialized = [self._serialize_edge(e) for e in edges[:_MAX_EDGES]]
         return MCPToolResult.json_result(
             {
                 "symbol": name,
@@ -384,10 +424,10 @@ class AuditAdapter(BaseWardenAdapter):
             }
         )
 
-    def _result_who_inherits(self, name: str, fqn: str, code_graph: Any) -> MCPToolResult:
+    def _result_who_inherits(self, name: str, fqn: str, store: Any) -> MCPToolResult:
         """Return nodes that inherit from fqn."""
-        nodes = code_graph.who_inherits(fqn)
-        serialized = [{"fqn": n.fqn, **n.model_dump(by_alias=False, exclude={"fqn"})} for n in nodes[:_MAX_NODES]]
+        nodes = store.who_inherits(fqn)
+        serialized = [self._serialize_node(n) for n in nodes[:_MAX_NODES]]
         return MCPToolResult.json_result(
             {
                 "symbol": name,
@@ -399,10 +439,10 @@ class AuditAdapter(BaseWardenAdapter):
             }
         )
 
-    def _result_who_implements(self, name: str, fqn: str, code_graph: Any) -> MCPToolResult:
+    def _result_who_implements(self, name: str, fqn: str, store: Any) -> MCPToolResult:
         """Return nodes that implement fqn."""
-        nodes = code_graph.who_implements(fqn)
-        serialized = [{"fqn": n.fqn, **n.model_dump(by_alias=False, exclude={"fqn"})} for n in nodes[:_MAX_NODES]]
+        nodes = store.who_implements(fqn)
+        serialized = [self._serialize_node(n) for n in nodes[:_MAX_NODES]]
         return MCPToolResult.json_result(
             {
                 "symbol": name,
@@ -414,10 +454,10 @@ class AuditAdapter(BaseWardenAdapter):
             }
         )
 
-    def _result_dependency_chain(self, name: str, fqn: str, code_graph: Any, max_depth: int) -> MCPToolResult:
+    def _result_dependency_chain(self, name: str, fqn: str, store: Any, max_depth: int) -> MCPToolResult:
         """Return dependency chains from fqn."""
-        chains = code_graph.get_dependency_chain(fqn, max_depth=max_depth)
-        serialized = [[e.model_dump(by_alias=False) for e in chain] for chain in chains[:_MAX_CHAINS]]
+        chains = store.impact(fqn, max_depth=max_depth)
+        serialized = [[self._serialize_edge(e) for e in chain] for chain in chains[:_MAX_CHAINS]]
         return MCPToolResult.json_result(
             {
                 "symbol": name,
@@ -430,13 +470,11 @@ class AuditAdapter(BaseWardenAdapter):
             }
         )
 
-    def _result_callers(self, name: str, fqn: str, code_graph: Any, include_tests: bool) -> MCPToolResult:
+    def _result_callers(self, name: str, fqn: str, store: Any, include_tests: bool) -> MCPToolResult:
         """Return who_uses edges filtered to CALLS relation only."""
-        from warden.analysis.domain.code_graph import EdgeRelation
-
-        edges = code_graph.who_uses(fqn, include_tests=include_tests)
+        edges = store.who_uses(fqn, include_tests=include_tests)
         call_edges = [e for e in edges if e.relation == EdgeRelation.CALLS]
-        serialized = [e.model_dump(by_alias=False) for e in call_edges[:_MAX_EDGES]]
+        serialized = [self._serialize_edge(e) for e in call_edges[:_MAX_EDGES]]
         return MCPToolResult.json_result(
             {
                 "symbol": name,
@@ -448,12 +486,10 @@ class AuditAdapter(BaseWardenAdapter):
             }
         )
 
-    def _result_callees(self, name: str, fqn: str, code_graph: Any) -> MCPToolResult:
+    def _result_callees(self, name: str, fqn: str, store: Any) -> MCPToolResult:
         """Return outgoing CALLS edges from fqn."""
-        from warden.analysis.domain.code_graph import EdgeRelation
-
-        callees = [e for e in code_graph.edges if e.source == fqn and e.relation == EdgeRelation.CALLS]
-        serialized = [e.model_dump(by_alias=False) for e in callees[:_MAX_EDGES]]
+        edges = store.edges_from(fqn, relation=EdgeRelation.CALLS)
+        serialized = [self._serialize_edge(e) for e in edges[:_MAX_EDGES]]
         return MCPToolResult.json_result(
             {
                 "symbol": name,
@@ -484,24 +520,20 @@ class AuditAdapter(BaseWardenAdapter):
         limit = min(arguments.get("limit", _DEFAULT_GRAPH_SEARCH_LIMIT), _MAX_GRAPH_SEARCH)
 
         try:
-            code_graph = self._load_code_graph()
+            with self._open_store() as store:
+                candidates = store.search(query, kind=kind_filter, limit=_MAX_GRAPH_SEARCH)
         except FileNotFoundError as e:
             return MCPToolResult.error(str(e))
         except Exception as e:
             return MCPToolResult.error(f"Graph search failed: {e}")
 
-        # Collect candidates with match scores
         query_lower = query.lower()
-        scored: list[tuple[int, int, Any]] = []  # (score, name_len, node)
+        scored: list[tuple[int, int, Any]] = []
 
-        for node in code_graph.nodes.values():
-            if kind_filter and node.kind.value != kind_filter:
-                continue
-
+        for node in candidates:
             name = node.name
             name_lower = name.lower()
 
-            # Score: 0 = exact, 1 = case-insensitive exact, 2 = prefix, 3 = substring
             if name == query:
                 score = 0
             elif name_lower == query_lower:
@@ -516,9 +548,7 @@ class AuditAdapter(BaseWardenAdapter):
             scored.append((score, len(name), node))
 
         scored.sort(key=lambda x: (x[0], x[1]))
-        results = [
-            {"fqn": item[2].fqn, **item[2].model_dump(by_alias=False, exclude={"fqn"})} for item in scored[:limit]
-        ]
+        results = [self._serialize_node(item[2]) for item in scored[:limit]]
 
         return MCPToolResult.json_result(
             {

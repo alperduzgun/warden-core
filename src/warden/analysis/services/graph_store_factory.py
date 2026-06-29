@@ -36,6 +36,7 @@ def default_db_path(project_root: str | Path) -> Path:
     """Return the canonical persistent graph DB path for a project."""
     return Path(project_root) / DEFAULT_DB_RELPATH
 
+
 # Registry of known backends.  Populated lazily on first request.
 _REGISTRY: dict[str, type[GraphStore]] = {}
 
@@ -78,11 +79,11 @@ def get_graph_store(backend: str = "memory", **kwargs: object) -> GraphStore:
 def _ensure_builtin_backends() -> None:
     """Import built-in backends so they register themselves."""
     if "memory" not in _REGISTRY:
-        from warden.analysis.services.memory_graph_store import MemoryGraphStore  # noqa: F401
+        from warden.analysis.services.memory_graph_store import MemoryGraphStore
 
     # SQLite backend (#686) — self-registers on import.
     if "sqlite" not in _REGISTRY:
-        from warden.analysis.services.sqlite_graph_store import SqliteGraphStore  # noqa: F401
+        from warden.analysis.services.sqlite_graph_store import SqliteGraphStore
 
     if "kuzu" not in _REGISTRY:
 
@@ -91,8 +92,7 @@ def _ensure_builtin_backends() -> None:
 
             def __init__(self, **_: object) -> None:
                 raise NotImplementedError(
-                    "Kuzu GraphStore backend is reserved for future use. "
-                    "Use backend='memory' for now."
+                    "Kuzu GraphStore backend is reserved for future use. Use backend='memory' for now."
                 )
 
             def upsert_file(self, file_path: str, *, content_hash: str = "") -> None: ...
@@ -105,6 +105,10 @@ def _ensure_builtin_backends() -> None:
             def impact(self, target_fqn: str, *, max_depth: int = 5) -> list: ...
             def find_orphan_symbols(self) -> list: ...
             def find_circular_deps(self) -> list: ...
+            def get_node(self, fqn: str) -> object | None: ...
+            def who_inherits(self, fqn: str) -> list: ...
+            def who_implements(self, fqn: str) -> list: ...
+            def edges_from(self, fqn: str, *, relation: object | None = None) -> list: ...
             def search(self, query: str, *, kind: str | None = None, limit: int = 50) -> list: ...
             def status(self) -> dict: ...
             def export_json(self) -> dict: ...
