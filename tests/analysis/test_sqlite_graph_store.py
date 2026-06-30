@@ -31,11 +31,47 @@ def store() -> SqliteGraphStore:
 @pytest.fixture()
 def sample_nodes() -> list[SymbolNode]:
     return [
-        SymbolNode(fqn="src/app/main.py::App", name="App", kind=SymbolKind.CLASS, file_path="src/app/main.py", line=10, module="app.main"),
-        SymbolNode(fqn="src/app/main.py::run", name="run", kind=SymbolKind.FUNCTION, file_path="src/app/main.py", line=25, module="app.main"),
-        SymbolNode(fqn="src/app/utils.py::helper", name="helper", kind=SymbolKind.FUNCTION, file_path="src/app/utils.py", line=5, module="app.utils"),
-        SymbolNode(fqn="src/app/utils.py::format_output", name="format_output", kind=SymbolKind.FUNCTION, file_path="src/app/utils.py", line=30, module="app.utils"),
-        SymbolNode(fqn="tests/test_main.py::test_run", name="test_run", kind=SymbolKind.FUNCTION, file_path="tests/test_main.py", line=1, module="tests.test_main", is_test=True),
+        SymbolNode(
+            fqn="src/app/main.py::App",
+            name="App",
+            kind=SymbolKind.CLASS,
+            file_path="src/app/main.py",
+            line=10,
+            module="app.main",
+        ),
+        SymbolNode(
+            fqn="src/app/main.py::run",
+            name="run",
+            kind=SymbolKind.FUNCTION,
+            file_path="src/app/main.py",
+            line=25,
+            module="app.main",
+        ),
+        SymbolNode(
+            fqn="src/app/utils.py::helper",
+            name="helper",
+            kind=SymbolKind.FUNCTION,
+            file_path="src/app/utils.py",
+            line=5,
+            module="app.utils",
+        ),
+        SymbolNode(
+            fqn="src/app/utils.py::format_output",
+            name="format_output",
+            kind=SymbolKind.FUNCTION,
+            file_path="src/app/utils.py",
+            line=30,
+            module="app.utils",
+        ),
+        SymbolNode(
+            fqn="tests/test_main.py::test_run",
+            name="test_run",
+            kind=SymbolKind.FUNCTION,
+            file_path="tests/test_main.py",
+            line=1,
+            module="tests.test_main",
+            is_test=True,
+        ),
     ]
 
 
@@ -44,7 +80,9 @@ def sample_edges() -> list[SymbolEdge]:
     return [
         SymbolEdge(source="src/app/main.py::App", target="src/app/main.py::run", relation=EdgeRelation.DEFINES),
         SymbolEdge(source="src/app/main.py::run", target="src/app/utils.py::helper", relation=EdgeRelation.CALLS),
-        SymbolEdge(source="src/app/main.py::run", target="src/app/utils.py::format_output", relation=EdgeRelation.CALLS),
+        SymbolEdge(
+            source="src/app/main.py::run", target="src/app/utils.py::format_output", relation=EdgeRelation.CALLS
+        ),
         SymbolEdge(source="tests/test_main.py::test_run", target="src/app/main.py::run", relation=EdgeRelation.CALLS),
     ]
 
@@ -59,22 +97,16 @@ def _populate(store: SqliteGraphStore, nodes: list[SymbolNode], edges: list[Symb
 
 class TestSchema:
     def test_required_tables_exist(self, store: SqliteGraphStore) -> None:
-        rows = store._conn.execute(
-            "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
-        ).fetchall()
+        rows = store._conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").fetchall()
         names = {r["name"] for r in rows}
         assert {"files", "symbols", "edges", "graph_meta", "symbol_intent"} <= names
 
     def test_fts_table_exists(self, store: SqliteGraphStore) -> None:
-        row = store._conn.execute(
-            "SELECT name FROM sqlite_master WHERE name = 'graph_fts'"
-        ).fetchone()
+        row = store._conn.execute("SELECT name FROM sqlite_master WHERE name = 'graph_fts'").fetchone()
         assert row is not None
 
     def test_required_indexes_exist(self, store: SqliteGraphStore) -> None:
-        rows = store._conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'index'"
-        ).fetchall()
+        rows = store._conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'").fetchall()
         names = {r["name"] for r in rows}
         assert {"idx_symbols_name_file", "idx_edges_target_rel", "idx_edges_source_rel"} <= names
 
@@ -155,8 +187,12 @@ class TestRead:
 
     def test_who_uses_unresolved_target_hint(self, store: SqliteGraphStore) -> None:
         # Edge to an external/unparsed target keeps a hint and is still found.
-        store.upsert_symbols([SymbolNode(fqn="a.py::caller", name="caller", kind=SymbolKind.FUNCTION, file_path="a.py")])
-        store.upsert_edges([SymbolEdge(source="a.py::caller", target="external.lib::thing", relation=EdgeRelation.CALLS)])
+        store.upsert_symbols(
+            [SymbolNode(fqn="a.py::caller", name="caller", kind=SymbolKind.FUNCTION, file_path="a.py")]
+        )
+        store.upsert_edges(
+            [SymbolEdge(source="a.py::caller", target="external.lib::thing", relation=EdgeRelation.CALLS)]
+        )
         uses = store.who_uses("external.lib::thing")
         assert len(uses) == 1
         assert uses[0].target == "external.lib::thing"
@@ -205,6 +241,88 @@ class TestRead:
     def test_search_respects_limit(self, store, sample_nodes, sample_edges) -> None:
         _populate(store, sample_nodes, sample_edges)
         assert len(store.search("", limit=2)) <= 2
+
+
+# ── reverse impact ────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def reverse_impact_nodes() -> list[SymbolNode]:
+    return [
+        SymbolNode(fqn="a.py::Base", name="Base", kind=SymbolKind.CLASS, file_path="a.py"),
+        SymbolNode(fqn="b.py::Child", name="Child", kind=SymbolKind.CLASS, file_path="b.py"),
+        SymbolNode(fqn="c.py::Caller", name="Caller", kind=SymbolKind.FUNCTION, file_path="c.py"),
+        SymbolNode(fqn="d.py::Leaf", name="Leaf", kind=SymbolKind.FUNCTION, file_path="d.py"),
+        SymbolNode(
+            fqn="tests/test_c.py::test_caller",
+            name="test_caller",
+            kind=SymbolKind.FUNCTION,
+            file_path="tests/test_c.py",
+            is_test=True,
+        ),
+    ]
+
+
+@pytest.fixture()
+def reverse_impact_edges() -> list[SymbolEdge]:
+    return [
+        SymbolEdge(source="b.py::Child", target="a.py::Base", relation=EdgeRelation.INHERITS),
+        SymbolEdge(source="c.py::Caller", target="b.py::Child", relation=EdgeRelation.CALLS),
+        SymbolEdge(source="d.py::Leaf", target="c.py::Caller", relation=EdgeRelation.CALLS),
+        SymbolEdge(source="tests/test_c.py::test_caller", target="c.py::Caller", relation=EdgeRelation.CALLS),
+    ]
+
+
+class TestReverseImpact:
+    def test_reverse_impact_returns_callers_and_inheritors(
+        self, store: SqliteGraphStore, reverse_impact_nodes: list[SymbolNode], reverse_impact_edges: list[SymbolEdge]
+    ) -> None:
+        store.upsert_symbols(reverse_impact_nodes)
+        store.upsert_edges(reverse_impact_edges)
+        chains = store.reverse_impact("a.py::Base", max_depth=3)
+        assert len(chains) >= 2
+        targets = {chain[-1].source for chain in chains}
+        assert "b.py::Child" in targets
+        assert "c.py::Caller" in targets
+
+    def test_reverse_impact_excludes_tests_by_default(
+        self, store: SqliteGraphStore, reverse_impact_nodes: list[SymbolNode], reverse_impact_edges: list[SymbolEdge]
+    ) -> None:
+        store.upsert_symbols(reverse_impact_nodes)
+        store.upsert_edges(reverse_impact_edges)
+        chains = store.reverse_impact("c.py::Caller", max_depth=2)
+        sources = {chain[-1].source for chain in chains}
+        assert "d.py::Leaf" in sources
+        assert "tests/test_c.py::test_caller" not in sources
+
+    def test_reverse_impact_includes_tests_when_flagged(
+        self, store: SqliteGraphStore, reverse_impact_nodes: list[SymbolNode], reverse_impact_edges: list[SymbolEdge]
+    ) -> None:
+        store.upsert_symbols(reverse_impact_nodes)
+        store.upsert_edges(reverse_impact_edges)
+        chains = store.reverse_impact("c.py::Caller", max_depth=2, include_tests=True)
+        sources = {chain[-1].source for chain in chains}
+        assert "tests/test_c.py::test_caller" in sources
+
+    def test_reverse_impact_respects_max_depth(
+        self, store: SqliteGraphStore, reverse_impact_nodes: list[SymbolNode], reverse_impact_edges: list[SymbolEdge]
+    ) -> None:
+        store.upsert_symbols(reverse_impact_nodes)
+        store.upsert_edges(reverse_impact_edges)
+        d1 = store.reverse_impact("a.py::Base", max_depth=1)
+        d3 = store.reverse_impact("a.py::Base", max_depth=3)
+        assert len(d3) >= len(d1)
+        assert all(len(chain) <= 1 for chain in d1)
+
+    def test_reverse_impact_handles_unresolved_target_hint(
+        self, store: SqliteGraphStore, reverse_impact_nodes: list[SymbolNode]
+    ) -> None:
+        store.upsert_symbols(reverse_impact_nodes)
+        # Edge whose target is an unresolved short/hint name, not a known symbol.
+        store.upsert_edges([SymbolEdge(source="d.py::Leaf", target="external.lib::thing", relation=EdgeRelation.CALLS)])
+        chains = store.reverse_impact("external.lib::thing", max_depth=1)
+        assert len(chains) == 1
+        assert chains[0][0].source == "d.py::Leaf"
 
 
 # ── introspection ─────────────────────────────────────────────────────
@@ -268,9 +386,7 @@ class TestSchemaVersionRoundTrip:
         db = tmp_path / "graph.db"
         SqliteGraphStore(db).close()
         s2 = SqliteGraphStore(db)
-        count = s2._conn.execute(
-            "SELECT COUNT(*) AS c FROM graph_meta WHERE key = 'schema_version'"
-        ).fetchone()["c"]
+        count = s2._conn.execute("SELECT COUNT(*) AS c FROM graph_meta WHERE key = 'schema_version'").fetchone()["c"]
         s2.close()
         assert count == 1
 
@@ -289,9 +405,7 @@ class TestWalConcurrency:
     def test_second_connection_reads_committed_writes(self, tmp_path: Path) -> None:
         db = tmp_path / "graph.db"
         writer = SqliteGraphStore(db)
-        writer.upsert_symbols(
-            [SymbolNode(fqn="a.py::A", name="A", kind=SymbolKind.CLASS, file_path="a.py")]
-        )
+        writer.upsert_symbols([SymbolNode(fqn="a.py::A", name="A", kind=SymbolKind.CLASS, file_path="a.py")])
 
         reader = SqliteGraphStore(db)  # separate connection
         assert reader.status()["node_count"] == 1

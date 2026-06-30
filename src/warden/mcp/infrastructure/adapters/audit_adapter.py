@@ -9,13 +9,16 @@ and gap/dep/chain data from .warden/intelligence/*.json.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
-from warden.analysis.domain.code_graph import EdgeRelation
+from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge
+from warden.analysis.services.context_slicer import ContextSlicerService
 from warden.mcp.domain.enums import ToolCategory
 from warden.mcp.domain.models import MCPToolDefinition, MCPToolResult
 from warden.mcp.infrastructure.adapters.base_adapter import BaseWardenAdapter
+from warden.shared.utils.token_utils import estimate_tokens, truncate_to_tokens
 
 # Lazy import types — used at runtime only inside methods
 _QUERY_TYPES = frozenset(
@@ -50,6 +53,14 @@ _DEFAULT_GRAPH_SEARCH_LIMIT = 20
 _MAX_DEPTH = 10
 _DEFAULT_DEPTH = 5
 
+# Token budgets for new tools (D4)
+_IMPACT_TOKEN_BUDGET = 200
+_SLICE_TOKEN_BUDGET = 280
+_SLICE_TOKEN_CEILING = 400
+_IMPACT_MAX_EDGES = 30
+_IMPACT_MAX_FILES = 10
+_IMPACT_MAX_SYMBOLS_PER_FILE = 5
+
 
 class AuditAdapter(BaseWardenAdapter):
     """
@@ -66,6 +77,8 @@ class AuditAdapter(BaseWardenAdapter):
             "warden_get_audit_context",
             "warden_query_symbol",
             "warden_graph_search",
+            "warden_impact",
+            "warden_slice",
         }
     )
     TOOL_CATEGORY = ToolCategory.ANALYSIS
@@ -141,7 +154,8 @@ class AuditAdapter(BaseWardenAdapter):
             self._create_tool_definition(
                 name="warden_graph_search",
                 description=(
-                    "Fuzzy/prefix search across the code graph symbols. Returns matching symbols sorted by relevance."
+                    "Fuzzy/prefix search across the code graph symbols. Returns matching symbols sorted by relevance. "
+                    f"Results are capped to stay within ~{_IMPACT_TOKEN_BUDGET} output tokens."
                 ),
                 properties={
                     "query": {
@@ -162,6 +176,60 @@ class AuditAdapter(BaseWardenAdapter):
                 required=["query"],
                 requires_bridge=False,
             ),
+            self._create_tool_definition(
+                name="warden_impact",
+                description=(
+                    "Reverse impact analysis: find callers, inheritors, implementors and importers of a symbol. "
+                    "Results are grouped by file and annotated with test-file flags. "
+                    f"Results are capped to stay within ~{_IMPACT_TOKEN_BUDGET} output tokens. "
+                    "NOTE: on warden-core this currently returns sparse/empty results because resolved CALLS edges "
+                    "are builder-gated by issue #714; the tool will light up automatically once #714 lands."
+                ),
+                properties={
+                    "fqn": {
+                        "type": "string",
+                        "description": (
+                            "Symbol name or FQN (e.g., 'SecurityFrame' or 'src/warden/foo.py::SecurityFrame')"
+                        ),
+                    },
+                    "depth": {
+                        "type": "integer",
+                        "description": f"Max reverse traversal depth (default: {_DEFAULT_DEPTH}, max: {_MAX_DEPTH})",
+                        "default": _DEFAULT_DEPTH,
+                    },
+                    "include_tests": {
+                        "type": "boolean",
+                        "description": "Include test files in results (default: false)",
+                        "default": False,
+                    },
+                },
+                required=["fqn"],
+                requires_bridge=False,
+            ),
+            self._create_tool_definition(
+                name="warden_slice",
+                description=(
+                    "Return a focused code slice for a symbol: its function/class body plus caller/callee "
+                    "signatures and import context, resolved from the code graph by FQN. Uses AST function "
+                    "boundaries when the source parses; otherwise degrades to centered truncation. "
+                    f"Output is capped to ~{_SLICE_TOKEN_BUDGET} tokens (hard ceiling {_SLICE_TOKEN_CEILING})."
+                ),
+                properties={
+                    "fqn": {
+                        "type": "string",
+                        "description": (
+                            "Symbol name or FQN (e.g., 'SecurityFrame' or 'src/warden/foo.py::SecurityFrame')"
+                        ),
+                    },
+                    "token_budget": {
+                        "type": "integer",
+                        "description": f"Target token budget (default: {_SLICE_TOKEN_BUDGET}, max: {_SLICE_TOKEN_CEILING})",
+                        "default": _SLICE_TOKEN_BUDGET,
+                    },
+                },
+                required=["fqn"],
+                requires_bridge=False,
+            ),
         ]
 
     async def _execute_tool_async(
@@ -176,6 +244,10 @@ class AuditAdapter(BaseWardenAdapter):
             return await self._query_symbol_async(arguments)
         elif tool_name == "warden_graph_search":
             return await self._graph_search_async(arguments)
+        elif tool_name == "warden_impact":
+            return await self._impact_async(arguments)
+        elif tool_name == "warden_slice":
+            return await self._slice_async(arguments)
         return MCPToolResult.error(f"Unknown tool: {tool_name}")
 
     # ------------------------------------------------------------------
@@ -559,3 +631,300 @@ class AuditAdapter(BaseWardenAdapter):
                 "results": results,
             }
         )
+
+    # ------------------------------------------------------------------
+    # warden_impact
+    # ------------------------------------------------------------------
+
+    async def _impact_async(self, arguments: dict[str, Any]) -> MCPToolResult:
+        """Reverse impact: who depends on the given symbol."""
+        name = arguments.get("fqn") or arguments.get("name") or ""
+        if not name:
+            return MCPToolResult.error("Missing required parameter: fqn")
+
+        max_depth = min(arguments.get("depth", arguments.get("max_depth", _DEFAULT_DEPTH)), _MAX_DEPTH)
+        include_tests = arguments.get("include_tests", False)
+
+        try:
+            with self._open_store() as store:
+                fqn, _matches = self._resolve_symbol(store, name)
+                if not fqn:
+                    return MCPToolResult.json_result(
+                        {
+                            "symbol": name,
+                            "fqn": None,
+                            "found": False,
+                            "count": 0,
+                            "files": {},
+                            "test_files": [],
+                            "note": "Symbol not found in code graph.",
+                        }
+                    )
+
+                start = time.perf_counter()
+                chains = store.reverse_impact(fqn, max_depth=max_depth, include_tests=include_tests)
+                elapsed_ms = (time.perf_counter() - start) * 1000
+
+                # Group by source file while respecting output caps.
+                files: dict[str, dict[str, Any]] = {}
+                test_files: list[str] = []
+                total_edges = 0
+
+                for chain in chains:
+                    if not chain:
+                        continue
+                    edge = chain[-1]
+                    source_node = store.get_node(edge.source)
+                    file_path = source_node.file_path if source_node else ""
+                    is_test = source_node.is_test if source_node else False
+
+                    if is_test and file_path and file_path not in test_files:
+                        test_files.append(file_path)
+
+                    if file_path not in files:
+                        if len(files) >= _IMPACT_MAX_FILES:
+                            continue
+                        files[file_path] = {"symbols": [], "relations": [], "is_test": is_test}
+
+                    entry = files[file_path]
+                    if edge.source not in {s["fqn"] for s in entry["symbols"]}:
+                        if len(entry["symbols"]) >= _IMPACT_MAX_SYMBOLS_PER_FILE:
+                            continue
+                        entry["symbols"].append(
+                            {
+                                "fqn": edge.source,
+                                "relation": edge.relation.value,
+                                "depth": len(chain),
+                            }
+                        )
+                        entry["relations"].append(edge.relation.value)
+
+                    total_edges += 1
+                    if total_edges >= _IMPACT_MAX_EDGES:
+                        break
+
+                result = {
+                    "symbol": name,
+                    "fqn": fqn,
+                    "found": True,
+                    "count": sum(len(f["symbols"]) for f in files.values()),
+                    "max_depth": max_depth,
+                    "elapsed_ms": round(elapsed_ms, 3),
+                    "files": files,
+                    "test_files": test_files,
+                }
+
+                # Budget check / adaptive cap.
+                text = json.dumps(result)
+                if estimate_tokens(text) > _IMPACT_TOKEN_BUDGET:
+                    # Halve caps once and rebuild.
+                    halved = self._build_impact_result(
+                        store,
+                        chains,
+                        max_files=max(_IMPACT_MAX_FILES // 2, 1),
+                        max_symbols=max(_IMPACT_MAX_SYMBOLS_PER_FILE // 2, 1),
+                        max_edges=max(_IMPACT_MAX_EDGES // 2, 1),
+                    )
+                    result.update(halved)
+                    text = json.dumps(result)
+                    if estimate_tokens(text) > _IMPACT_TOKEN_BUDGET:
+                        result["files"] = {}
+                        result["count"] = 0
+                        result["truncated"] = True
+
+                return MCPToolResult.json_result(result)
+
+        except FileNotFoundError as e:
+            return MCPToolResult.error(str(e))
+        except Exception as e:
+            return MCPToolResult.error(f"Impact analysis failed: {e}")
+
+    def _build_impact_result(
+        self,
+        store: Any,
+        chains: list[list[SymbolEdge]],
+        *,
+        max_files: int,
+        max_symbols: int,
+        max_edges: int,
+    ) -> dict[str, Any]:
+        """Rebuild grouped impact result with tighter caps."""
+        files: dict[str, dict[str, Any]] = {}
+        test_files: list[str] = []
+        total_edges = 0
+
+        for chain in chains:
+            if not chain:
+                continue
+            edge = chain[-1]
+            source_node = store.get_node(edge.source)
+            file_path = source_node.file_path if source_node else ""
+            is_test = source_node.is_test if source_node else False
+
+            if is_test and file_path and file_path not in test_files:
+                test_files.append(file_path)
+
+            if file_path not in files:
+                if len(files) >= max_files:
+                    continue
+                files[file_path] = {"symbols": [], "relations": [], "is_test": is_test}
+
+            entry = files[file_path]
+            if edge.source not in {s["fqn"] for s in entry["symbols"]}:
+                if len(entry["symbols"]) >= max_symbols:
+                    continue
+                entry["symbols"].append(
+                    {
+                        "fqn": edge.source,
+                        "relation": edge.relation.value,
+                        "depth": len(chain),
+                    }
+                )
+                entry["relations"].append(edge.relation.value)
+
+            total_edges += 1
+            if total_edges >= max_edges:
+                break
+
+        return {
+            "count": sum(len(f["symbols"]) for f in files.values()),
+            "files": files,
+            "test_files": test_files,
+        }
+
+    # ------------------------------------------------------------------
+    # warden_slice
+    # ------------------------------------------------------------------
+
+    async def _slice_async(self, arguments: dict[str, Any]) -> MCPToolResult:
+        """Return a focused code slice for a symbol resolved by FQN."""
+        name = arguments.get("fqn") or arguments.get("name") or ""
+        if not name:
+            return MCPToolResult.error("Missing required parameter: fqn")
+
+        token_budget = min(arguments.get("token_budget", _SLICE_TOKEN_BUDGET), _SLICE_TOKEN_CEILING)
+
+        try:
+            with self._open_store() as store:
+                fqn, _matches = self._resolve_symbol(store, name)
+                node = store.get_node(fqn) if fqn else None
+                if not node:
+                    return MCPToolResult.json_result(
+                        {
+                            "symbol": name,
+                            "fqn": fqn,
+                            "found": False,
+                            "note": "Symbol not found in code graph.",
+                        }
+                    )
+                return await self._build_slice_result(store, node, token_budget)
+        except FileNotFoundError as e:
+            return MCPToolResult.error(str(e))
+        except Exception as e:
+            return MCPToolResult.error(f"Slice failed: {e}")
+
+    async def _build_slice_result(self, store: Any, node: Any, token_budget: int) -> MCPToolResult:
+        """Assemble the focused slice (body + caller/callee sigs) for a resolved node."""
+        file_path = node.file_path
+        full_path = self.project_root / file_path
+        if not file_path or not full_path.exists():
+            return MCPToolResult.error(f"Source file not found for symbol: {node.fqn}")
+
+        try:
+            content = full_path.read_text(encoding="utf-8")
+        except Exception as e:
+            return MCPToolResult.error(f"Failed to read file: {e}")
+
+        target_line = node.line or 1
+        ast_root = await self._parse_ast_best_effort(content, file_path)
+
+        slicer = ContextSlicerService()
+        # Reserve ~20% of the budget for caller/callee signatures appended below.
+        body = slicer.build_focused_context(
+            content,
+            file_path,
+            [target_line],
+            ast_root=ast_root,
+            code_graph=None,
+            token_budget=max(int(token_budget * 0.8), 1),
+        )
+
+        callers, callees = self._slice_signatures(store, node.fqn)
+
+        parts: list[str] = [body]
+        if callers:
+            parts.append("")
+            parts.append("Callers:")
+            parts.extend(f"  - {c}" for c in callers)
+        if callees:
+            parts.append("")
+            parts.append("Callees:")
+            parts.extend(f"  - {c}" for c in callees)
+        sliced = "\n".join(parts)
+
+        if estimate_tokens(sliced) > token_budget:
+            sliced = truncate_to_tokens(sliced, token_budget)
+
+        return MCPToolResult.json_result(
+            {
+                "symbol": node.name,
+                "fqn": node.fqn,
+                "found": True,
+                "file_path": file_path,
+                "line": target_line,
+                "token_budget": token_budget,
+                "tokens": estimate_tokens(sliced),
+                "degraded": ast_root is None,
+                "slice": sliced,
+            }
+        )
+
+    async def _parse_ast_best_effort(self, content: str, file_path: str):
+        """Parse an AST root on the fly for Python sources; None when unavailable.
+
+        No pipeline AST cache exists in the MCP adapter context, so the slice
+        degrades to centered truncation for non-Python files or parse failures.
+        """
+        if not file_path.endswith(".py"):
+            return None
+        try:
+            from warden.ast.domain.enums import CodeLanguage
+            from warden.ast.providers.python_ast_provider import PythonASTProvider
+
+            result = await PythonASTProvider().parse(content, CodeLanguage.PYTHON, file_path)
+            if result.is_success():
+                return result.ast_root
+        except Exception:
+            return None
+        return None
+
+    def _slice_signatures(
+        self,
+        store: Any,
+        fqn: str,
+        *,
+        max_callers: int = 5,
+        max_callees: int = 3,
+    ) -> tuple[list[str], list[str]]:
+        """Build caller/callee signature lists from incoming/outgoing graph edges."""
+        callers: list[str] = []
+        for edge in store.who_uses(fqn)[:max_callers]:
+            source = store.get_node(edge.source)
+            if source:
+                callers.append(self._format_signature(source))
+
+        callees: list[str] = []
+        for edge in store.edges_from(fqn)[:max_callees]:
+            target = store.get_node(edge.target)
+            if target:
+                callees.append(self._format_signature(target))
+
+        return callers, callees
+
+    @staticmethod
+    def _format_signature(node: Any) -> str:
+        """Render a compact symbol signature: '<kind> <name> (<file>)'."""
+        sig = f"{node.kind.value} {node.name}"
+        if node.file_path:
+            sig += f" ({node.file_path})"
+        return sig

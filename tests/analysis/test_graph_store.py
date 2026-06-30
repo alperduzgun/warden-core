@@ -13,7 +13,6 @@ from warden.analysis.domain.graph_store import GraphStore
 from warden.analysis.services.graph_store_factory import get_graph_store
 from warden.analysis.services.memory_graph_store import MemoryGraphStore
 
-
 # ── fixtures ──────────────────────────────────────────────────────────
 
 
@@ -77,7 +76,9 @@ def sample_edges() -> list[SymbolEdge]:
     return [
         SymbolEdge(source="src/app/main.py::App", target="src/app/main.py::run", relation=EdgeRelation.DEFINES),
         SymbolEdge(source="src/app/main.py::run", target="src/app/utils.py::helper", relation=EdgeRelation.CALLS),
-        SymbolEdge(source="src/app/main.py::run", target="src/app/utils.py::format_output", relation=EdgeRelation.CALLS),
+        SymbolEdge(
+            source="src/app/main.py::run", target="src/app/utils.py::format_output", relation=EdgeRelation.CALLS
+        ),
         SymbolEdge(source="tests/test_main.py::test_run", target="src/app/main.py::run", relation=EdgeRelation.CALLS),
     ]
 
@@ -304,6 +305,82 @@ class TestMemoryGraphStoreLifecycle:
             assert s.status()["file_count"] == 1
         # After exiting, store should be closed
         assert s.status()["closed"] is True
+
+
+# ── reverse impact ────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def reverse_impact_fixture() -> tuple[list[SymbolNode], list[SymbolEdge]]:
+    """Synthetic graph with resolved CALLS and INHERITS edges for reverse impact."""
+    nodes = [
+        SymbolNode(fqn="a.py::Base", name="Base", kind=SymbolKind.CLASS, file_path="a.py"),
+        SymbolNode(fqn="b.py::Child", name="Child", kind=SymbolKind.CLASS, file_path="b.py"),
+        SymbolNode(fqn="c.py::Caller", name="Caller", kind=SymbolKind.FUNCTION, file_path="c.py"),
+        SymbolNode(fqn="d.py::Leaf", name="Leaf", kind=SymbolKind.FUNCTION, file_path="d.py"),
+        SymbolNode(
+            fqn="tests/test_c.py::test_caller",
+            name="test_caller",
+            kind=SymbolKind.FUNCTION,
+            file_path="tests/test_c.py",
+            is_test=True,
+        ),
+    ]
+    edges = [
+        SymbolEdge(source="b.py::Child", target="a.py::Base", relation=EdgeRelation.INHERITS),
+        SymbolEdge(source="c.py::Caller", target="b.py::Child", relation=EdgeRelation.CALLS),
+        SymbolEdge(source="d.py::Leaf", target="c.py::Caller", relation=EdgeRelation.CALLS),
+        SymbolEdge(source="tests/test_c.py::test_caller", target="c.py::Caller", relation=EdgeRelation.CALLS),
+    ]
+    return nodes, edges
+
+
+class TestMemoryReverseImpact:
+    def test_reverse_impact_returns_callers_and_inheritors(
+        self, store: MemoryGraphStore, reverse_impact_fixture: tuple[list[SymbolNode], list[SymbolEdge]]
+    ) -> None:
+        nodes, edges = reverse_impact_fixture
+        store.upsert_symbols(nodes)
+        store.upsert_edges(edges)
+        chains = store.reverse_impact("a.py::Base", max_depth=3)
+        assert len(chains) >= 2
+        # Should contain Child inheriting Base and Caller calling Child
+        targets = {chain[-1].source for chain in chains}
+        assert "b.py::Child" in targets
+        assert "c.py::Caller" in targets
+
+    def test_reverse_impact_excludes_tests_by_default(
+        self, store: MemoryGraphStore, reverse_impact_fixture: tuple[list[SymbolNode], list[SymbolEdge]]
+    ) -> None:
+        nodes, edges = reverse_impact_fixture
+        store.upsert_symbols(nodes)
+        store.upsert_edges(edges)
+        chains = store.reverse_impact("c.py::Caller", max_depth=2)
+        sources = {chain[-1].source for chain in chains}
+        assert "d.py::Leaf" in sources
+        assert "tests/test_c.py::test_caller" not in sources
+
+    def test_reverse_impact_includes_tests_when_flagged(
+        self, store: MemoryGraphStore, reverse_impact_fixture: tuple[list[SymbolNode], list[SymbolEdge]]
+    ) -> None:
+        nodes, edges = reverse_impact_fixture
+        store.upsert_symbols(nodes)
+        store.upsert_edges(edges)
+        chains = store.reverse_impact("c.py::Caller", max_depth=2, include_tests=True)
+        sources = {chain[-1].source for chain in chains}
+        assert "tests/test_c.py::test_caller" in sources
+
+    def test_reverse_impact_respects_max_depth(
+        self, store: MemoryGraphStore, reverse_impact_fixture: tuple[list[SymbolNode], list[SymbolEdge]]
+    ) -> None:
+        nodes, edges = reverse_impact_fixture
+        store.upsert_symbols(nodes)
+        store.upsert_edges(edges)
+        d1 = store.reverse_impact("a.py::Base", max_depth=1)
+        d3 = store.reverse_impact("a.py::Base", max_depth=3)
+        assert len(d3) >= len(d1)
+        # depth=1 should only include direct incoming edges
+        assert all(len(chain) <= 1 for chain in d1)
 
 
 # ── Factory tests ─────────────────────────────────────────────────────

@@ -14,12 +14,18 @@ Covers:
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
 
 from warden.analysis.domain.code_graph import EdgeRelation, SymbolEdge, SymbolKind, SymbolNode
-from warden.mcp.infrastructure.adapters.audit_adapter import AuditAdapter
+from warden.mcp.infrastructure.adapters.audit_adapter import (
+    _IMPACT_TOKEN_BUDGET,
+    _SLICE_TOKEN_BUDGET,
+    AuditAdapter,
+)
+from warden.shared.utils.token_utils import estimate_tokens
 
 # ---------------------------------------------------------------------------
 # Graph DB populator helper
@@ -314,20 +320,25 @@ def rich_adapter(tmp_path: Path) -> AuditAdapter:
 
 
 class TestSupportedToolsAndDefinitions:
-    def test_supported_tools_has_exactly_three_entries(self, adapter: AuditAdapter) -> None:
-        assert len(AuditAdapter.SUPPORTED_TOOLS) == 3
+    def test_supported_tools_has_exactly_five_entries(self, adapter: AuditAdapter) -> None:
+        assert len(AuditAdapter.SUPPORTED_TOOLS) == 5
 
     def test_supports_method_returns_true_for_known_tools(self, adapter: AuditAdapter) -> None:
-        assert adapter.supports("warden_get_audit_context") is True
-        assert adapter.supports("warden_query_symbol") is True
-        assert adapter.supports("warden_graph_search") is True
+        for tool in (
+            "warden_get_audit_context",
+            "warden_query_symbol",
+            "warden_graph_search",
+            "warden_impact",
+            "warden_slice",
+        ):
+            assert adapter.supports(tool) is True, tool
 
     def test_supports_method_returns_false_for_unknown_tool(self, adapter: AuditAdapter) -> None:
         assert adapter.supports("warden_nonexistent") is False
 
-    def test_returns_three_definitions(self, adapter: AuditAdapter) -> None:
+    def test_returns_five_definitions(self, adapter: AuditAdapter) -> None:
         defs = adapter.get_tool_definitions()
-        assert len(defs) == 3
+        assert len(defs) == 5
 
     def test_audit_context_schema_has_format_and_full(self, adapter: AuditAdapter) -> None:
         defs = {d.name: d for d in adapter.get_tool_definitions()}
@@ -345,6 +356,20 @@ class TestSupportedToolsAndDefinitions:
         defs = {d.name: d for d in adapter.get_tool_definitions()}
         schema = defs["warden_graph_search"].input_schema
         assert "query" in schema.get("required", [])
+
+    def test_impact_schema_requires_fqn_and_has_depth(self, adapter: AuditAdapter) -> None:
+        defs = {d.name: d for d in adapter.get_tool_definitions()}
+        schema = defs["warden_impact"].input_schema
+        assert "fqn" in schema.get("required", [])
+        assert "depth" in schema["properties"]
+        assert "name" not in schema["properties"]
+
+    def test_slice_schema_requires_fqn(self, adapter: AuditAdapter) -> None:
+        defs = {d.name: d for d in adapter.get_tool_definitions()}
+        schema = defs["warden_slice"].input_schema
+        assert "fqn" in schema.get("required", [])
+        assert "file_path" not in schema["properties"]
+        assert "target_lines" not in schema["properties"]
 
     def test_definitions_do_not_require_bridge(self, adapter: AuditAdapter) -> None:
         for tool_def in adapter.get_tool_definitions():
@@ -1001,3 +1026,199 @@ class TestD5GracefulDegradation:
         assert stats["functions"] == 1
         assert stats["test_nodes"] == 1
         assert stats["total_nodes"] == 3
+
+
+# ---------------------------------------------------------------------------
+# 18. warden_impact
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def slice_adapter(tmp_path: Path) -> AuditAdapter:
+    """Adapter with a small source file and a populated graph for warden_slice tests.
+
+    Graph: main (line 6) --CALLS--> helper (line 3), both in src/demo.py.
+    """
+    src = tmp_path / "src" / "demo.py"
+    src.parent.mkdir(parents=True)
+    src.write_text(
+        "import os\n\ndef helper(x):\n    return x + 1\n\ndef main():\n    value = helper(1)\n    print(value)\n",
+        encoding="utf-8",
+    )
+
+    nodes = [
+        SymbolNode(fqn="src/demo.py::helper", name="helper", kind=SymbolKind.FUNCTION, file_path="src/demo.py", line=3),
+        SymbolNode(fqn="src/demo.py::main", name="main", kind=SymbolKind.FUNCTION, file_path="src/demo.py", line=6),
+    ]
+    edges = [
+        SymbolEdge(source="src/demo.py::main", target="src/demo.py::helper", relation=EdgeRelation.CALLS),
+    ]
+    _populate_graph_db(tmp_path, nodes, edges)
+    return AuditAdapter(project_root=tmp_path)
+
+
+class TestWardenImpact:
+    @pytest.mark.asyncio
+    async def test_impact_on_synthetic_fixture_returns_non_empty(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async("warden_impact", {"fqn": "BaseFrame"})
+        assert result.is_error is False
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["count"] >= 1
+        assert parsed["files"]
+        # SecurityFrame and ResilienceFrame inherit BaseFrame
+        symbols = {s["fqn"] for f in parsed["files"].values() for s in f["symbols"]}
+        assert "app.security::SecurityFrame" in symbols
+        assert "app.resilience::ResilienceFrame" in symbols
+
+    @pytest.mark.asyncio
+    async def test_impact_missing_fqn_returns_error(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async("warden_impact", {})
+        assert result.is_error is True
+
+    @pytest.mark.asyncio
+    async def test_impact_depth_param_honored(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async("warden_impact", {"fqn": "BaseFrame", "depth": 1})
+        assert result.is_error is False
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["max_depth"] == 1
+
+    @pytest.mark.asyncio
+    async def test_impact_shape_budget_and_latency_on_real_data(self) -> None:
+        project_root = Path(__file__).resolve().parents[2]
+        db_path = project_root / ".warden" / "graph.db"
+        if not db_path.exists():
+            pytest.skip("Real graph.db not built; run 'warden graph build'")
+
+        adapter = AuditAdapter(project_root=project_root)
+        start = time.perf_counter()
+        result = await adapter._execute_tool_async(
+            "warden_impact", {"fqn": "src/warden/analysis/domain/graph_store.py::GraphStore"}
+        )
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
+        assert result.is_error is False
+        assert elapsed_ms < 100
+        parsed = json.loads(result.content[0]["text"])
+        assert "symbol" in parsed
+        assert "fqn" in parsed
+        assert "files" in parsed
+        assert "test_files" in parsed
+        assert "elapsed_ms" in parsed
+        assert estimate_tokens(json.dumps(parsed)) <= _IMPACT_TOKEN_BUDGET
+
+    @pytest.mark.asyncio
+    async def test_impact_excludes_tests_by_default(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async("warden_impact", {"fqn": "SecurityFrame"})
+        assert result.is_error is False
+        parsed = json.loads(result.content[0]["text"])
+        test_files = parsed.get("test_files", [])
+        assert "tests/test_security.py" not in test_files
+
+    @pytest.mark.asyncio
+    async def test_impact_includes_tests_when_flagged(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async(
+            "warden_impact", {"fqn": "SecurityFrame", "include_tests": True}
+        )
+        assert result.is_error is False
+        parsed = json.loads(result.content[0]["text"])
+        test_files = parsed.get("test_files", [])
+        assert "tests/test_security.py" in test_files
+
+
+# ---------------------------------------------------------------------------
+# 19. warden_slice
+# ---------------------------------------------------------------------------
+
+
+class TestWardenSlice:
+    @pytest.mark.asyncio
+    async def test_slice_returns_focused_context(self, slice_adapter: AuditAdapter) -> None:
+        result = await slice_adapter._execute_tool_async("warden_slice", {"fqn": "src/demo.py::main"})
+        assert result.is_error is False
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["fqn"] == "src/demo.py::main"
+        assert parsed["file_path"] == "src/demo.py"
+        assert "slice" in parsed
+        assert "main" in parsed["slice"] or "helper" in parsed["slice"]
+
+    @pytest.mark.asyncio
+    async def test_slice_resolves_short_name(self, slice_adapter: AuditAdapter) -> None:
+        result = await slice_adapter._execute_tool_async("warden_slice", {"fqn": "main"})
+        assert result.is_error is False
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is True
+        assert parsed["fqn"] == "src/demo.py::main"
+
+    @pytest.mark.asyncio
+    async def test_slice_includes_callee_signatures(self, slice_adapter: AuditAdapter) -> None:
+        # main --CALLS--> helper, so helper appears as a callee signature.
+        result = await slice_adapter._execute_tool_async("warden_slice", {"fqn": "src/demo.py::main"})
+        parsed = json.loads(result.content[0]["text"])
+        assert "Callees:" in parsed["slice"]
+        assert "helper" in parsed["slice"]
+
+    @pytest.mark.asyncio
+    async def test_slice_includes_caller_signatures(self, slice_adapter: AuditAdapter) -> None:
+        # main calls helper, so main appears as a caller signature for helper.
+        result = await slice_adapter._execute_tool_async("warden_slice", {"fqn": "src/demo.py::helper"})
+        parsed = json.loads(result.content[0]["text"])
+        assert "Callers:" in parsed["slice"]
+        assert "main" in parsed["slice"]
+
+    @pytest.mark.asyncio
+    async def test_slice_budget_and_latency(self, slice_adapter: AuditAdapter) -> None:
+        start = time.perf_counter()
+        result = await slice_adapter._execute_tool_async(
+            "warden_slice",
+            {"fqn": "src/demo.py::main", "token_budget": _SLICE_TOKEN_BUDGET},
+        )
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
+        assert result.is_error is False
+        assert elapsed_ms < 100
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["token_budget"] == _SLICE_TOKEN_BUDGET
+        assert estimate_tokens(parsed["slice"]) <= _SLICE_TOKEN_BUDGET
+
+    @pytest.mark.asyncio
+    async def test_slice_symbol_not_found(self, slice_adapter: AuditAdapter) -> None:
+        result = await slice_adapter._execute_tool_async("warden_slice", {"fqn": "src/demo.py::ghost"})
+        assert result.is_error is False
+        parsed = json.loads(result.content[0]["text"])
+        assert parsed["found"] is False
+
+    @pytest.mark.asyncio
+    async def test_slice_rejects_missing_fqn(self, slice_adapter: AuditAdapter) -> None:
+        result = await slice_adapter._execute_tool_async("warden_slice", {})
+        assert result.is_error is True
+
+    @pytest.mark.asyncio
+    async def test_slice_no_db_returns_error(self, tmp_path: Path) -> None:
+        adapter = AuditAdapter(project_root=tmp_path)
+        result = await adapter._execute_tool_async("warden_slice", {"fqn": "Foo"})
+        assert result.is_error is True
+        assert "Run 'warden graph build' first" in result.content[0]["text"]
+
+
+# ---------------------------------------------------------------------------
+# 20. warden_graph_search token cap (D3/D4 documentation, no regression)
+# ---------------------------------------------------------------------------
+
+
+class TestGraphSearchTokenCap:
+    def test_graph_search_description_mentions_token_cap(self, adapter: AuditAdapter) -> None:
+        defs = {d.name: d for d in adapter.get_tool_definitions()}
+        desc = defs["warden_graph_search"].description
+        assert "token" in desc.lower()
+        assert str(_IMPACT_TOKEN_BUDGET) in desc
+
+    @pytest.mark.asyncio
+    async def test_graph_search_schema_unchanged(self, rich_adapter: AuditAdapter) -> None:
+        result = await rich_adapter._execute_tool_async("warden_graph_search", {"query": "Security"})
+        assert result.is_error is False
+        parsed = json.loads(result.content[0]["text"])
+        assert "query" in parsed
+        assert "results" in parsed
+        assert "count" in parsed

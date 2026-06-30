@@ -124,6 +124,37 @@ class MemoryGraphStore(GraphStore):
 
         return chains
 
+    def reverse_impact(self, fqn: str, *, max_depth: int = 5, include_tests: bool = False) -> list[list[SymbolEdge]]:
+        self._ensure_open()
+        chains: list[list[SymbolEdge]] = []
+        queue: list[tuple[str, list[SymbolEdge]]] = [(fqn, [])]
+        visited: set[str] = set()
+
+        semantic_relations = {
+            EdgeRelation.CALLS,
+            EdgeRelation.INHERITS,
+            EdgeRelation.IMPLEMENTS,
+            EdgeRelation.IMPORTS,
+        }
+
+        while queue:
+            current, path = queue.pop(0)
+            if current in visited or len(path) >= max_depth:
+                continue
+            visited.add(current)
+
+            incoming = [e for e in self._edges if e.target == current and e.relation in semantic_relations]
+            for edge in incoming:
+                if not include_tests:
+                    source_node = self._nodes.get(edge.source)
+                    if source_node and source_node.is_test:
+                        continue
+                new_path = [*path, edge]
+                chains.append(new_path)
+                queue.append((edge.source, new_path))
+
+        return chains
+
     def find_orphan_symbols(self) -> list[SymbolNode]:
         self._ensure_open()
         connected: set[str] = set()

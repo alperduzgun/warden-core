@@ -146,6 +146,23 @@ class GraphStore(ABC):
         """
 
     @abstractmethod
+    def reverse_impact(self, fqn: str, *, max_depth: int = 5, include_tests: bool = False) -> list[list[SymbolEdge]]:
+        """Depth-capped reverse impact analysis starting from ``fqn``.
+
+        Walks *incoming* edges (callers, inheritors, implementors, importers)
+        and returns every reverse dependency chain reachable within
+        ``max_depth`` hops. Cycles are cut once a node repeats on a path.
+
+        Args:
+            fqn: Fully-qualified name of the symbol to start from.
+            max_depth: Maximum traversal depth.
+            include_tests: If False, exclude edges originating from test files.
+
+        Returns:
+            List of reverse dependency paths (each path is a list of edges).
+        """
+
+    @abstractmethod
     def find_orphan_symbols(self) -> list[SymbolNode]:
         """Return symbols with zero edges (neither a source nor a target).
 

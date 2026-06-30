@@ -423,6 +423,89 @@ class SqliteGraphStore(GraphStore):
 
         return self._chains_from_path_ids([r["path_ids"] for r in rows])
 
+    def reverse_impact(self, fqn: str, *, max_depth: int = 5, include_tests: bool = False) -> list[list[SymbolEdge]]:
+        """Depth-capped reverse-impact CTE walking *incoming* edges.
+
+        Mirrors :meth:`impact` but anchors on edges whose resolved target or
+        ``target_fqn_hint`` equals ``fqn`` and walks backward via
+        ``edges.target_id`` / ``target_fqn_hint``.  Test-file sources are
+        filtered out at the anchor and each recursive step unless
+        ``include_tests`` is True.
+
+        Traverses CALLS, INHERITS, IMPLEMENTS and IMPORTS relations so the
+        tool lights up automatically once the builder (#714) starts emitting
+        resolved semantic edges.
+        """
+        self._ensure_open()
+        depth = min(max_depth, _MAX_DEPTH)
+        if depth <= 0:
+            return []
+
+        relation_values = sorted(
+            r.value
+            for r in (
+                EdgeRelation.CALLS,
+                EdgeRelation.INHERITS,
+                EdgeRelation.IMPLEMENTS,
+                EdgeRelation.IMPORTS,
+            )
+        )
+        # Relations are a fixed internal enum; inlining is safe and avoids
+        # parameter-binding issues with repeated IN clauses.
+        relation_list = ",".join(f"'{v}'" for v in relation_values)
+
+        rows = self._conn.execute(
+            f"""
+            WITH RECURSIVE walk(tip_fqn, path_ids, nodes, depth, stop) AS (
+                -- anchor: incoming semantic edges to the start symbol/hint
+                SELECT
+                    src.fqn,
+                    CAST(e.id AS TEXT),
+                    :sep || COALESCE(tgt.fqn, e.target_fqn_hint) || :sep || src.fqn || :sep,
+                    1,
+                    CASE WHEN instr(:sep || COALESCE(tgt.fqn, e.target_fqn_hint) || :sep,
+                                    :sep || src.fqn || :sep) > 0
+                         THEN 1 ELSE 0 END
+                FROM edges e
+                JOIN symbols src ON src.id = e.source_id
+                LEFT JOIN symbols tgt ON tgt.id = e.target_id
+                WHERE e.relation IN ({relation_list})
+                  AND (e.target_id = (SELECT id FROM symbols WHERE fqn = :start)
+                       OR e.target_fqn_hint = :start)
+                  AND (:include_tests OR src.is_test = 0)
+              UNION ALL
+                -- step: extend each still-open path by one incoming edge
+                SELECT
+                    src.fqn,
+                    w.path_ids || ',' || e.id,
+                    w.nodes || src.fqn || :sep,
+                    w.depth + 1,
+                    CASE WHEN instr(w.nodes, :sep || src.fqn || :sep) > 0
+                         THEN 1 ELSE 0 END
+                FROM walk w
+                JOIN symbols tgt ON tgt.fqn = w.tip_fqn
+                JOIN edges e ON e.target_id = tgt.id
+                JOIN symbols src ON src.id = e.source_id
+                WHERE w.stop = 0
+                  AND w.depth < :max_depth
+                  AND e.relation IN ({relation_list})
+                  AND (:include_tests OR src.is_test = 0)
+            )
+            SELECT path_ids FROM walk
+            ORDER BY depth, path_ids
+            LIMIT :cap
+            """,
+            {
+                "start": fqn,
+                "sep": _PATH_SEP,
+                "max_depth": depth,
+                "cap": _MAX_IMPACT_RESULTS,
+                "include_tests": 1 if include_tests else 0,
+            },
+        ).fetchall()
+
+        return self._chains_from_path_ids([r["path_ids"] for r in rows])
+
     def get_node(self, fqn: str) -> SymbolNode | None:
         self._ensure_open()
         row = self._conn.execute(
